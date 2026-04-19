@@ -1,115 +1,209 @@
-# 🚀 THERS - TU NUEVA RED SOCIAL
+<div align="center">
 
-Bienvenidos a **Thers** una red social desarrollada para unir y conectar personas de todo el mundo de una manera facil y rapida.Utilizando interfaces interactivas y modernas, en Thers puedes crear,compartir publicaciones, historias y videos en tiempo real ademas de interactuar con otros usuarios.
+# THERS
+### Bienvenidos a Thers una red social desarrollada para unir y conectar personas de todo el mundo de una manera facil y rapida.Utilizando interfaces interactivas y modernas, en Thers puedes crear,compartir publicaciones, historias y videos en tiempo real ademas de interactuar con otros usuarios.
 
----
-## Características Principales
- ✅ Interfaz rápida y responsiva gracias a React + Vite + Tailwind CSS.
-✅ Autenticación segura para proteger los datos de los usuarios.
-✅ Bottombar optimizado para una mejor experiencia en dispositivos móviles.
-✅ Publicaciones personalizables con imágenes, texto y reacciones.
-✅ Sistema de navegación eficiente con una estructura clara y amigable.
 
----
-## 📋 Requisitos
-Para ejecutar Thers, necesitas:
 
-Node.js 20.14.0 o superior.
+**Conecta, comparte y descubre — la red social hecha para estudiantes**
 
-un entorno de desarollo integrado (IDE) **recomendado**:Visual Studio Code 
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
+![Flask](https://img.shields.io/badge/Flask-3-000000?style=flat-square&logo=flask)
+![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?style=flat-square&logo=mysql)
+![TailwindCSS](https://img.shields.io/badge/Tailwind-3-38B2AC?style=flat-square&logo=tailwindcss)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
-Un navegador moderno como Chrome o Firefox.
+[Demo](#) · [Reportar Bug](../../issues) · [Solicitar Feature](../../issues)
+
+</div>
 
 ---
 
-## 👨‍💻 Tecnologías utilizadas
+## ¿Qué es THERS?
 
-* React
-* Vite
-* Tailwind CSS
-* JavaScript
-* Git y GitHub
+THERS es una red social que Permite publicar contenido (texto e imágenes), interactuar con otros usuarios mediante likes y comentarios, seguir perfiles, explorar publicaciones y recibir notificaciones — todo en un entorno pensado para todo el publico.
 
----
+## Características
 
-## 📁 Estructura del proyecto
+- Registro e inicio de sesión con JWT
+- Publicaciones con texto e imágenes
+- Feed personalizado con posts de personas seguidas
+- Sistema de likes y comentarios
+- Seguir / dejar de seguir usuarios
+- Perfil de usuario con bio y posts propios
+- Explorar y buscar otros estudiantes
+- Notificaciones (likes, comentarios, nuevos seguidores)
+- Panel de administración de usuarios
+- Diseño responsive (mobile-first)
 
-```
-Frontend/
- └── src/
-      ├── pages/
-      ├── components/
-      ├── assets/
-      └── App.jsx
-```
+## Stack tecnológico
 
----
+| Capa | Tecnología |
+|------|-----------|
+| Frontend | React 18 + Vite 5 |
+| Estilos | Tailwind CSS 3 |
+| Routing | React Router v6 |
+| Estado global | Context API + hooks |
+| HTTP client | Axios |
+| Backend | Flask 3 (Python) |
+| Base de datos | MySQL 8 |
+| Autenticación | JWT (flask-jwt-extended) |
 
-## ⚙️ Instalación
-
-1. Clonar el repositorio:
-
-```
-git clone https://github.com/Fernandito41/THERS_REDSOCIAL.git
-```
-
-2. Entrar al proyecto:
-
-```
-cd THERS_REDSOCIAL/Frontend
-```
-
-3. Instalar dependencias:
+## Estructura del proyecto
 
 ```
+thers/
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # UI reutilizable (Navbar, PostCard)
+│   │   ├── pages/            # Home, Login, Register, Profile, Explore
+│   │   ├── routes/           # AppRouter + rutas protegidas
+│   │   ├── context/          # AuthContext, PostContext
+│   │   ├── services/         # authService, postService, userService…
+│   │   └── assets/
+│   ├── index.html
+│   ├── vite.config.js
+│   └── tailwind.config.js
+│
+├── backend/
+│   ├── routes/               # auth, posts, users, comments, likes, follows
+│   ├── models/               # User, Post, Comment, Like, Follow, Notification
+│   ├── config/               # DB, JWT
+│   └── app.py
+│
+└── README.md
+```
+
+## Instalación local
+
+### Prerrequisitos
+
+- Node.js 18+
+- Python 3.11+
+- MySQL 8+
+
+### 1. Clonar el repositorio
+
+```bash
+git clone https://github.com/TU_USUARIO/thers.git
+cd thers
+```
+
+### 2. Frontend
+
+```bash
+cd frontend
 npm install
-```
-
-4. Ejecutar el proyecto:
-
-```
+cp .env.example .env        # configurar VITE_API_URL
 npm run dev
-
-copiar y pegar en tu navegador el localhost que se te genera para verlo en tiempo real
 ```
+
+### 3. Backend
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate    # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env        # configurar DB y JWT_SECRET
+flask db upgrade
+flask run
+```
+
+### Variables de entorno
+
+**frontend/.env**
+```env
+VITE_API_URL=http://localhost:5000/api
+```
+
+**backend/.env**
+```env
+DATABASE_URL=mysql+pymysql://user:password@localhost/thers_db
+JWT_SECRET_KEY=tu_clave_secreta
+UPLOAD_FOLDER=uploads/
+```
+
+## API — Endpoints principales
+
+| Método | Endpoint | Descripción | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/auth/register` | Registro de usuario | No |
+| POST | `/api/auth/login` | Login → JWT | No |
+| GET | `/api/auth/me` | Usuario autenticado | Sí |
+| GET | `/api/posts` | Feed personalizado | Sí |
+| POST | `/api/posts` | Crear publicación | Sí |
+| DELETE | `/api/posts/:id` | Eliminar publicación | Sí |
+| POST | `/api/posts/:id/like` | Like / unlike | Sí |
+| GET | `/api/posts/:id/comments` | Ver comentarios | Sí |
+| POST | `/api/comments` | Crear comentario | Sí |
+| GET | `/api/users/:id` | Ver perfil | Sí |
+| POST | `/api/users/:id/follow` | Seguir usuario | Sí |
+| DELETE | `/api/users/:id/follow` | Dejar de seguir | Sí |
+| GET | `/api/users/explore` | Explorar estudiantes | Sí |
+| GET | `/api/notifications` | Ver notificaciones | Sí |
+| GET | `/api/admin/users` | Gestión de usuarios | Admin |
+
+## Flujo de ramas (Git Flow)
+
+```
+main          ← producción estable
+└── develop   ← integración
+    ├── feature/auth
+    ├── feature/posts
+    ├── feature/comments
+    ├── feature/likes
+    ├── feature/follow
+    ├── feature/notifications
+    ├── feature/explore
+    ├── feature/profile
+    ├── feature/admin
+    └── feature/ui
+```
+
+**Convención de commits:**
+
+```
+feat:     nueva funcionalidad
+fix:      corrección de bug
+style:    cambios de UI/estilos
+refactor: refactorización sin cambio de comportamiento
+docs:     documentación
+test:     pruebas
+```
+
+## Equipo
+
+| Rol | Responsabilidad |
+|-----|----------------|
+| Frontend (×2) | React, componentes, páginas, UI |
+| Backend (×2) | Flask, API REST, modelos, DB |
+| UI/UX (×1) | Diseño, Tailwind, assets, experiencia |
+| DB / Testing (×1) | Esquema MySQL, pruebas, integración |
+
+## Roadmap
+
+- [x] Setup del proyecto
+- [x] Autenticación JWT
+- [ ] Publicaciones (texto + imagen)
+- [ ] Likes y comentarios
+- [ ] Sistema de seguidores
+- [ ] Feed personalizado
+- [ ] Perfiles de usuario
+- [ ] Explorar / buscar usuarios
+- [ ] Notificaciones
+- [ ] Panel de administración
+- [ ] UI responsive final
+- [ ] Testing
+- [ ] Deploy
+
+## Licencia
+
+Distribuido bajo licencia MIT. Ver `LICENSE` para más información.
 
 ---
 
-## 🌿 Trabajo en equipo
-
-⚠️ IMPORTANTE:
-
-* No trabajar en la rama `main`
-* Cada integrante debe crear su propia rama
-
-Ejemplo:
-
-```
-git checkout -b login
-```
-
----
-
-## 🚀 Subir cambios
-
-```
-git add .
-git commit -m "mensaje del cambio"
-git push origin nombre-rama
-```
-
----
-
-## 🔀 Pull Request
-
-* Crear Pull Request en GitHub
-* Revisar cambios
-* Hacer merge a `main` **OJO**:NO HACER MERGE SIN ANTES REVISAR BIEN LO QUE ES EL ARCHIVO ASI EVITAR DESORDEN Y PROBLEMAS EN EL SISTEMA
-
----
-
-## 📌 Estado del proyecto
-
-🔧 En desarrollo
-
----
+<div align="center">
+Desarrollado con propósito educativo · THERS 2025
+</div>

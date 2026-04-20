@@ -86,8 +86,8 @@ thers/
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/TU_USUARIO/thers.git
-cd thers
+git clone https://github.com/Fernandito41/THERS_REDSOCIAL
+cd THERS_REDSOCIAL
 ```
 
 ### 2. Frontend

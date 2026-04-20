@@ -205,5 +205,5 @@ Distribuido bajo licencia MIT. Ver `LICENSE` para más información.
 ---
 
 <div align="center">
-Desarrollado con propósito educativo · THERS 2025
+Desarrollado con propósito educativo · THERS 2026
 </div>

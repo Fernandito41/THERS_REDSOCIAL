@@ -172,6 +172,40 @@ refactor: refactorización sin cambio de comportamiento
 docs:     documentación
 test:     pruebas
 ```
+## Contribuir al proyecto (flujo por miembro)
+
+### 1. Siempre trabajar desde develop
+```bash
+git checkout develop
+git pull origin develop
+```
+
+### 3. Crear tu feature branch
+```bash
+git checkout -b feature/NOMBRE
+# Ejemplos:
+# git checkout -b feature/auth
+# git checkout -b feature/posts
+# git checkout -b feature/follow
+```
+
+### 4. Hacer tus cambios y commitear
+```bash
+git add .
+git commit -m "feat: descripción corta de lo que hiciste"
+```
+
+### 5. Subir tu branch a GitHub
+```bash
+git push origin feature/NOMBRE
+```
+
+### 6. Abrir Pull Request en GitHub
+- Ve a github.com/TU_USUARIO/thers
+- Clic en **"Compare & pull request"**
+- Base: `develop` ← Compare: `feature/NOMBRE`
+- Describe los cambios y asigna un reviewer
+- Espera aprobación antes de hacer merge
 
 ## Equipo
 

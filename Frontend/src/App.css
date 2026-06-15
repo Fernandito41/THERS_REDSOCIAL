@@ -182,3 +182,33 @@
     border-right-color: var(--border);
   }
 }
+@keyframes fadeZoom {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.animate-logo {
+  animation: fadeZoom 1.2s ease-out forwards;
+}
+
+.animate-exit {
+  animation: fadeOut 0.8s ease-in forwards;
+}

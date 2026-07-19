@@ -3,15 +3,28 @@ import { useNavigate } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
 import { IoClose } from "react-icons/io5";
 import Logo from "@shared/components/Logo";
+import { useAuth } from "@features/auth";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
+
   const [input, setInput] = useState("");
 
-  const handleNext = (e) => {
+  const handleNext = async (e) => {
     e.preventDefault();
-    console.log(input);
-    navigate("/feed"); // luego será real
+
+    try {
+      await login({
+        email: input,
+        password: "123456" // temporal
+      });
+
+      navigate("/feed");
+    } catch (error) {
+      console.error(error);
+      alert("Error al iniciar sesión");
+    }
   };
 
   return (

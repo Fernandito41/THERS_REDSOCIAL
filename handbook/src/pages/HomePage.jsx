@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 
 import { ROOT_CATEGORIES } from '../routes/routes'
+import Footer from '../components/ui/Footer'
 
 // Mapeo nombre → componente Lucide (DS-001 §6.1 / ARC-001 §8)
 const ICON_MAP = {
@@ -104,7 +105,8 @@ function CategoryCard({ category }) {
 // ── HomePage ──────────────────────────────────────────────────────────────
 function HomePage() {
   return (
-    <div className="mx-auto w-full max-w-5xl px-8 py-16">
+    <div className="flex min-h-full flex-col">
+    <div className="mx-auto w-full max-w-5xl flex-1 px-8 py-16">
       {/* ── [1] Hero ──────────────────────────────────────────────────────
           Centrado horizontalmente — única excepción al patrón left-aligned
           del resto del sistema (PV-001 Parte 1 §3).
@@ -147,6 +149,9 @@ function HomePage() {
           ))}
         </div>
       </section>
+    </div>
+    {/* Footer — DS-001 §9.3: presente en Home y Category Index */}
+    <Footer />
     </div>
   )
 }

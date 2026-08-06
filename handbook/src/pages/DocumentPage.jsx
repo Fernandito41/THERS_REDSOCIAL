@@ -1,28 +1,25 @@
 // DocumentPage — página de documento individual.
 //
-// Módulo 3 (Navigation System): placeholder estructural.
+// Módulo 4 (Design System Components):
+// - Usa el componente Breadcrumbs real (DS-001 §9.4) en lugar del inline de M3.
+// - Usa el componente Badge real (DS-001 §9.11) en lugar del span inline de M3.
 //
 // La plantilla dominante del Handbook (WF-001 §3.2):
 // "más del 90% del contenido del Handbook vive aquí".
 //
-// En Módulo 3 establece:
-//   - La ruta dinámica /:category/:doc funciona y resuelve parámetros
-//   - La página se renderiza dentro de DocumentLayout (Header + Sidebar + TOC)
-//   - El encabezado muestra la ruta actual para confirmar que la navegación funciona
-//
-// Qué falta para la especificación completa (PV-001 Parte 2 / Módulo 4+):
-//   - Breadcrumbs (DS-001 §9.4) — requieren router + frontmatter
-//   - Encabezado del Documento: código, badge de estado, versión, autor (PV-001 Parte 2 §4)
+// Qué falta para la especificación completa (PV-001 Parte 2 / Módulo 5+):
 //   - Contenido MDX renderizado (ARC-001 §1 capa 2 — Build Layer)
 //   - Prev/Next (WF-001 §5 plano Secuencial — requiere orden del frontmatter)
 //   - Documentos relacionados (PV-001 Parte 2 §9)
-//   - Footer condensado (PV-001 Parte 2 §10 / DS-001 §9.3 variante)
+//   - Scroll-spy en TOC (DS-001 §9.13)
 //
 // FAS-001 §7 — independencia entre páginas: DocumentPage no depende del
 // estado de ninguna otra página, solo de los params de la URL.
 
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ROOT_CATEGORIES } from '../routes/routes'
+import Breadcrumbs from '../components/ui/Breadcrumbs'
+import Badge from '../components/ui/Badge'
 
 function DocumentPage() {
   const { category: categorySlug, doc: docSlug } = useParams()
@@ -38,30 +35,26 @@ function DocumentPage() {
       className="mx-auto w-full px-8 py-8"
       style={{ maxWidth: '760px' }}
     >
-      {/* ── Breadcrumb placeholder ────────────────────────────────────────
-          DS-001 §9.4 — implementación real en Módulo 4+ (requiere frontmatter).
-          En Módulo 3 solo confirma la ruta actual.                          */}
-      <nav
-        className="mb-6 flex items-center gap-2 text-sm"
-        aria-label="Breadcrumb"
-      >
-        <Link to="/" style={{ color: 'var(--color-text-secondary)' }}>
-          Inicio
-        </Link>
-        <span style={{ color: 'var(--color-text-secondary)' }}>›</span>
-        {parentCategory && (
-          <>
-            <Link
-              to={parentCategory.path}
-              style={{ color: 'var(--color-text-secondary)' }}
-            >
-              {parentCategory.name}
-            </Link>
-            <span style={{ color: 'var(--color-text-secondary)' }}>›</span>
-          </>
-        )}
-        <span style={{ color: 'var(--color-text-primary)' }}>{docSlug}</span>
-      </nav>
+      {/* ── Breadcrumbs (DS-001 §9.4) ────────────────────────────────────
+          Componente real del Design System — Módulo 4.
+          El título del documento sigue siendo el slug hasta que el Content
+          Layer (Módulo 5+) provea el frontmatter con el título real.       */}
+      <div className="mb-6">
+        <Breadcrumbs
+          items={[
+            { label: 'Inicio', href: '/' },
+            ...(parentCategory
+              ? [{ label: parentCategory.name, href: parentCategory.path }]
+              : []),
+            {
+              label: docSlug
+                .split('-')
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(' '),
+            },
+          ]}
+        />
+      </div>
 
       {/* ── Encabezado del documento ──────────────────────────────────────
           PV-001 Parte 2 §4 — Fila 1: código + título (H1).
@@ -87,22 +80,14 @@ function DocumentPage() {
             .join(' ')}
         </h1>
 
-        {/* Badge de estado placeholder — DS-001 §9.11 en Módulo 4+ */}
+        {/* Badge de estado (DS-001 §9.11) — Módulo 4 */}
         <div className="mt-3 flex items-center gap-3">
-          <span
-            className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
-            style={{
-              backgroundColor: 'var(--color-warning)',
-              color: '#fff',
-            }}
-          >
-            Draft
-          </span>
+          <Badge variant="draft" />
           <span
             className="text-xs"
             style={{ color: 'var(--color-text-secondary)' }}
           >
-            Contenido provisional — Módulo 3
+            Contenido provisional — MDX en Módulo 5+
           </span>
         </div>
 

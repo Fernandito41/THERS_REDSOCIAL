@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 
 import { ROOT_CATEGORIES } from '../routes/routes'
+import Footer from '../components/ui/Footer'
 
 const ICON_MAP = {
   'building-2': Building2,
@@ -110,7 +111,8 @@ function CategoryPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-8 py-8">
+    <div className="flex min-h-full flex-col">
+    <div className="mx-auto w-full max-w-4xl flex-1 px-8 py-8">
       {/* ── Encabezado de categoría (PV-001 Parte 3 §1) ──────────────────
           Icono en contenedor 48×48px (radio 8px, border 1px color-border)
           + nombre H1 (text-h1: 30px/700).                                  */}
@@ -178,9 +180,12 @@ function CategoryPage() {
           style={{ color: 'var(--color-text-disabled)' }}
         >
           Los documentos reales de esta categoría se cargarán desde el Content
-          Layer en el Módulo 4+.
+          Layer en el Módulo 5+.
         </p>
       </section>
+    </div>
+    {/* Footer — DS-001 §9.3: presente en Home y Category Index */}
+    <Footer />
     </div>
   )
 }

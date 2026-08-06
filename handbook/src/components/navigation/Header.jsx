@@ -1,23 +1,16 @@
 // Header (TopNav) — chrome persistente del App Shell (DS-001 §9.1).
 //
-// Módulo 3 (Navigation System):
-// - sticky top-0 z-10 — permanece fijo sobre el contenido (DS-001 §9.1:
-//   "Permanece fijo con z-index por encima del contenido pero por debajo
-//   de modales"). Corrección respecto a Módulo 2: el Header era `shrink-0`
-//   dentro de un flex column, lo que lo fijaba visualmente pero no era
-//   verdaderamente sticky — ahora es sticky independiente del scroll.
-// - Aplica tokens de color DS-001 §4 en lugar de clases Tailwind gray-*:
-//   bg-gray-50 → var(--color-surface) | border-gray-200 → var(--color-border)
-//   text-gray-900 → var(--color-text-primary) | text-gray-400 → var(--color-text-secondary)
-//   (DS-001 §4 — regla vinculante: ningún color hardcodeado en componentes)
-// - Logo como NavLink funcional a Home (PV-001 Parte 1 §1:
-//   "un click, desde cualquier punto del Handbook, regresa a Home").
-// - Buscador y acciones permanecen como placeholders (Módulo 4+).
+// Módulo 4 (Design System Components):
+// - ThemeToggle: toggle de tema claro/oscuro (DS-001 §9 / §10).
+// - GitHub: enlace externo al repositorio con icono Lucide Github (DS-001 §9.1).
+// - Buscador permanece como placeholder visual (Módulo 5+: modal Ctrl+K).
 //
 // El componente es idéntico en las tres plantillas — Header no conoce
 // ni le importa qué layout lo contiene (FAS-001 §5: bajo acoplamiento).
 
 import { NavLink } from 'react-router-dom'
+import { ExternalLink } from 'lucide-react'
+import ThemeToggle from '../ui/ThemeToggle'
 
 function Header() {
   return (
@@ -71,17 +64,29 @@ function Header() {
       </div>
 
       {/* Acciones — toggle de tema + enlace GitHub (DS-001 §9.1).
-          Área de toque 40×40px (DS-001 §12 — mínimo 24×24px).
-          Módulo 4+: ThemeToggle (DS-001 §9, DS-001 §10) + enlace real. */}
-      <div className="flex items-center gap-3" aria-hidden="true">
-        <span
-          className="flex h-10 w-10 items-center justify-center rounded-md"
-          style={{ border: '1px solid var(--color-border)' }}
-        />
-        <span
-          className="flex h-10 w-10 items-center justify-center rounded-md"
-          style={{ border: '1px solid var(--color-border)' }}
-        />
+          Área de toque 40×40px mínimo (DS-001 §12).                     */}
+      <div className="flex items-center gap-3">
+        <ThemeToggle />
+        <a
+          href="https://github.com/Fernandito41/THERS_REDSOCIAL_2026"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-10 w-10 items-center justify-center rounded-md transition-colors"
+          style={{
+            border: '1px solid var(--color-border)',
+            color: 'var(--color-text-secondary)',
+          }}
+          aria-label="Ver repositorio en GitHub"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor =
+              'var(--color-sidebar-item-hover)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent'
+          }}
+        >
+          <ExternalLink size={18} strokeWidth={2} aria-hidden="true" />
+        </a>
       </div>
     </header>
   )

@@ -10,7 +10,7 @@
 
 function MainContent({ children }) {
   return (
-    <main className="flex-1 overflow-y-auto">
+    <main id="main-content" className="flex-1 overflow-y-auto" tabIndex={-1}>
       {children ?? (
         // Placeholder — visible solo cuando no hay children (no hay ruta activa).
         // En uso normal con el router, el <Outlet /> siempre provee contenido.

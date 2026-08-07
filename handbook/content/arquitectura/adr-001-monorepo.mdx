@@ -1,0 +1,74 @@
+---
+code: "ADR-001"
+title: "Estructura de Monorepo"
+status: "estable"
+version: "1.0"
+author: "Fernando Escalante"
+description: "Decisión de arquitectura: adopción de estructura monorepo para el proyecto THERS con backend Flask y frontend React."
+---
+
+import Callout from '@ui/Callout'
+
+## Estado
+
+**Aceptada** — implementada desde el inicio del proyecto.
+
+## Contexto
+
+El proyecto THERS requiere coordinar tres entidades separadas:
+
+1. **API backend** — Flask + PostgreSQL
+2. **Frontend de la red social** — React SPA
+3. **Handbook de ingeniería** — React SPA con contenido MDX
+
+Necesitamos decidir si estas tres entidades viven en repositorios separados o en un único repositorio.
+
+## Opciones consideradas
+
+### Opción A: Repositorios separados (polyrepo)
+- Un repo por entidad
+- CI/CD independiente por repo
+- Versioning independiente
+
+### Opción B: Monorepo (elegida)
+- Un único repositorio
+- Estructura de directorios claros: `backend/`, `Frontend/`, `handbook/`, `docs/`
+- Coordinación de cambios cross-cutting en un solo PR
+
+## Decisión
+
+Se adopta la **estructura monorepo** (Opción B).
+
+## Razonamiento
+
+<Callout variant="nota" title="Por qué monorepo">
+  Para un equipo pequeño con cambios frecuentes que atraviesan frontend y backend, el monorepo reduce la fricción de coordinación. Un solo PR puede modificar el contrato de la API y el cliente que lo consume simultáneamente.
+</Callout>
+
+| Criterio | Polyrepo | Monorepo |
+|---|---|---|
+| Coordinación cross-cutting | Alta fricción (múltiples PRs) | Baja fricción (un PR) |
+| Overhead de CI | Bajo por repo | Requiere configuración por directorio |
+| Visibilidad del proyecto | Fragmentada | Completa en un lugar |
+| Curva de onboarding | Mayor (múltiples repos) | Menor (un solo clone) |
+
+## Consecuencias
+
+**Positivas:**
+- Un solo `git clone` da acceso a todo el proyecto.
+- Los cambios de interfaz backend/frontend se revisan en conjunto.
+- La documentación (`docs/`) está junto al código que documenta.
+
+**Negativas:**
+- El repositorio crecerá en tamaño con el tiempo.
+- Los pipelines de CI/CD requieren filtros por directorio para no ejecutar todo en cada cambio.
+
+## Estructura adoptada
+
+```
+THERS_REDSOCIAL_2026/
+├── backend/          # Flask API
+├── Frontend/         # Red social React
+├── handbook/         # Engineering Handbook React
+└── docs/             # Documentación oficial (ARC-001, DS-001, etc.)
+```

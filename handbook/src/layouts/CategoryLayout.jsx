@@ -16,23 +16,37 @@ import { Outlet } from 'react-router-dom'
 import Header from '../components/navigation/Header'
 import Sidebar from '../components/navigation/Sidebar'
 import MainContent from '../components/layout/MainContent'
+import Footer from '../components/layout/Footer'
+import { DrawerProvider } from '../providers/DrawerContext'
 
 function CategoryLayout() {
   return (
+    <DrawerProvider>
     <div
       id="app-shell-category"
       className="flex h-screen flex-col"
       style={{ backgroundColor: 'var(--color-bg)' }}
     >
+      {/* Skip to content — DS-001 §12 */}
+      <a href="#main-content" className="skip-to-content">
+        Saltar al contenido principal
+      </a>
       <Header />
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar expandido — árbol completo con rama activa resaltada */}
         <Sidebar variant="expanded" />
         <MainContent>
-          <Outlet />
+          {/* Footer al fondo del área scrollable (PV-001 §8) */}
+          <div className="flex min-h-full flex-col">
+            <div className="flex-1">
+              <Outlet />
+            </div>
+            <Footer />
+          </div>
         </MainContent>
       </div>
     </div>
+    </DrawerProvider>
   )
 }
 

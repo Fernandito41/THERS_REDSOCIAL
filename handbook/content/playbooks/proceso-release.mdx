@@ -1,0 +1,84 @@
+---
+code: "PLY-001"
+title: "Proceso de Release"
+status: "draft"
+version: "0.1"
+author: "Fernando Escalante"
+description: "Procedimiento para hacer releases del frontend y backend THERS a producción."
+---
+
+import Callout from '@ui/Callout'
+import Alert from '@ui/Alert'
+
+<Alert variant="warning">
+  Este playbook está en estado draft. El proceso de release aún no está completamente definido para producción. Úsalo como guía pero verifica con el equipo antes de ejecutar.
+</Alert>
+
+## Cuándo hacer un release
+
+- Hay features completas y aprobadas en `develop`
+- Todos los tests del pipeline pasan
+- Se ha revisado el diff completo de `develop → main`
+- Hay al menos 2 approvals en el PR de release
+
+## Proceso paso a paso
+
+### 1. Preparar el PR de release
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b release/v{X.Y.Z}
+```
+
+Actualiza la versión en los archivos correspondientes:
+- `handbook/src/components/ui/Footer.jsx` — `HANDBOOK_VERSION`
+- `backend/app/__init__.py` — si tiene versión
+
+### 2. Verificar el build
+
+```bash
+# Handbook
+cd handbook && npm run build
+
+# Frontend
+cd Frontend && npm run build
+```
+
+Ambos deben completar sin errores ni warnings.
+
+### 3. Abrir el PR de release
+
+- Base: `main`
+- Head: `release/v{X.Y.Z}`
+- Título: `release: v{X.Y.Z}`
+- Descripción: lista de cambios desde el release anterior
+
+<Callout variant="advertencia" title="Freeze durante revisión">
+  Una vez abierto el PR de release, no se mergean nuevas features a `develop` hasta que el release esté completo o abortado.
+</Callout>
+
+### 4. Merge y tag
+
+Después de los approvals:
+
+```bash
+git checkout main
+git merge --no-ff release/v{X.Y.Z}
+git tag -a v{X.Y.Z} -m "Release v{X.Y.Z}"
+git push origin main --tags
+```
+
+### 5. Post-release
+
+- Mergear `main` de vuelta a `develop`
+- Anunciar el release en el canal del equipo
+- Actualizar el Roadmap si corresponde
+
+## Rollback
+
+Si el release tiene un bug crítico en producción:
+
+1. Revertir el merge: `git revert -m 1 {merge-commit-hash}`
+2. Abrir un PR de hotfix a `main`
+3. Documentar el incidente en el Handbook bajo `playbooks/`

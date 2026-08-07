@@ -1,22 +1,12 @@
 // CategoryPage — página índice de una categoría (Category Index).
 //
-// Módulo 3 (Navigation System).
+// Módulo 5 (Content Layer): muestra la lista real de documentos de la categoría
+// obtenida desde el registro de contenido (src/content/registry.js).
 //
-// Implementa el encabezado de categoría definido en WF-001 §10 y
-// PV-001 Parte 3 §1 (Encabezado de Categoría):
-//   - Icono 48×48px (contenedor cuadrado) + nombre H1 (PV-001 Parte 3 §1)
-//   - Descripción en text-body / text-secondary, máximo 2 líneas
-//   - Grid de tarjetas de documentos (placeholder — contenido real en Módulo 4+)
+// Si la categoría no tiene documentos en el registro, muestra el estado vacío
+// del Módulo 3 (indicando que no hay contenido aún).
 //
-// La categoría actual se resuelve desde la URL usando useLocation y
-// buscando en ROOT_CATEGORIES (FAS-001 §7 — independencia entre páginas:
-// ninguna página depende del estado de otra, solo de la URL actual).
-//
-// Secciones de Módulo 4+:
-//   - Buscador local (WF-001 §10 zona 5)
-//   - Filtros y etiquetas (WF-001 §10 zonas 4–6)
-//   - Estadísticas de categoría (WF-001 §10 zona 7)
-//   - Grid real de documentos (requiere Content Layer — ARC-001 §1 capa 1)
+// FAS-001 §7 — independencia entre páginas: solo depende de la URL actual.
 
 import { useLocation, Link } from 'react-router-dom'
 import {
@@ -32,7 +22,10 @@ import {
 } from 'lucide-react'
 
 import { ROOT_CATEGORIES } from '../routes/routes'
+import { getCategoryDocs } from '../content/registry'
+import Badge from '../components/ui/Badge'
 import Footer from '../components/ui/Footer'
+import Card from '../components/ui/Card'
 
 const ICON_MAP = {
   'building-2': Building2,
@@ -45,49 +38,20 @@ const ICON_MAP = {
   settings: Settings,
 }
 
-// ── Placeholder de tarjeta de documento ──────────────────────────────────
-// DS-001 §9.5 — anatomía: icono → título text-h4 → badge de estado.
-// En Módulo 4+ se alimenta desde el frontmatter de cada archivo MDX.
-function DocumentCardPlaceholder({ index }) {
-  return (
-    <div
-      className="flex items-start gap-3 rounded-lg p-4"
-      style={{
-        backgroundColor: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-      }}
-    >
-      <FileText
-        size={20}
-        strokeWidth={1.5}
-        aria-hidden="true"
-        style={{ color: 'var(--color-text-disabled)', flexShrink: 0, marginTop: 2 }}
-      />
-      <div className="flex flex-col gap-1">
-        <span
-          className="text-sm font-semibold"
-          style={{ color: 'var(--color-text-disabled)' }}
-        >
-          Documento {index + 1}
-        </span>
-        <span
-          className="text-xs"
-          style={{ color: 'var(--color-text-disabled)' }}
-        >
-          Contenido disponible en Módulo 4+
-        </span>
-      </div>
-    </div>
-  )
-}
-
-// ── CategoryPage ──────────────────────────────────────────────────────────
+// ── CategoryPage ─────────────────────────────────────────────────────────────
+// DocumentCard fue reemplazada por el componente Card compartido
+// (Módulo 9, variant="document") — DS-001 §9.5 exige una sola estructura
+// base para todas las variantes de tarjeta, antes duplicada con CategoryCard.
 function CategoryPage() {
   const { pathname } = useLocation()
   const category = ROOT_CATEGORIES.find((c) => c.path === pathname)
   const Icon = category ? ICON_MAP[category.icon] : null
 
-  // Categoría no encontrada — ruta inválida (404 real en Módulo 4+)
+  // Slug de la categoría sin la barra inicial ("/ingenieria" → "ingenieria")
+  const categorySlug = pathname.slice(1)
+  const docs = getCategoryDocs(categorySlug)
+
+  // Categoría no encontrada — ruta inválida (404 real en Módulo 6)
   if (!category) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -112,80 +76,100 @@ function CategoryPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-    <div className="mx-auto w-full max-w-4xl flex-1 px-8 py-8">
-      {/* ── Encabezado de categoría (PV-001 Parte 3 §1) ──────────────────
-          Icono en contenedor 48×48px (radio 8px, border 1px color-border)
-          + nombre H1 (text-h1: 30px/700).                                  */}
-      <header className="mb-8">
-        <div className="flex items-center gap-4">
-          {/* Contenedor de icono 48×48px (PV-001 Parte 3 §1) */}
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg"
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            {Icon && (
-              <Icon
-                size={24}
-                strokeWidth={2}
-                aria-hidden="true"
-                style={{ color: 'var(--color-text-secondary)' }}
-              />
-            )}
+      <div className="mx-auto w-full max-w-4xl flex-1 px-8 py-8">
+        {/* ── Encabezado de categoría (PV-001 Parte 3 §1) ───────────────── */}
+        <header className="mb-8">
+          <div className="flex items-center gap-4">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {Icon && (
+                <Icon
+                  size={24}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                />
+              )}
+            </div>
+            <h1
+              className="text-3xl font-bold leading-tight"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              {category.name}
+            </h1>
           </div>
-
-          {/* Nombre — text-h1 (DS-001 §5.2: 30px/700) */}
-          <h1
-            className="text-3xl font-bold leading-tight"
-            style={{ color: 'var(--color-text-primary)' }}
+          <p
+            className="mt-3 text-base leading-relaxed"
+            style={{ color: 'var(--color-text-secondary)' }}
           >
-            {category.name}
-          </h1>
-        </div>
+            {category.description}
+          </p>
+          <hr className="mt-6" style={{ borderColor: 'var(--color-border)' }} />
+        </header>
 
-        {/* Descripción — text-body / text-secondary, máx. 2 líneas (PV-001 Parte 3 §1) */}
-        <p
-          className="mt-3 text-base leading-relaxed"
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
-          {category.description}
-        </p>
+        {/* ── Lista de documentos ────────────────────────────────────────── */}
+        <section>
+          <h2
+            className="mb-4 text-sm font-semibold uppercase tracking-wider"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            Documentos
+            {docs.length > 0 && (
+              <span
+                className="ml-2 font-mono font-normal normal-case"
+                style={{ color: 'var(--color-text-disabled)' }}
+              >
+                {docs.length}
+              </span>
+            )}
+          </h2>
 
-        {/* Divisor (DS-001 §7 / PV-001 Parte 1 §8) */}
-        <hr className="mt-6" style={{ borderColor: 'var(--color-border)' }} />
-      </header>
-
-      {/* ── Grid de documentos ────────────────────────────────────────────
-          Placeholder — contenido real depende del Content Layer (ARC-001 §1
-          capa 1: Markdown/MDX + frontmatter). Se implementa en Módulo 4+.
-          Estructura: 2 columnas en desktop, 1 en mobile (WF-001 §10 zona 3). */}
-      <section>
-        <h2
-          className="mb-4 text-sm font-semibold uppercase tracking-wider"
-          style={{ color: 'var(--color-text-secondary)' }}
-        >
-          Documentos
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {[...Array(4)].map((_, i) => (
-            <DocumentCardPlaceholder key={i} index={i} />
-          ))}
-        </div>
-
-        {/* Aviso de Módulo 4+ */}
-        <p
-          className="mt-6 text-center text-xs"
-          style={{ color: 'var(--color-text-disabled)' }}
-        >
-          Los documentos reales de esta categoría se cargarán desde el Content
-          Layer en el Módulo 5+.
-        </p>
-      </section>
-    </div>
-    {/* Footer — DS-001 §9.3: presente en Home y Category Index */}
-    <Footer />
+          {docs.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              {docs.map((doc) => (
+                <Card
+                  key={doc.slug}
+                  to={doc.path}
+                  icon={FileText}
+                  title={doc.frontmatter.title}
+                  description={doc.frontmatter.description}
+                  badge={<Badge variant={doc.frontmatter.status} />}
+                  meta={doc.frontmatter.code}
+                  variant="document"
+                />
+              ))}
+            </div>
+          ) : (
+            // Estado vacío — categoría sin contenido MDX en el registro
+            <div
+              className="flex items-center justify-center rounded-lg border border-dashed py-16 text-center"
+              style={{ borderColor: 'var(--color-border)' }}
+            >
+              <div>
+                <p
+                  className="text-sm font-medium"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  Sin documentos aún
+                </p>
+                <p
+                  className="mt-1 text-xs"
+                  style={{ color: 'var(--color-text-disabled)' }}
+                >
+                  Los documentos de esta categoría se añaden en{' '}
+                  <code>content/{categorySlug}/</code>
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+      <Footer />
     </div>
   )
 }

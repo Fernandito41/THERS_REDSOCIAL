@@ -18,23 +18,37 @@ import { Outlet } from 'react-router-dom'
 import Header from '../components/navigation/Header'
 import Sidebar from '../components/navigation/Sidebar'
 import MainContent from '../components/layout/MainContent'
+import Footer from '../components/layout/Footer'
+import { DrawerProvider } from '../providers/DrawerContext'
 
 function HomeLayout() {
   return (
+    <DrawerProvider>
     <div
       id="app-shell-home"
       className="flex h-screen flex-col"
       style={{ backgroundColor: 'var(--color-bg)' }}
     >
+      {/* Skip to content — DS-001 §12, primer elemento Tab de la página */}
+      <a href="#main-content" className="skip-to-content">
+        Saltar al contenido principal
+      </a>
       <Header />
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar colapsado — variante de Home (franja 64px, solo iconos) */}
         <Sidebar variant="collapsed" />
         <MainContent>
-          <Outlet />
+          {/* Footer empujado al fondo del área de scroll (PV-001 §7) */}
+          <div className="flex min-h-full flex-col">
+            <div className="flex-1">
+              <Outlet />
+            </div>
+            <Footer />
+          </div>
         </MainContent>
       </div>
     </div>
+    </DrawerProvider>
   )
 }
 

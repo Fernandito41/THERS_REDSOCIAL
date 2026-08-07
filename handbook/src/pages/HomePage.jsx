@@ -8,9 +8,10 @@
 //   [1] Hero  — título "THERS Engineering Handbook" en text-display (36px/700),
 //               subtítulo en text-body / text-secondary. Solo en Home (DS-001 §5.2).
 //   [2] Grid de categorías — 8 Cards (DS-001 §9.5) en grid 4×2, una por cada
-//               categoría raíz del sitemap (ARC-001 §2).
-//               Cada card: icono icon-lg (24px) + título text-h4 + descripción.
-//               Hover: border-color-border-strong + sombra sutil (DS-001 §9.5).
+//               categoría raíz del sitemap (ARC-001 §2). Usa el componente Card
+//               compartido (Módulo 9, variant="category") en vez de una
+//               implementación propia — DS-001 §9.5 exige una sola estructura
+//               base para todas las variantes de tarjeta.
 //               Click navega a la Category Index correspondiente.
 //
 // Secciones "Últimas actualizaciones" y "Accesos rápidos" (WF-001 §8 zonas 7–9)
@@ -20,7 +21,6 @@
 // todo viene de los tokens de DS-001 y de los componentes del Design System
 // (FAS-001 §5 — coherencia con DS-001 como fuente de verdad visual).
 
-import { Link } from 'react-router-dom'
 import {
   Building2,
   BrainCircuit,
@@ -34,6 +34,7 @@ import {
 
 import { ROOT_CATEGORIES } from '../routes/routes'
 import Footer from '../components/ui/Footer'
+import Card from '../components/ui/Card'
 
 // Mapeo nombre → componente Lucide (DS-001 §6.1 / ARC-001 §8)
 const ICON_MAP = {
@@ -45,61 +46,6 @@ const ICON_MAP = {
   'list-checks': ListChecks,
   map: Map,
   settings: Settings,
-}
-
-// ── CategoryCard ──────────────────────────────────────────────────────────
-// DS-001 §9.5 — Card: fondo color-surface, borde 1px color-border, radio 8px,
-// padding space-4 (16px). Hover: borde pasa a color-border-strong + sombra sutil.
-// Anatomía: icono → título text-h4 → descripción text-body-sm / text-secondary.
-function CategoryCard({ category }) {
-  const Icon = ICON_MAP[category.icon]
-
-  return (
-    <Link
-      to={category.path}
-      className="group flex flex-col gap-2 rounded-lg p-4 transition-shadow"
-      style={{
-        backgroundColor: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-        textDecoration: 'none',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border-strong)'
-        e.currentTarget.style.boxShadow =
-          '0 1px 4px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border)'
-        e.currentTarget.style.boxShadow = 'none'
-      }}
-    >
-      {/* Icono icon-lg (24px, stroke 2px — DS-001 §6.2) */}
-      {Icon && (
-        <Icon
-          size={24}
-          strokeWidth={2}
-          aria-hidden="true"
-          style={{ color: 'var(--color-text-secondary)' }}
-        />
-      )}
-
-      {/* Título — text-h4 (DS-001 §5.2: 16px/600) */}
-      <span
-        className="text-base font-semibold"
-        style={{ color: 'var(--color-text-primary)' }}
-      >
-        {category.name}
-      </span>
-
-      {/* Descripción — text-body-sm / text-secondary (DS-001 §5.2: 14px/400) */}
-      <span
-        className="text-sm leading-snug"
-        style={{ color: 'var(--color-text-secondary)' }}
-      >
-        {category.description}
-      </span>
-    </Link>
-  )
 }
 
 // ── HomePage ──────────────────────────────────────────────────────────────
@@ -145,7 +91,14 @@ function HomePage() {
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {ROOT_CATEGORIES.map((category) => (
-            <CategoryCard key={category.path} category={category} />
+            <Card
+              key={category.path}
+              to={category.path}
+              icon={ICON_MAP[category.icon]}
+              title={category.name}
+              description={category.description}
+              variant="category"
+            />
           ))}
         </div>
       </section>

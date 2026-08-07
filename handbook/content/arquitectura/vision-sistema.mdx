@@ -1,0 +1,53 @@
+---
+code: "ARC-001"
+title: "Visión del Sistema"
+status: "estable"
+version: "1.0"
+author: "Fernando Escalante"
+description: "Arquitectura de alto nivel del sistema THERS: capas, responsabilidades y principios de diseño."
+---
+
+import Callout from '@ui/Callout'
+
+## Qué es THERS
+
+THERS es una red social de ingeniería diseñada para conectar profesionales técnicos. Consta de tres sistemas:
+
+1. **API Backend** (`backend/`) — Flask + PostgreSQL + JWT auth
+2. **Frontend Red Social** (`Frontend/`) — React SPA con feeds, perfiles, mensajes
+3. **Engineering Handbook** (`handbook/`) — Documentación técnica interna (este sitio)
+
+## Capas del Handbook
+
+El Handbook sigue una arquitectura de 5 capas definidas en ARC-001:
+
+```
+Content Layer  →  Build Layer  →  App Shell  →  Design System  →  Delivery
+   .mdx files     Vite + MDX     React Router    DS-001 tokens    Static SPA
+```
+
+### Content Layer
+Archivos MDX en `/content/{categoría}/{documento}.mdx`. El frontmatter YAML define metadatos (título, estado, versión, autor). El contenido en Markdown/MDX es procesado por el Build Layer.
+
+### Build Layer
+Vite 8 con el plugin `@mdx-js/rollup`. Transforma MDX → JSX → JS. Los plugins remark/rehype añaden soporte GFM, exportan el frontmatter y añaden IDs a los headings para el TOC.
+
+### App Shell
+React Router 7 con nested routes. Tres layouts: `HomeLayout`, `CategoryLayout`, `DocumentLayout`. Los layouts son persistentes — Header y Sidebar no se re-renderizan al navegar.
+
+### Design System
+CSS custom properties como tokens de color, Inter + JetBrains Mono, componentes UI en `src/components/ui/`. Dark mode via `data-theme` en `<html>`.
+
+### Delivery
+SPA estática generada por `vite build`. Puede desplegarse en Vercel, Netlify o cualquier CDN que sirva archivos estáticos.
+
+## Principios de diseño
+
+<Callout variant="nota" title="Regla fundamental">
+  El Handbook no tiene servidor. Es una SPA estática. Toda la lógica vive en el cliente.
+</Callout>
+
+- **Sin servidor propio** — el contenido se procesa en build time, no en runtime.
+- **Un solo repositorio** — backend, frontend y handbook en el mismo monorepo.
+- **Design System como contrato** — DS-001 define qué puede existir en la UI.
+- **Accesibilidad by default** — foco visible, ARIA, contraste WCAG AA obligatorios.

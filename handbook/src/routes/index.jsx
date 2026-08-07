@@ -21,6 +21,7 @@ import DocumentLayout from '../layouts/DocumentLayout'
 import HomePage from '../pages/HomePage'
 import CategoryPage from '../pages/CategoryPage'
 import DocumentPage from '../pages/DocumentPage'
+import NotFoundPage from '../pages/NotFoundPage'
 
 import { ROOT_CATEGORIES } from './routes'
 
@@ -49,9 +50,6 @@ const router = createBrowserRouter([
 
   // ── Document Page — /:category/:doc ─────────────────────────────────────
   // Layout con Sidebar expandido + TOC rail 220px (DS-001 §8.1).
-  // El parámetro :doc identifica el documento dentro de la categoría.
-  // En esta etapa (Módulo 3) el contenido es un placeholder —
-  // el rendering MDX real corresponde a módulos posteriores (ARC-001 §1 capa 2).
   {
     element: <DocumentLayout />,
     children: [
@@ -60,6 +58,16 @@ const router = createBrowserRouter([
         element: <DocumentPage />,
       },
     ],
+  },
+
+  // ── 404 catch-all — Módulo 6 ─────────────────────────────────────────────
+  // Debe ser la última entrada del array: React Router intenta hacer match
+  // en orden y solo llega aquí si ninguna ruta anterior coincide.
+  // Usa HomeLayout para mantener el chrome del App Shell (Header + Sidebar).
+  {
+    path: '*',
+    element: <HomeLayout />,
+    children: [{ index: true, element: <NotFoundPage /> }],
   },
 ])
 

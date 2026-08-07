@@ -1,0 +1,75 @@
+---
+code: "MAP-001"
+title: "Roadmap Actual"
+status: "draft"
+version: "0.2"
+author: "Fernando Escalante"
+description: "Estado actual y planificación próxima del proyecto THERS."
+---
+
+import Alert from '@ui/Alert'
+import Callout from '@ui/Callout'
+import Timeline from '@ui/Timeline'
+
+<Alert variant="info">
+  Este documento se actualiza al cierre de cada módulo o sprint. Verifica la fecha de la última actualización comparando el campo `version` con el historial de commits.
+</Alert>
+
+## Estado general
+
+| Área | Módulo actual | Próximo |
+|---|---|---|
+| Engineering Handbook | Módulo 9 (Content Components) | Módulo 10 (por definir) |
+| Frontend red social | Conectado a backend | Features sociales |
+| Backend API | Auth completa | Feed + perfiles |
+
+## Handbook — Módulos completados
+
+<Timeline>
+  <Timeline.Item status="completado" date="M1" title="Foundation: Vite + React + Tailwind v4">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M2" title="Layout System: Header, Sidebar, MainContent">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M3" title="Navigation System: Router, layouts, páginas">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M4" title="Design System Components: Badge, Button, Callout, Alert, ThemeToggle">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M5" title="Content Layer: MDX rendering, registro de contenido">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M6" title="Search + Scroll-spy TOC">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M7" title="Responsive + Sequential Navigation: Drawer mobile, PrevNext, CodeBlock">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M8" title="Footer + Accesibilidad">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M9" title="Content Components: Card unificado, Timeline, sombra de scroll en tablas">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="pendiente" date="M10" title="Por definir">
+    Planificado
+  </Timeline.Item>
+</Timeline>
+
+## Próximos pasos (Módulo 10)
+
+<Callout variant="nota" title="Módulo 10">
+  El alcance del Módulo 10 todavía no está definido en la documentación oficial. Se registrará en esta sección al cierre de su planificación, siguiendo el mismo criterio de esta entrada (documentar solo alcance ya confirmado, no anticipado).
+</Callout>
+
+## Frontend red social
+
+| Feature | Estado |
+|---|---|
+| Autenticación (login/register) | ✅ Completa |
+| Conexión frontend-backend | ✅ Completa |
+| Feed de publicaciones | 🔵 En desarrollo |
+| Perfil de usuario | 🔵 Planificado |
+| Mensajes directos | 🔵 Futuro |

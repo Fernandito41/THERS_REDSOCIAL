@@ -24,10 +24,13 @@ import { DrawerProvider } from '../providers/DrawerContext'
 function HomeLayout() {
   return (
     <DrawerProvider>
+    {/* container-app 1440px (DS-001 §8.1 / PV-001 Responsive §2 bp-wide):
+        el espacio adicional en monitores ultrawide se vuelve padding lateral,
+        no un App Shell sin límite (Módulo 10 — cierre de fidelidad visual). */}
     <div
       id="app-shell-home"
-      className="flex h-screen flex-col"
-      style={{ backgroundColor: 'var(--color-bg)' }}
+      className="mx-auto flex h-screen flex-col"
+      style={{ backgroundColor: 'var(--color-bg)', maxWidth: '1440px' }}
     >
       {/* Skip to content — DS-001 §12, primer elemento Tab de la página */}
       <a href="#main-content" className="skip-to-content">

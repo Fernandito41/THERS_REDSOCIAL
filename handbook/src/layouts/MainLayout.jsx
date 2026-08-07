@@ -23,8 +23,8 @@ function MainLayout({ children }) {
   return (
     <div
       id="app-shell"
-      className="flex h-screen flex-col"
-      style={{ backgroundColor: 'var(--color-bg)' }}
+      className="mx-auto flex h-screen flex-col"
+      style={{ backgroundColor: 'var(--color-bg)', maxWidth: '1440px' }}
     >
       <Header />
       <div className="flex flex-1 overflow-hidden">

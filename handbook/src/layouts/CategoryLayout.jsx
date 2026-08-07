@@ -22,10 +22,12 @@ import { DrawerProvider } from '../providers/DrawerContext'
 function CategoryLayout() {
   return (
     <DrawerProvider>
+    {/* container-app 1440px (DS-001 §8.1 / PV-001 Responsive §2 bp-wide) —
+        Módulo 10, mismo criterio que HomeLayout y DocumentLayout. */}
     <div
       id="app-shell-category"
-      className="flex h-screen flex-col"
-      style={{ backgroundColor: 'var(--color-bg)' }}
+      className="mx-auto flex h-screen flex-col"
+      style={{ backgroundColor: 'var(--color-bg)', maxWidth: '1440px' }}
     >
       {/* Skip to content — DS-001 §12 */}
       <a href="#main-content" className="skip-to-content">

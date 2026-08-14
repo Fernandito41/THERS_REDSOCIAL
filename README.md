@@ -17,7 +17,7 @@
 
 ---
 
-> ℹ **Nota sobre este README.** Este archivo es **informativo, no una fuente de verdad oficial**. La documentación autoritativa del proyecto vive en [`docs/`](docs/); ante cualquier conflicto, `docs/` tiene prioridad (ver `HB-001` y `docs/architecture/REPOSITORY_STRUCTURE.md`). Este documento se reconcilió con la documentación oficial y el código real; las secciones marcadas como *planificado* o *pendiente de documentar* señalan aquello que todavía no está implementado ni formalmente especificado.
+>  **Nota sobre este README.** Este archivo es **informativo, no una fuente de verdad oficial**. La documentación autoritativa del proyecto vive en [`docs/`](docs/); ante cualquier conflicto, `docs/` tiene prioridad (ver `HB-001` y `docs/architecture/REPOSITORY_STRUCTURE.md`). Este documento se reconcilió con la documentación oficial y el código real; las secciones marcadas como *planificado* o *pendiente de documentar* señalan aquello que todavía no está implementado ni formalmente especificado.
 
 ## ¿Qué es THERS?
 
@@ -145,7 +145,7 @@ La documentación oficial vive en [`docs/`](docs/) (Markdown, versionada). Docum
 
 ## Roadmap
 
-> Intención de producto — **no** especificación aprobada (ver nota de alcance arriba). El estado refleja lo realmente implementado hoy.
+> Intención de producto — **no** especificación aprobada (ver nota de alcance arriba). El estado  refleja lo realmente implementado hoy.
 
 - [x] Setup del monorepo (backend / Frontend / handbook / docs)
 - [x] THERS Engineering Handbook (Release Candidate)

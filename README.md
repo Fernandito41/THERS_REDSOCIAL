@@ -17,13 +17,13 @@
 
 ---
 
-> ℹ️ **Nota sobre este README.** Este archivo es **informativo, no una fuente de verdad oficial**. La documentación autoritativa del proyecto vive en [`docs/`](docs/); ante cualquier conflicto, `docs/` tiene prioridad (ver `HB-001` y `docs/architecture/REPOSITORY_STRUCTURE.md`). Este documento se reconcilió con la documentación oficial y el código real; las secciones marcadas como *planificado* o *pendiente de documentar* señalan aquello que todavía no está implementado ni formalmente especificado.
+> ℹ **Nota sobre este README.** Este archivo es **informativo, no una fuente de verdad oficial**. La documentación autoritativa del proyecto vive en [`docs/`](docs/); ante cualquier conflicto, `docs/` tiene prioridad (ver `HB-001` y `docs/architecture/REPOSITORY_STRUCTURE.md`). Este documento se reconcilió con la documentación oficial y el código real; las secciones marcadas como *planificado* o *pendiente de documentar* señalan aquello que todavía no está implementado ni formalmente especificado.
 
 ## ¿Qué es THERS?
 
 THERS es **una red social**, desarrollada como monorepo por un equipo de 4 integrantes con estándares de trabajo de una empresa de software real (`HB-001`).
 
-> ⚠️ **La descripción funcional completa del producto** (audiencia objetivo y catálogo definitivo de features) **aún no está formalmente documentada** en `docs/` — solo está confirmado, por el nombre del repositorio, que se trata de una red social (`docs/architecture/REPOSITORY_STRUCTURE.md` §1). La sección de [Roadmap](#roadmap) refleja *intención de producto*, no una especificación aprobada.
+>  **La descripción funcional completa del producto** (audiencia objetivo y catálogo definitivo de features) **aún no está formalmente documentada** en `docs/` — solo está confirmado, por el nombre del repositorio, que se trata de una red social (`docs/architecture/REPOSITORY_STRUCTURE.md` §1). La sección de [Roadmap](#roadmap) refleja *intención de producto*, no una especificación aprobada.
 
 ## Estructura del repositorio (monorepo)
 
@@ -83,7 +83,7 @@ Lo que existe hoy en el código, sin adornos:
 
 | Método | Endpoint | Descripción | Estado |
 |--------|----------|-------------|--------|
-| POST | `/api/login` | Login → JWT | ✅ Implementado (credenciales temporales, sin BD) |
+| POST | `/api/login` | Login → JWT |  Implementado (credenciales temporales, sin BD) |
 
 > El resto de endpoints de una red social (registro persistente, posts, likes, comentarios, follows, notificaciones, perfiles, admin) **no existen todavía** y **no están especificados** en `docs/`. Se documentará cada endpoint el mismo día de su PR (`HB-001` §15.1), no de forma retroactiva.
 
@@ -107,9 +107,9 @@ npm run dev
 cd backend
 python run.py     # arranca en http://127.0.0.1:5000
 ```
-> ⚠️ **Dependencias del backend: pendientes.** No hay `requirements.txt` ni `pyproject.toml` en el repositorio, por lo que no existe un comando de instalación documentado (`CLAUDE.md` §4). Confirmar las dependencias con el equipo antes de asumir versiones.
+>  **Dependencias del backend: pendientes.** No hay `requirements.txt` ni `pyproject.toml` en el repositorio, por lo que no existe un comando de instalación documentado (`CLAUDE.md` §4). Confirmar las dependencias con el equipo antes de asumir versiones.
 >
-> 🔐 **Secreto JWT por entorno.** `JWT_SECRET_KEY` se lee de una variable de entorno (`backend/app/config.py`). Debe estar definida en el entorno donde corra Flask; **nunca** se sube al repositorio (`HB-001` §19.1, §20).
+>  **Secreto JWT por entorno.** `JWT_SECRET_KEY` se lee de una variable de entorno (`backend/app/config.py`). Debe estar definida en el entorno donde corra Flask; **nunca** se sube al repositorio (`HB-001` §19.1, §20).
 
 ## Flujo de ramas (Git Flow)
 
@@ -145,7 +145,7 @@ La documentación oficial vive en [`docs/`](docs/) (Markdown, versionada). Docum
 
 ## Roadmap
 
-> Intención de producto — **no** especificación aprobada (ver nota de alcance arriba). El estado ✅ refleja lo realmente implementado hoy.
+> Intención de producto — **no** especificación aprobada (ver nota de alcance arriba). El estado refleja lo realmente implementado hoy.
 
 - [x] Setup del monorepo (backend / Frontend / handbook / docs)
 - [x] THERS Engineering Handbook (Release Candidate)

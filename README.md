@@ -1,236 +1,170 @@
 <div align="center">
 
 # THERS
-### Bienvenidos a Thers una red social desarrollada para unir y conectar personas de todo el mundo de una manera facil y rapida.Utilizando interfaces interactivas y modernas, en Thers puedes crear,compartir publicaciones, historias y videos en tiempo real ademas de interactuar con otros usuarios.
 
+**Una red social — proyecto de un equipo autogestionado de 4 integrantes.**
 
-
-**Conecta, comparte y descubre — la red social hecha para estudiantes**
-
-![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
-![Flask](https://img.shields.io/badge/Flask-3-000000?style=flat-square&logo=flask)
-![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?style=flat-square&logo=mysql)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite)
+![Flask](https://img.shields.io/badge/Flask-000000?style=flat-square&logo=flask)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-3-38B2AC?style=flat-square&logo=tailwindcss)
-![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+![JWT](https://img.shields.io/badge/JWT-000000?style=flat-square&logo=jsonwebtokens)
 
-[Demo](#) · [Reportar Bug](../../issues) · [Solicitar Feature](../../issues)
+[Reportar Bug](../../issues) · [Solicitar Feature](../../issues)
 
 </div>
 
 ---
 
+> ℹ️ **Nota sobre este README.** Este archivo es **informativo, no una fuente de verdad oficial**. La documentación autoritativa del proyecto vive en [`docs/`](docs/); ante cualquier conflicto, `docs/` tiene prioridad (ver `HB-001` y `docs/architecture/REPOSITORY_STRUCTURE.md`). Este documento se reconcilió con la documentación oficial y el código real; las secciones marcadas como *planificado* o *pendiente de documentar* señalan aquello que todavía no está implementado ni formalmente especificado.
+
 ## ¿Qué es THERS?
 
-THERS es una red social que Permite publicar contenido (texto e imágenes), interactuar con otros usuarios mediante likes y comentarios, seguir perfiles, explorar publicaciones y recibir notificaciones — todo en un entorno pensado para todo el publico.
+THERS es **una red social**, desarrollada como monorepo por un equipo de 4 integrantes con estándares de trabajo de una empresa de software real (`HB-001`).
 
-## Características
+> ⚠️ **La descripción funcional completa del producto** (audiencia objetivo y catálogo definitivo de features) **aún no está formalmente documentada** en `docs/` — solo está confirmado, por el nombre del repositorio, que se trata de una red social (`docs/architecture/REPOSITORY_STRUCTURE.md` §1). La sección de [Roadmap](#roadmap) refleja *intención de producto*, no una especificación aprobada.
 
-- Registro e inicio de sesión con JWT
-- Publicaciones con texto e imágenes
-- Feed personalizado con posts de personas seguidas
-- Sistema de likes y comentarios
-- Seguir / dejar de seguir usuarios
-- Perfil de usuario con bio y posts propios
-- Explorar y buscar otros estudiantes
-- Notificaciones (likes, comentarios, nuevos seguidores)
-- Panel de administración de usuarios
-- Diseño responsive (mobile-first)
+## Estructura del repositorio (monorepo)
+
+Tres aplicaciones independientes + la documentación oficial, cada una como carpeta de primer nivel (`docs/architecture/REPOSITORY_STRUCTURE.md`):
+
+```
+THERS_REDSOCIAL_2026/
+├── backend/        # API Flask (JWT). Capas: domain / application / interfaces
+│   ├── app/
+│   │   ├── domain/auth/            # reglas de negocio puras
+│   │   ├── application/auth/       # casos de uso
+│   │   ├── interfaces/routes/      # adaptadores HTTP (blueprints)
+│   │   ├── config.py
+│   │   ├── extensions.py
+│   │   └── __init__.py             # create_app()
+│   └── run.py                      # punto de entrada (127.0.0.1:5000)
+│
+├── Frontend/       # Producto — la red social (React + Vite + Tailwind)
+│   └── src/
+│       ├── app/                    # providers, router, store
+│       ├── features/               # organización por dominio
+│       │   ├── auth/               # AuthPage, Login, Register, useAuth
+│       │   └── legal/              # Terms, Privacy, Cookies
+│       └── shared/                 # componentes y librerías transversales
+│
+├── handbook/       # THERS Engineering Handbook (React + Vite + MDX, SSG)
+│
+└── docs/           # Documentación oficial (fuente de verdad)
+```
+
+> La organización interna del backend está **observada en el código, no ratificada** en un documento oficial de arquitectura (`docs/architecture/REPOSITORY_STRUCTURE.md` §6). La arquitectura de base de datos se documenta en `docs/architecture/DATABASE_ARCHITECTURE.md` (borrador).
 
 ## Stack tecnológico
 
-| Capa | Tecnología |
-|------|-----------|
-| Frontend | React 18 + Vite 5 |
-| Estilos | Tailwind CSS 3 |
-| Routing | React Router v6 |
-| Estado global | Context API + hooks |
-| HTTP client | Axios |
-| Backend | Flask 3 (Python) |
-| Base de datos | MySQL 8 |
-| Autenticación | JWT (flask-jwt-extended) |
+| Capa | Tecnología | Fuente |
+|------|-----------|--------|
+| Frontend | React 19 + Vite 8 | `Frontend/package.json` |
+| Estilos | Tailwind CSS 3 | `Frontend/package.json` |
+| Routing | React Router 7 | `Frontend/package.json` |
+| HTTP client | Axios | `Frontend/package.json` |
+| Iconos | react-icons | `Frontend/package.json` |
+| Backend | Flask (Python) | `HB-001`, `backend/` |
+| Base de datos | PostgreSQL | `HB-001` (versión y driver: pendientes, ver `DATABASE_ARCHITECTURE.md`) |
+| Autenticación | JWT (`flask-jwt-extended`) | `backend/app/extensions.py` |
+| Documentación | Markdown + Handbook (MDX/SSG) | `docs/`, `handbook/` |
 
-## Estructura del proyecto
+## Estado actual (implementado)
 
-```
-thers/
-├── frontend/
-│   ├── src/
-│   │   ├── components/       # UI reutilizable (Navbar, PostCard)
-│   │   ├── pages/            # Home, Login, Register, Profile, Explore
-│   │   ├── routes/           # AppRouter + rutas protegidas
-│   │   ├── context/          # AuthContext, PostContext
-│   │   ├── services/         # authService, postService, userService…
-│   │   └── assets/
-│   ├── index.html
-│   ├── vite.config.js
-│   └── tailwind.config.js
-│
-├── backend/
-│   ├── routes/               # auth, posts, users, comments, likes, follows
-│   ├── models/               # User, Post, Comment, Like, Follow, Notification
-│   ├── config/               # DB, JWT
-│   └── app.py
-│
-└── README.md
-```
+Lo que existe hoy en el código, sin adornos:
+
+- **Frontend — Autenticación (UI):** páginas `AuthPage`, `Login` y `Register`. El login consume el backend; el registro es todavía un stub (`console.log` + redirección).
+- **Frontend — Legal:** páginas estáticas `Terms`, `Privacy`, `Cookies`.
+- **Backend — Auth:** un único endpoint, `POST /api/login`, que emite un JWT. La validación de credenciales es **temporal / hardcodeada** (aún sin base de datos).
+- **Handbook:** aplicación de documentación técnica interna, completa (Release Candidate).
+
+## API — Endpoints
+
+| Método | Endpoint | Descripción | Estado |
+|--------|----------|-------------|--------|
+| POST | `/api/login` | Login → JWT | ✅ Implementado (credenciales temporales, sin BD) |
+
+> El resto de endpoints de una red social (registro persistente, posts, likes, comentarios, follows, notificaciones, perfiles, admin) **no existen todavía** y **no están especificados** en `docs/`. Se documentará cada endpoint el mismo día de su PR (`HB-001` §15.1), no de forma retroactiva.
 
 ## Instalación local
 
 ### Prerrequisitos
-
 - Node.js 18+
 - Python 3.11+
-- MySQL 8+
+- PostgreSQL *(aún no integrado en el backend — ver nota más abajo)*
 
-### 1. Clonar el repositorio
-
+### Frontend (`Frontend/`)
 ```bash
-git clone https://github.com/TU_USUARIO/thers.git
-cd thers
-```
-
-### 2. Frontend
-
-```bash
-cd frontend
+cd Frontend
 npm install
-cp .env.example .env        # configurar VITE_API_URL
 npm run dev
 ```
+> La URL de la API está fijada en `src/shared/lib/api.js` (`http://127.0.0.1:5000/api`). No hay `.env.example` ni lista oficial de variables de entorno del Frontend todavía (pendiente de documentar).
 
-### 3. Backend
-
+### Backend (`backend/`)
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate    # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env        # configurar DB y JWT_SECRET
-flask db upgrade
-flask run
+python run.py     # arranca en http://127.0.0.1:5000
 ```
-
-### Variables de entorno
-
-**frontend/.env**
-```env
-VITE_API_URL=http://localhost:5000/api
-```
-
-**backend/.env**
-```env
-DATABASE_URL=mysql+pymysql://user:password@localhost/thers_db
-JWT_SECRET_KEY=tu_clave_secreta
-UPLOAD_FOLDER=uploads/
-```
-
-## API — Endpoints principales
-
-| Método | Endpoint | Descripción | Auth |
-|--------|----------|-------------|------|
-| POST | `/api/auth/register` | Registro de usuario | No |
-| POST | `/api/auth/login` | Login → JWT | No |
-| GET | `/api/auth/me` | Usuario autenticado | Sí |
-| GET | `/api/posts` | Feed personalizado | Sí |
-| POST | `/api/posts` | Crear publicación | Sí |
-| DELETE | `/api/posts/:id` | Eliminar publicación | Sí |
-| POST | `/api/posts/:id/like` | Like / unlike | Sí |
-| GET | `/api/posts/:id/comments` | Ver comentarios | Sí |
-| POST | `/api/comments` | Crear comentario | Sí |
-| GET | `/api/users/:id` | Ver perfil | Sí |
-| POST | `/api/users/:id/follow` | Seguir usuario | Sí |
-| DELETE | `/api/users/:id/follow` | Dejar de seguir | Sí |
-| GET | `/api/users/explore` | Explorar estudiantes | Sí |
-| GET | `/api/notifications` | Ver notificaciones | Sí |
-| GET | `/api/admin/users` | Gestión de usuarios | Admin |
+> ⚠️ **Dependencias del backend: pendientes.** No hay `requirements.txt` ni `pyproject.toml` en el repositorio, por lo que no existe un comando de instalación documentado (`CLAUDE.md` §4). Confirmar las dependencias con el equipo antes de asumir versiones.
+>
+> 🔐 **Secreto JWT por entorno.** `JWT_SECRET_KEY` se lee de una variable de entorno (`backend/app/config.py`). Debe estar definida en el entorno donde corra Flask; **nunca** se sube al repositorio (`HB-001` §19.1, §20).
 
 ## Flujo de ramas (Git Flow)
 
-```
-main          ← producción estable
-└── develop   ← integración
-    ├── feature/auth
-    ├── feature/posts
-    ├── feature/comments
-    ├── feature/likes
-    ├── feature/follow
-    ├── feature/notifications
-    ├── feature/explore
-    ├── feature/profile
-    ├── feature/admin
-    └── feature/ui
-```
+Fuente vinculante: `HB-001` §7–9 (resumen en `CLAUDE.md` §6).
 
-**Convención de commits:**
+- **`main`** — producción/entregable estable. Sin push directo.
+- **`develop`** — integración. Sin push directo.
+- Ambas exigen **Pull Request + al menos 1 aprobación** (el autor no se autoaprueba).
+- **Ramas:** `feature/<nombre>`, `fix/<nombre>`, `chore/<nombre>`, `docs/<nombre>`, `hotfix/<nombre>`.
+- **Commits (Conventional Commits):** `feat:` · `fix:` · `docs:` · `style:` · `refactor:` · `test:` · `chore:`.
+- **PR:** resuelve una sola cosa; título con el mismo prefijo que los commits; vinculado a su Issue (`Closes #N`); sin `.env`/credenciales ni código de prueba olvidado.
+- **Release:** `develop` → `main` periódicamente vía PR de release.
 
-```
-feat:     nueva funcionalidad
-fix:      corrección de bug
-style:    cambios de UI/estilos
-refactor: refactorización sin cambio de comportamiento
-docs:     documentación
-test:     pruebas
-```
-## Contribuir al proyecto (flujo por miembro)
-
-### 1. Siempre trabajar desde develop
+### Flujo por integrante
 ```bash
 git checkout develop
 git pull origin develop
-```
-
-### 3. Crear tu feature branch
-```bash
-git checkout -b feature/NOMBRE
-# Ejemplos:
-# git checkout -b feature/auth
-# git checkout -b feature/posts
-# git checkout -b feature/follow
-```
-
-### 4. Hacer tus cambios y commitear
-```bash
-git add .
-git commit -m "feat: descripción corta de lo que hiciste"
-```
-
-### 5. Subir tu branch a GitHub
-```bash
+git checkout -b feature/NOMBRE     # o fix/ , docs/ , chore/ , hotfix/
+# ...cambios...
+git commit -m "feat: descripción corta"
 git push origin feature/NOMBRE
+# Abrir Pull Request hacia develop y esperar aprobación
 ```
 
-### 6. Abrir Pull Request en GitHub
-- Ve a github.com/TU_USUARIO/thers
-- Clic en **"Compare & pull request"**
-- Base: `develop` ← Compare: `feature/NOMBRE`
-- Describe los cambios y asigna un reviewer
-- Espera aprobación antes de hacer merge
+## Documentación
 
-## Equipo
+La documentación oficial vive en [`docs/`](docs/) (Markdown, versionada). Documentos de referencia:
 
-| Rol | Responsabilidad |
-|-----|----------------|
-| Frontend (×2) | React, componentes, páginas, UI |
-| Backend (×2) | Flask, API REST, modelos, DB |
-| UI/UX (×1) | Diseño, Tailwind, assets, experiencia |
-| DB / Testing (×1) | Esquema MySQL, pruebas, integración |
+- `docs/architecture/organization/` — Manual de Organización (`HB-001`): roles, git flow, gobernanza.
+- `docs/architecture/REPOSITORY_STRUCTURE.md` — mapa del monorepo.
+- `docs/architecture/DATABASE_ARCHITECTURE.md` — contrato de base de datos (borrador).
+- `docs/architecture/design/` y `docs/architecture/Frontend/` — Design System, wireframes, prototipo y arquitectura del Handbook.
 
 ## Roadmap
 
-- [x] Setup del proyecto
-- [x] Autenticación JWT
+> Intención de producto — **no** especificación aprobada (ver nota de alcance arriba). El estado ✅ refleja lo realmente implementado hoy.
+
+- [x] Setup del monorepo (backend / Frontend / handbook / docs)
+- [x] THERS Engineering Handbook (Release Candidate)
+- [x] Autenticación JWT — login (credenciales temporales)
+- [ ] Integración de PostgreSQL y persistencia real de usuarios
+- [ ] Registro de usuario persistente
 - [ ] Publicaciones (texto + imagen)
 - [ ] Likes y comentarios
-- [ ] Sistema de seguidores
-- [ ] Feed personalizado
+- [ ] Sistema de seguidores y feed personalizado
 - [ ] Perfiles de usuario
 - [ ] Explorar / buscar usuarios
 - [ ] Notificaciones
 - [ ] Panel de administración
-- [ ] UI responsive final
-- [ ] Testing
-- [ ] Deploy
+- [ ] Estrategia de testing
+- [ ] DevOps / deploy
+
+## Equipo
+
+Equipo autogestionado de **4 integrantes** (`HB-001` §1). Roles, responsabilidades y ownership por documento están definidos en el Manual de Organización (`docs/architecture/organization/` — `HB-001` §2–3).
 
 ## Licencia
 
@@ -239,5 +173,5 @@ Distribuido bajo licencia MIT. Ver `LICENSE` para más información.
 ---
 
 <div align="center">
-Desarrollado con propósito educativo · THERS 2025
+Desarrollado con propósito educativo · THERS 2026
 </div>

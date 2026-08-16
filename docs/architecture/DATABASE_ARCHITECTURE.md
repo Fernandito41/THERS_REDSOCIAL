@@ -204,12 +204,12 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 | Columna | Tipo (conceptual) | Nulo | Justificación / origen |
 |---|---|---|---|
-| `id` | **UUID** | No | Clave primaria. Implementado en `app/infrastructure/persistence/models.py` (`sqlalchemy.dialects.postgresql.UUID(as_uuid=True)`, generado en Python con `uuid.uuid4`, no en la base de datos). Cambiado desde BIGINT autoincremental por indicación posterior del Tech Lead Backend — ratificación formal por el Comité Técnico pendiente de confirmar (`HB-001` §11.1; ver `BACKEND_ARCHITECTURE.md` §2 nota de gobernanza) |
-| `name` | texto | No | Campo `name` recolectado en `Register.jsx`; devuelto por el backend |
-| `email` | texto | No | Campo `email` de registro; **login se hace por email** → identificador de acceso |
-| `password_hash` | texto | No | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11) |
-| `created_at` | timestamp con zona | No | Convención de auditoría (§7); estándar para toda entidad |
-| `updated_at` | timestamp con zona | No | Convención de auditoría (§7) |
+| `id` | **UUID** | No | Clave primaria. `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` — el valor se genera **en PostgreSQL** (`gen_random_uuid()`, función nativa desde PostgreSQL 13, no requiere `pgcrypto`/`uuid-ossp`), no en Python. Implementado en `app/infrastructure/persistence/models.py` (`sqlalchemy.dialects.postgresql.UUID(as_uuid=True)`, `server_default=text("gen_random_uuid()")`) y en la migración `a1b2c3d4e5f6_create_users_table.py` |
+| `name` | `VARCHAR(120)` | No | Campo `name` recolectado en `Register.jsx`; devuelto por el backend |
+| `email` | **CITEXT** | No | `email CITEXT NOT NULL UNIQUE` — tipo case-insensitive de PostgreSQL (extensión `citext`, ver §11); el `UNIQUE` ignora mayúsculas/minúsculas a nivel de motor, sin normalizar manualmente en la capa de aplicación. **login se hace por email** → identificador de acceso |
+| `password_hash` | `TEXT` | No | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11) |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Convención de auditoría (§7); estándar para toda entidad |
+| `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7). Un trigger de PostgreSQL (`set_updated_at`/`trg_users_updated_at`, ver migración) la actualiza en cada `UPDATE` — funciona igual vía ORM o SQL directo, no depende de que el código de aplicación la toque |
 
 **Clave primaria (PK).** `id`.
 
@@ -218,11 +218,11 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 **Relaciones.** Ninguna definida hoy. Cuando existan entidades sociales (posts, follows), serán ellas quienes referencien a `users` mediante FK, no al revés (ver §6 y §4.B).
 
 **Constraints relevantes**
-- `email` **UNIQUE** y **NOT NULL** — el login identifica al usuario por email; dos cuentas no pueden compartirlo. (Justifica también el índice de §8.)
+- `email` **UNIQUE** (case-insensitive, vía `CITEXT`) y **NOT NULL** — el login identifica al usuario por email; dos cuentas no pueden compartirlo, ni siquiera con distinto casing. (Justifica también el índice de §8.)
 - `name` **NOT NULL** — el formulario lo exige (`isValid` requiere `name.trim()`).
 - `password_hash` **NOT NULL**.
 
-**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): longitudes máximas de columnas (implementadas como `name VARCHAR(120)`, `email`/`password_hash VARCHAR(255)` — valores por defecto razonables aplicados en el código, no ratificados formalmente); si se normaliza el `email` (minúsculas) a nivel de esquema o de aplicación (no implementado todavía en ningún caso de uso); algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9); campos anticipados por la UI pero **no** recolectados en registro (`username`/`@usuario` y teléfono aparecen solo como placeholder en `Login.jsx`, no como campos reales) → no se añaden por inferencia. **Tipo de PK ya resuelto:** UUID (ver arriba).
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9); campos anticipados por la UI pero **no** recolectados en registro (`username`/`@usuario` y teléfono aparecen solo como placeholder en `Login.jsx`, no como campos reales) → no se añaden por inferencia. **Ya resueltos:** tipo de PK (UUID, `gen_random_uuid()`), tipo de `email` (`CITEXT`), longitud de `name` (`VARCHAR(120)`), tipo de `password_hash` (`TEXT`), estrategia de `updated_at` (trigger) — ver tabla arriba.
 
 > **Actualización v0.2 — reconciliación con el alcance objetivo.** El alcance funcional confirmado por el equipo incorpora `username`, `avatar_url` y `bio` como **columnas OBJETIVO** de `users` (§4.B › Perfil). Se añadirán cuando el modelo de `users` se ratifique por ADR, **no ahora**: el modelo *implementado* de esta sección se mantiene sin cambios para no cruzar la línea requisito → persistencia por iniciativa propia.
 
@@ -294,6 +294,7 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 ## 11. Integridad y seguridad
 
 - **Constraints como defensa de datos.** Las reglas de integridad (unicidad de `email`, `NOT NULL`, futuros `CHECK`/enums) se declaran en el esquema, no solo en la aplicación (§3, §5).
+- **Extensión `citext`.** El tipo `CITEXT` de `email` (§5) requiere `CREATE EXTENSION IF NOT EXISTS citext`, creada por la propia migración (`a1b2c3d4e5f6_create_users_table.py`) antes de crear la tabla — no requiere instalación manual adicional en la base.
 - **Contraseñas.** Se almacena `password_hash`, **nunca** la contraseña en claro (§5). El algoritmo de hashing concreto queda **PENDIENTE** (§14) — es una decisión de seguridad que debe confirmar el equipo, no inferirse.
 - **Secretos y credenciales.** La cadena de conexión y credenciales de la base **nunca** se suben al repositorio (`HB-001` §20, regla innegociable) y se proveen por variables de entorno. No hay lista oficial de variables de entorno (`CLAUDE.md` §9, §14) → definirla es **PENDIENTE**.
 - **Acceso.** El backend accede a la base con un usuario de base de datos de privilegios acotados. La política concreta de roles/privilegios de PostgreSQL es **PENDIENTE** (depende de DevOps, no especificado).
@@ -334,15 +335,15 @@ Se describe la responsabilidad de cada capa **usando la estructura ya observada*
 Decisiones que este documento **no toma** porque no están respaldadas por la documentación oficial ni por una necesidad técnica evidente. Cada una debe resolverse como ADR (`HB-001` §11–12) antes de implementarse.
 
 ### Motor y dependencias
-- **Versión de PostgreSQL** — no documentada; tampoco hay todavía una instancia real conectada.
+- **Versión de PostgreSQL** — instancia real verificada localmente: **PostgreSQL 17.11** (instalada para desarrollo en esta tarea). No hay todavía una base compartida por el equipo o de producción; la versión oficial para esos entornos sigue sin ratificación formal.
 - **Driver/adaptador Python** y **ORM** — **implementado en código** (`psycopg` v3 + SQLAlchemy + Flask-Migrate/Alembic, ver §2); ratificación formal por el Comité Técnico pendiente de confirmar.
 
 ### Esquema
-- ~~Tipo de PK de `users`~~ — **resuelto: UUID** (implementado, ver §5; ratificación formal pendiente de confirmar).
-- **Longitudes máximas** de columnas de texto — valores por defecto aplicados en código (`name` 120, `email`/`password_hash` 255), no ratificados formalmente.
-- **Normalización de `email`** (¿minúsculas a nivel de esquema? ¿`CITEXT`?).
-- **Algoritmo de hashing** de contraseñas.
-- **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo).
+- ~~Tipo de PK de `users`~~ — **resuelto: UUID**, `DEFAULT gen_random_uuid()` a nivel de PostgreSQL (implementado, ver §5; ratificación formal pendiente de confirmar).
+- ~~Longitudes máximas de columnas de texto~~ — **resuelto:** `name VARCHAR(120)`; `email` (`CITEXT`) y `password_hash` (`TEXT`) sin límite fijo de longitud (ver §5).
+- ~~Normalización de `email`~~ — **resuelto: `CITEXT`** (extensión de PostgreSQL, comparación e índice único case-insensitive a nivel de motor — ver §5, §11).
+- **Algoritmo de hashing** de contraseñas — sigue pendiente (se usa `werkzeug.security`/scrypt como corrección puntual, no ratificado como definitivo).
+- **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo) — no aplica a `users` todavía, sigue pendiente para entidades futuras.
 
 ### Entidades candidatas del modelo objetivo
 La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. Entre las candidatas confirmadas por el alcance funcional: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`username`/`avatar_url`/`bio`), `posts`, `media`, `reactions`, `comments`, `saves`, `mentions`, `hashtags` (+`post_hashtags`), `follows`, `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.

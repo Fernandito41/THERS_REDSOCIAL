@@ -38,16 +38,20 @@ Solo se dibuja la entidad ratificada. No se dibujan entidades ni relaciones espe
 ```mermaid
 erDiagram
     USERS {
-        uuid id PK "generado en Python (uuid.uuid4) — implementado en código"
-        string name "NOT NULL"
-        string email UK "UNIQUE, NOT NULL — identificador de login"
-        string password_hash "NOT NULL — nunca en claro"
-        timestamptz created_at "NOT NULL"
-        timestamptz updated_at "NOT NULL"
+        uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
+        varchar_120 name "NOT NULL"
+        citext email UK "NOT NULL — case-insensitive, identificador de login"
+        text password_hash "NOT NULL — nunca en claro"
+        timestamptz created_at "NOT NULL, DEFAULT now()"
+        timestamptz updated_at "NOT NULL, DEFAULT now(), mantenida por trigger"
     }
 ```
 
-> **Nota sobre el tipo de `id`:** UUID, implementado en `backend/app/infrastructure/persistence/models.py` (`DATABASE_ARCHITECTURE.md` §5). Cambiado desde BIGINT autoincremental por indicación posterior del Tech Lead Backend. **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — fue una decisión indicada directamente por el Tech Lead Backend, no consensuada por los 4 integrantes en la tarea que la implementó.
+> **Nota sobre el tipo de `id`:** UUID con `DEFAULT gen_random_uuid()` a nivel de PostgreSQL (función nativa desde PostgreSQL 13, sin extensión adicional), implementado en `backend/app/infrastructure/persistence/models.py` y en la migración `a1b2c3d4e5f6_create_users_table.py` (`DATABASE_ARCHITECTURE.md` §5). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend.
+>
+> **Nota sobre `email`:** tipo `CITEXT` (extensión `citext` de PostgreSQL, creada por la propia migración) — el `UNIQUE` es case-insensitive a nivel de motor.
+>
+> **Nota sobre `updated_at`:** actualizada por un trigger de PostgreSQL (`set_updated_at`/`trg_users_updated_at`), no por la capa de aplicación — se mantiene correcta incluso ante `UPDATE`s hechos por SQL directo.
 
 ---
 
@@ -76,10 +80,10 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 
 | Entidad | Estado | Justificación | Atributos (según `DATABASE_ARCHITECTURE.md` §5) |
 |---|---|---|---|
-| `users` |  Ratificada | Registro recolecta `name`/`email`/`password`; login autentica por `email`; el backend ya devuelve `{ email, name }` | `id` (PK), `name`, `email` (UK), `password_hash`, `created_at`, `updated_at` |
+| `users` |  Ratificada | Registro recolecta `name`/`email`/`password`; login autentica por `email`; el backend ya devuelve `{ email, name }` | `id` UUID (PK), `name` VARCHAR(120), `email` CITEXT (UK), `password_hash` TEXT, `created_at`/`updated_at` TIMESTAMPTZ |
 
 **Constraints relevantes de `users`:**
-- `email`: **UNIQUE** + **NOT NULL** (login por email; genera el único índice justificado, `DATABASE_ARCHITECTURE.md` §8).
+- `email`: **UNIQUE** (case-insensitive, vía `CITEXT`) + **NOT NULL** (login por email; genera el único índice justificado, `DATABASE_ARCHITECTURE.md` §8).
 - `name`: **NOT NULL** (el formulario de registro lo exige).
 - `password_hash`: **NOT NULL** (nunca se almacena la contraseña en claro).
 
@@ -125,8 +129,8 @@ El equipo **confirma** un alcance funcional amplio (incluida la sección **PERFI
 | **Seguridad** | `sessions`, `devices`, `password_changes` (historial), `security_events`/auditoría | JWT es hoy stateless; ninguna sesión se persiste aún |
 
 ### Decisiones transversales pendientes (heredadas de `DATABASE_ARCHITECTURE.md` §14)
-- Tipo de PK (BIGINT vs UUID), longitudes de columnas, normalización de `email`, algoritmo de hashing, estrategia de enums.
-- Versión de PostgreSQL, driver/ORM, herramienta de migraciones, backups, variables de entorno, roles de acceso.
+- Para `users` ya resuelto (ver §5 de este documento): tipo de PK (UUID), normalización de `email` (`CITEXT`). **Todavía pendiente para las entidades candidatas de esta tabla:** si heredan el mismo patrón (UUID, `CITEXT` donde aplique) o se decide caso por caso; longitudes de columnas, algoritmo de hashing, estrategia de enums.
+- Versión de PostgreSQL: **PostgreSQL 17** verificado localmente (`DATABASE_ARCHITECTURE.md` §14); driver/ORM ya resueltos (SQLAlchemy + psycopg v3, `BACKEND_ARCHITECTURE.md` §2); herramienta de migraciones ya resuelta (Flask-Migrate/Alembic); backups, variables de entorno, roles de acceso siguen pendientes.
 
 ---
 

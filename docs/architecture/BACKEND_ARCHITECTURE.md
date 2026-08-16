@@ -42,9 +42,13 @@
 | Flask | Confirmado (`HB-001` portada y §2) | 3.1.3 (`pip freeze` en `backend/venv`) | Implementado — factory `create_app()` en `backend/app/__init__.py` |
 | flask-cors | No mencionado por nombre en `/docs` | 6.0.2 instalado, usado en `create_app()` | Ver sección 13 |
 | Flask-JWT-Extended | JWT confirmado como mecanismo de auth (`HB-001` portada; `CLAUDE.md` §4 lo nombra explícitamente como `flask_jwt_extended`) | 4.7.1 instalado y en uso (`app/extensions.py`, `app/interfaces/routes/auth_routes.py`) | Implementado parcialmente — ver sección 9 |
-| Flask-SQLAlchemy / SQLAlchemy | No mencionado por nombre en `/docs` | 3.1.1 / 2.0.49 **instalados en el venv, pero sin uso en el código** — ningún import, ninguna instancia `db = SQLAlchemy()`, ningún modelo | **Hallazgo:** hay una dependencia de persistencia instalada localmente que no está integrada ni referenciada por ningún archivo del proyecto. No se debe asumir que esto significa que la capa de persistencia está "lista" |
-| PostgreSQL | Confirmado como motor elegido (`HB-001` portada; `CLAUDE.md` §4 "Base de Datos") | **Sin driver instalado** (no hay `psycopg2` ni `psycopg` en el venv), sin cadena de conexión, sin modelos, sin `db.py` | No implementado. Ver sección 8 |
-| `requirements.txt` | **Corregido:** ya existe `backend/requirements.txt`, fijando `Flask==3.1.3`, `flask-cors==6.0.2`, `Flask-JWT-Extended==4.7.1` — exactamente los paquetes que el código actual importa | Implementado | Deliberadamente **no** incluye `Flask-SQLAlchemy`/`SQLAlchemy` (observados en el venv sin uso real) para no dar por adoptada una decisión de persistencia sin ratificar. Las versiones exactas siguen sujetas a confirmación formal del equipo — fijarlas aquí resuelve la reproducibilidad, no ratifica el archivo como cerrado (`pyproject.toml` sigue sin existir, sección 20) |
+| Flask-SQLAlchemy / SQLAlchemy | No mencionado por nombre en `/docs` | 3.1.1 / 2.0.52 — **en uso**: `db = SQLAlchemy()` en `app/extensions.py`, inicializado en `create_app()`, con el modelo `User` en `app/infrastructure/persistence/models.py` | **v0.4 — implementado, pendiente de ratificación formal del Comité Técnico** (`HB-001` §11.1: cambiar el modelo de datos es decisión de alto impacto). La elección de SQLAlchemy como ORM fue indicada directamente por el Tech Lead Backend en esta tarea, no consensuada por los 4 integrantes — ver nota de gobernanza al final de esta sección |
+| Flask-Migrate / Alembic | No mencionado por nombre en `/docs` | 4.1.0 / 1.19.1 — **en uso**: `migrate = Migrate()` en `app/extensions.py`; scaffolding generado en `backend/migrations/` con una migración inicial (`create_users_table`) | Implementado — ver sección 8 y 9 |
+| psycopg (v3) | No mencionado por nombre en `/docs` | 3.3.4 — driver de PostgreSQL en `requirements.txt` | Se eligió `psycopg` (v3) en vez de `psycopg2-binary` porque este último no tiene wheel precompilado para la versión de Python en uso (3.14) y falla al compilar sin `pg_config`. Nota: la cadena de conexión debe usar el esquema `postgresql+psycopg://`, no `postgresql://` a secas |
+| PostgreSQL | Confirmado como motor elegido (`HB-001` portada; `CLAUDE.md` §4 "Base de Datos") | Driver y ORM ya integrados (ver filas arriba); **verificado contra una instancia PostgreSQL 17 real** (instalada localmente para esta tarea, base `thers_dev`) — la migración se aplicó y se confirmó el esquema resultante con `psql` | Implementado a nivel de desarrollo local. Sigue sin existir una base compartida por el equipo o de producción. Ver sección 8 |
+| `requirements.txt` | Ya existía fijando `Flask==3.1.3`, `flask-cors==6.0.2`, `Flask-JWT-Extended==4.7.1` | **v0.4:** se agregaron `Flask-SQLAlchemy==3.1.1`, `Flask-Migrate==4.1.0`, `psycopg[binary]==3.3.4` | Versiones tomadas de la instalación real verificada en esta tarea (`pip freeze`). Sigue sin ratificación formal del equipo como estándar oficial (`pyproject.toml` sigue sin existir, sección 20) |
+
+> ⚠️ **Nota de gobernanza (v0.4, actualizada).** `HB-001` §11 clasifica "cambiar el modelo de datos" como decisión de **alto impacto**, que requiere llevarse al Comité Técnico completo (los 4 integrantes) y documentarse como ADR (§12) **antes** de implementarse — no solo el acuerdo del Tech Lead Backend. Las decisiones reflejadas en esta actualización (SQLAlchemy como ORM, `id` de `users` como **UUID** — cambiado desde BIGINT autoincremental por indicación posterior del Tech Lead Backend —, Flask-Migrate/Alembic como herramienta de migraciones) fueron indicadas directamente por el Tech Lead Backend en el chat de esta tarea, sin confirmación explícita de que ya pasaron por el proceso de consenso de `HB-001` §11.1. El código ya las implementa (es un hecho verificable); **su ratificación formal como decisión de equipo sigue pendiente** hasta que se confirme o se registre el ADR correspondiente en Notion (`HB-001` §12).
 
 **Notas de contradicción:**
 - El `README.md` raíz declara **MySQL** como base de datos (`README.md`, badge y tabla de stack) — contradice a `HB-001` (PostgreSQL) y a este documento. Ya identificado y no resuelto en `CLAUDE.md` §14; por la jerarquía de fuentes (`CLAUDE.md` §3), `/docs` gana. Este documento asume PostgreSQL por esa razón, no por preferencia propia.
@@ -129,12 +133,13 @@ El flujo real hoy termina en `domain/` — `validate_user()` compara contra cred
 
 ## 8. Persistencia
 
-- **Repositories:** **no existen.** No hay ningún módulo de acceso a datos, ni una carpeta `repositories/` ni `infrastructure/` en `backend/app/`.
-- **Acceso a PostgreSQL:** **no implementado.** No hay driver instalado (`psycopg2`/`psycopg`), no hay cadena de conexión, no hay `SQLALCHEMY_DATABASE_URI` en `config.py`, no hay modelos.
-- **Separación negocio/persistencia:** no evaluable todavía porque no existe capa de persistencia. La forma exacta en que dicha capa se incorporará y se relacionará con `application/` y `domain/` queda `PENDIENTE DE APROBACIÓN`.
-- **Estado real de los datos hoy:** el único "dato" de usuario del sistema es un valor hardcodeado en `domain/auth/auth_service.py`. No hay persistencia de ningún tipo, ni en memoria estructurada ni en disco.
+- **Repositories:** **todavía no existen.** Existe `app/infrastructure/persistence/` (nuevo, v0.4) con el modelo `User`, pero ningún módulo de acceso a datos (repositorio) que lo consuma — `domain/auth/auth_service.py` sigue comparando contra la credencial hardcodeada, sin consultar el modelo. Esa migración de `login`/`validate_user` a persistencia real queda para una tarea siguiente.
+- **Acceso a PostgreSQL — v0.4, implementado y verificado localmente:** driver instalado (`psycopg[binary]==3.3.4`), `SQLALCHEMY_DATABASE_URI` leída desde `DATABASE_URL` en `config.py`, modelo `User` definido (`app/infrastructure/persistence/models.py`: `id` **UUID** — generado en Python con `uuid.uuid4`, no en la base de datos —, `name`, `email` único+indexado, `password_hash`, `created_at`/`updated_at`). El flujo modelo→migración→`flask db upgrade` se verificó contra una instancia PostgreSQL 17 real instalada localmente (base `thers_dev`), confirmando el esquema resultante con `psql`. **Sigue sin haber una base compartida por el equipo o de producción** — esto es una base de desarrollo local, no un despliegue real.
+- **Migraciones — v0.4, implementado:** `backend/migrations/` (Flask-Migrate/Alembic), con una migración inicial (`create_users_table`) que crea la tabla `users` con índice único en `email`.
+- **Separación negocio/persistencia:** `domain/`/`application/` siguen sin conocer SQLAlchemy (regla de dependencia respetada — el modelo vive en `infrastructure/`, no en `domain/`). La forma exacta del repositorio que conectará ambos lados sigue sin implementarse.
+- **Estado real de los datos hoy:** el único "dato" de usuario que el flujo de login usa en producción de código sigue siendo el valor hardcodeado en `domain/auth/auth_service.py` — el modelo `User` nuevo todavía no está conectado a ningún endpoint.
 
-Toda decisión de cómo se implementará la persistencia (ORM vs. SQL directo, ubicación exacta de `repositories/`, patrón Unit of Work, pool de conexiones y mecanismo de dependencia entre `application/` y la implementación de persistencia) queda como `PENDIENTE DE APROBACIÓN` — no se decide en este documento por no estar respaldada por código ni por `/docs`.
+Pendiente (no decidido en esta actualización, `PENDIENTE DE APROBACIÓN`): patrón exacto de repositorio (Repository simple vs. Unit of Work), pool de conexiones para producción, y — como señala la nota de gobernanza de la sección 2 — la **ratificación formal** por el Comité Técnico de las decisiones ya codificadas (SQLAlchemy, UUID, Flask-Migrate).
 
 ---
 
@@ -316,17 +321,16 @@ Todo lo marcado `PROPUESTA` es una sugerencia de evolución consistente con las 
 - Manejo de errores básico por endpoint (`400`/`401` con JSON).
 - `JWT_SECRET_KEY` leída desde variable de entorno (`os.environ`), con `.env.example` documentando la variable y `.gitignore` protegiendo un futuro `.env` real (corrección de seguridad — ver sección 12, 16).
 - Hashing de la credencial de prueba con `werkzeug.security` (`scrypt`) — la comparación de contraseña ya no es en texto plano (corrección de seguridad — ver sección 9, 16).
-- `backend/requirements.txt` con las versiones en uso real fijadas (Flask, flask-cors, Flask-JWT-Extended) — ver sección 2.
-
-### OBSERVADO EN ENTORNO LOCAL (NO INTEGRADO)
-- `Flask-SQLAlchemy` / `SQLAlchemy` instalados en el venv local, sin ningún uso en el código. Esto no implica que la persistencia esté preparada ni que SQLAlchemy haya sido adoptado como decisión arquitectónica.
+- `backend/requirements.txt` con las versiones en uso real fijadas (Flask, flask-cors, Flask-JWT-Extended, Flask-SQLAlchemy, Flask-Migrate, psycopg) — ver sección 2.
+- **v0.4:** `db = SQLAlchemy()` / `migrate = Migrate()` inicializados en `create_app()` (`app/extensions.py`, `app/__init__.py`); `SQLALCHEMY_DATABASE_URI` leída desde `DATABASE_URL` (`config.py`, `.env.example`); modelo `User` (`app/infrastructure/persistence/models.py`, `id` **UUID**); scaffolding de migraciones (`backend/migrations/`) con la migración inicial de `users` generada y verificada contra una instancia PostgreSQL 17 real instalada localmente (base `thers_dev`).
 
 ### PENDIENTE
-- Driver de PostgreSQL (`psycopg2`/`psycopg`), modelos, `db.py`, cadena de conexión.
-- Capa de persistencia (`repositories`/`infrastructure`).
-- Modelo de usuario real (hoy: una única credencial hardcodeada, ahora comparada con hash — sigue sin tabla `users` real).
+- **Conexión a una base PostgreSQL real** (desarrollo compartido y/o producción) — el modelo y la migración existen y se verificaron localmente, pero nadie ha aplicado la migración contra un Postgres real todavía.
+- Capa de persistencia (`repositories/`) que conecte el modelo `User` con `application/`/`domain/` — el modelo existe pero ningún caso de uso lo consulta todavía.
+- Migrar `login`/`validate_user` de la credencial hardcodeada al modelo `User` real (siguiente tarea planeada).
+- Registro de usuario (`/register`) contra el modelo real.
+- **Ratificación formal por el Comité Técnico** de las decisiones ya codificadas en v0.4 (SQLAlchemy, BIGINT, Flask-Migrate) — ver nota de gobernanza, sección 2.
 - Estrategia de hashing para el futuro modelo de datos real (la corrección aplicada resuelve el mecanismo, no ratifica el algoritmo definitivo — sección 20).
-- Registro de usuario (`/register`).
 - Endpoints protegidos con `@jwt_required()` (ninguno existe hoy).
 - Política de expiración/refresh de JWT.
 - Roles y autorización.
@@ -344,7 +348,7 @@ Todo lo marcado `PROPUESTA` es una sugerencia de evolución consistente con las 
 
 Toda decisión arquitectónica no respaldada hoy por código ni por documento oficial ratificado:
 
-1. **Estrategia de persistencia:** ORM (SQLAlchemy) vs. SQL directo; patrón repository exacto; pool de conexiones y mecanismo de dependencia entre `application/` y la implementación de persistencia.
+1. **Estrategia de persistencia:** ORM vs. SQL directo — **ya implementado como SQLAlchemy + Flask-Migrate/Alembic (v0.4)** por indicación directa del Tech Lead Backend; **ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1). Patrón de repository exacto, pool de conexiones y mecanismo de dependencia entre `application/` y la implementación de persistencia siguen sin definir.
 2. **Modelo de datos de usuario y esquema de PostgreSQL** — normalización, índices, migraciones (ya señalado como hueco general en `CLAUDE.md` §14).
 3. **Estrategia de hashing de contraseñas para el modelo de datos real** (algoritmo, librería) — se aplicó `werkzeug.security`/`scrypt` como corrección puntual sobre la credencial de prueba hardcodeada (sección 9, 16, 19), pero **no queda ratificado como el algoritmo definitivo** del futuro modelo `users` persistido; esa decisión sigue abierta.
 4. **Estructura de DTOs/schemas** y si se adopta una librería de validación declarativa (Marshmallow, Pydantic, u otra).

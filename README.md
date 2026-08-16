@@ -7,10 +7,10 @@
 
 **Conecta, comparte y descubre — la red social hecha para estudiantes**
 
-![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite)
 ![Flask](https://img.shields.io/badge/Flask-3-000000?style=flat-square&logo=flask)
-![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?style=flat-square&logo=mysql)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-motor%20elegido-4169E1?style=flat-square&logo=postgresql)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-3-38B2AC?style=flat-square&logo=tailwindcss)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
@@ -39,111 +39,121 @@ THERS es una red social que Permite publicar contenido (texto e imágenes), inte
 
 ## Stack tecnológico
 
-| Capa | Tecnología |
-|------|-----------|
-| Frontend | React 18 + Vite 5 |
-| Estilos | Tailwind CSS 3 |
-| Routing | React Router v6 |
-| Estado global | Context API + hooks |
-| HTTP client | Axios |
-| Backend | Flask 3 (Python) |
-| Base de datos | MySQL 8 |
-| Autenticación | JWT (flask-jwt-extended) |
+Fuente de verdad de esta tabla: `docs/architecture/FRONTEND_ARCHITECTURE.md`, `docs/architecture/BACKEND_ARCHITECTURE.md` y `docs/architecture/DATABASE_ARCHITECTURE.md`. Este archivo describe el proyecto, no decide su arquitectura — ante cualquier diferencia con esos documentos, ganan ellos.
+
+| Capa | Tecnología | Estado |
+|------|-----------|--------|
+| Frontend | React 19 + Vite 8 | Implementado |
+| Estilos | Tailwind CSS 3 | Implementado, sin tokens/Design System propio del producto |
+| Routing | React Router v7 | Implementado — 6 rutas planas, sin rutas protegidas |
+| Estado global | Ninguno todavía (solo `useState` local por componente) | No implementado |
+| HTTP client | Axios | Implementado — URL de API configurable vía `VITE_API_URL` |
+| Backend | Flask 3 (Python) | Implementado — un único flujo end-to-end (login); dependencias fijadas en `backend/requirements.txt` |
+| Base de datos | PostgreSQL (motor elegido; versión, driver y esquema sin fijar) | No implementado — sin persistencia real ni ORM instalado |
+| Autenticación | JWT (flask-jwt-extended) | Implementado solo para login; sin endpoints protegidos ni registro |
 
 ## Estructura del proyecto
 
+Estructura real del monorepo — fuente: `docs/architecture/REPOSITORY_STRUCTURE.md`, `docs/architecture/FRONTEND_ARCHITECTURE.md` y `docs/architecture/BACKEND_ARCHITECTURE.md`. La carpeta del producto se llama `Frontend/` (con mayúscula inicial), no `frontend/`.
+
 ```
-thers/
-├── frontend/
+THERS_REDSOCIAL_2026/
+├── Frontend/                  # Producto — la red social
 │   ├── src/
-│   │   ├── components/       # UI reutilizable (Navbar, PostCard)
-│   │   ├── pages/            # Home, Login, Register, Profile, Explore
-│   │   ├── routes/           # AppRouter + rutas protegidas
-│   │   ├── context/          # AuthContext, PostContext
-│   │   ├── services/         # authService, postService, userService…
+│   │   ├── app/
+│   │   │   └── router/        # AppRouter (react-router-dom)
+│   │   ├── features/
+│   │   │   ├── auth/          # hooks/, pages/, index.js
+│   │   │   └── legal/         # pages/, index.js
+│   │   ├── shared/
+│   │   │   ├── components/    # UI reutilizable transversal
+│   │   │   └── lib/           # cliente HTTP (axios)
 │   │   └── assets/
 │   ├── index.html
 │   ├── vite.config.js
 │   └── tailwind.config.js
 │
-├── backend/
-│   ├── routes/               # auth, posts, users, comments, likes, follows
-│   ├── models/               # User, Post, Comment, Like, Follow, Notification
-│   ├── config/               # DB, JWT
-│   └── app.py
+├── backend/                   # API Flask
+│   ├── app/
+│   │   ├── interfaces/routes/ # adaptadores HTTP (blueprints)
+│   │   ├── application/       # casos de uso
+│   │   ├── domain/            # reglas de negocio puras
+│   │   ├── config.py
+│   │   └── extensions.py
+│   ├── run.py
+│   └── .env.example
 │
+├── handbook/                  # THERS Engineering Handbook (docs-as-code interno)
+├── docs/                      # Documentación oficial versionada
+├── CLAUDE.md
 └── README.md
 ```
 
+No existen (todavía) las carpetas `context/`, `services/` del lado del Frontend ni `routes/`/`models/` planos del lado del backend — el backend sigue una organización por capas (interfaces/application/domain), no por tipo de recurso.
+
 ## Instalación local
+
+Estado real (no aspiracional): no hay `pyproject.toml` en `backend/` ni herramienta de migraciones instalada, y no hay persistencia de datos todavía — el login solo valida contra una credencial de prueba. Los pasos siguientes reflejan lo que hoy es reproducible; lo que no lo es se marca explícitamente.
 
 ### Prerrequisitos
 
-- Node.js 18+
-- Python 3.11+
-- MySQL 8+
+- Node.js (versión mínima no fijada oficialmente)
+- Python 3.x (versión mínima no fijada oficialmente; `BACKEND_ARCHITECTURE.md` observó 3.14.3 en un entorno local, no es un requisito documentado)
+- PostgreSQL — motor elegido (`HB-001`), sin versión, esquema ni driver fijados todavía. No es necesario para levantar el login actual, que no usa base de datos.
 
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/TU_USUARIO/thers.git
-cd thers
+git clone <URL_DEL_REPOSITORIO>
+cd THERS_REDSOCIAL_2026
 ```
 
 ### 2. Frontend
 
 ```bash
-cd frontend
+cd Frontend
 npm install
-cp .env.example .env        # configurar VITE_API_URL
+cp .env.example .env        # ajustar VITE_API_URL si el backend no corre en 127.0.0.1:5000
 npm run dev
 ```
+
+Sin `VITE_API_URL` en `.env`, `Frontend/src/shared/lib/api.js` usa `http://127.0.0.1:5000/api` por defecto y lo advierte por consola.
 
 ### 3. Backend
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate    # Windows: venv\Scripts\activate
+# Windows: venv\Scripts\activate — macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # configurar DB y JWT_SECRET
-flask db upgrade
-flask run
+cp .env.example .env        # definir JWT_SECRET_KEY
+python run.py
 ```
+
+Sin `JWT_SECRET_KEY` en `.env`, `backend/app/config.py` usa un valor de desarrollo inseguro y lo advierte por consola — no usar ese valor fuera de desarrollo local.
 
 ### Variables de entorno
 
-**frontend/.env**
+**`backend/.env`** (ver `backend/.env.example`)
 ```env
-VITE_API_URL=http://localhost:5000/api
+JWT_SECRET_KEY=
 ```
 
-**backend/.env**
+**`Frontend/.env`** (ver `Frontend/.env.example`)
 ```env
-DATABASE_URL=mysql+pymysql://user:password@localhost/thers_db
-JWT_SECRET_KEY=tu_clave_secreta
-UPLOAD_FOLDER=uploads/
+VITE_API_URL=http://127.0.0.1:5000/api
 ```
 
-## API — Endpoints principales
+No existe todavía ninguna variable de conexión a base de datos (`DATABASE_URL` o equivalente) porque la persistencia no está implementada.
 
-| Método | Endpoint | Descripción | Auth |
-|--------|----------|-------------|------|
-| POST | `/api/auth/register` | Registro de usuario | No |
-| POST | `/api/auth/login` | Login → JWT | No |
-| GET | `/api/auth/me` | Usuario autenticado | Sí |
-| GET | `/api/posts` | Feed personalizado | Sí |
-| POST | `/api/posts` | Crear publicación | Sí |
-| DELETE | `/api/posts/:id` | Eliminar publicación | Sí |
-| POST | `/api/posts/:id/like` | Like / unlike | Sí |
-| GET | `/api/posts/:id/comments` | Ver comentarios | Sí |
-| POST | `/api/comments` | Crear comentario | Sí |
-| GET | `/api/users/:id` | Ver perfil | Sí |
-| POST | `/api/users/:id/follow` | Seguir usuario | Sí |
-| DELETE | `/api/users/:id/follow` | Dejar de seguir | Sí |
-| GET | `/api/users/explore` | Explorar estudiantes | Sí |
-| GET | `/api/notifications` | Ver notificaciones | Sí |
-| GET | `/api/admin/users` | Gestión de usuarios | Admin |
+## API — Estado real
+
+Fuente única del contrato de API: `docs/architecture/API_CONTRACT.md`. La tabla siguiente refleja únicamente lo implementado hoy; el resto de endpoints listados más abajo en este README (feed, posts, comentarios, follows, notificaciones, admin) son parte del alcance funcional del producto, **no** de la API existente — no hay código ni contrato que los respalde todavía.
+
+| Método | Endpoint | Descripción | Auth | Estado |
+|--------|----------|-------------|------|--------|
+| POST | `/api/login` | Login → JWT (credencial de prueba, sin persistencia real) | No | Implementado |
+| POST | `/api/register` | Registro de usuario | No | No implementado — el Frontend ya tiene el formulario, el backend no expone el endpoint |
 
 ## Flujo de ramas (Git Flow)
 
@@ -209,12 +219,16 @@ git push origin feature/NOMBRE
 
 ## Equipo
 
-| Rol | Responsabilidad |
-|-----|----------------|
-| Frontend (×2) | React, componentes, páginas, UI |
-| Backend (×2) | Flask, API REST, modelos, DB |
-| UI/UX (×1) | Diseño, Tailwind, assets, experiencia |
-| DB / Testing (×1) | Esquema MySQL, pruebas, integración |
+THERS es un equipo autogestionado de 4 integrantes, sin jerarquía de mando vertical — la dirección técnica se ejerce de forma colegiada (`HB-001` §1). Fuente de esta tabla: `HB-001` §2.
+
+| Rol | Enfoque principal | Responsable de |
+|-----|-------------------|-----------------|
+| Project Owner / Scrum Master | Gestión ágil y producto | Backlog, sprints, reuniones, seguimiento de avance |
+| Tech Lead Backend | Flask, PostgreSQL, JWT, API | Arquitectura de backend, endpoints, seguridad, migraciones |
+| Tech Lead Frontend | React, Vite, Tailwind | UI/UX, componentes, consumo de API, estado de la app |
+| QA / Documentación / DevOps de apoyo | Calidad y soporte técnico | Pruebas, documentación técnica, CI básico, GitHub |
+
+Cada integrante tiene un rol principal, pero todos participan en revisión de código, testing y documentación; los roles rotan cada semestre académico o cada 3 meses de desarrollo (`HB-001` §2).
 
 ## Roadmap
 
@@ -239,5 +253,5 @@ Distribuido bajo licencia MIT. Ver `LICENSE` para más información.
 ---
 
 <div align="center">
-Desarrollado con propósito educativo · THERS 2025
+Desarrollado con propósito educativo · THERS 2026
 </div>

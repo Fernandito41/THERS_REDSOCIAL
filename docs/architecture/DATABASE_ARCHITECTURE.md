@@ -204,7 +204,7 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 | Columna | Tipo (conceptual) | Nulo | Justificación / origen |
 |---|---|---|---|
-| `id` | **BIGINT autoincremental** | No | Clave primaria. Implementado en `app/infrastructure/persistence/models.py` (`db.BigInteger`, `autoincrement=True`) — ratificación formal por el Comité Técnico pendiente de confirmar (`HB-001` §11.1; ver `BACKEND_ARCHITECTURE.md` §2 nota de gobernanza) |
+| `id` | **UUID** | No | Clave primaria. Implementado en `app/infrastructure/persistence/models.py` (`sqlalchemy.dialects.postgresql.UUID(as_uuid=True)`, generado en Python con `uuid.uuid4`, no en la base de datos). Cambiado desde BIGINT autoincremental por indicación posterior del Tech Lead Backend — ratificación formal por el Comité Técnico pendiente de confirmar (`HB-001` §11.1; ver `BACKEND_ARCHITECTURE.md` §2 nota de gobernanza) |
 | `name` | texto | No | Campo `name` recolectado en `Register.jsx`; devuelto por el backend |
 | `email` | texto | No | Campo `email` de registro; **login se hace por email** → identificador de acceso |
 | `password_hash` | texto | No | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11) |
@@ -222,7 +222,7 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 - `name` **NOT NULL** — el formulario lo exige (`isValid` requiere `name.trim()`).
 - `password_hash` **NOT NULL**.
 
-**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): longitudes máximas de columnas (implementadas como `name VARCHAR(120)`, `email`/`password_hash VARCHAR(255)` — valores por defecto razonables aplicados en el código, no ratificados formalmente); si se normaliza el `email` (minúsculas) a nivel de esquema o de aplicación (no implementado todavía en ningún caso de uso); algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9); campos anticipados por la UI pero **no** recolectados en registro (`username`/`@usuario` y teléfono aparecen solo como placeholder en `Login.jsx`, no como campos reales) → no se añaden por inferencia. **Tipo de PK ya resuelto:** BIGINT autoincremental (ver arriba).
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): longitudes máximas de columnas (implementadas como `name VARCHAR(120)`, `email`/`password_hash VARCHAR(255)` — valores por defecto razonables aplicados en el código, no ratificados formalmente); si se normaliza el `email` (minúsculas) a nivel de esquema o de aplicación (no implementado todavía en ningún caso de uso); algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9); campos anticipados por la UI pero **no** recolectados en registro (`username`/`@usuario` y teléfono aparecen solo como placeholder en `Login.jsx`, no como campos reales) → no se añaden por inferencia. **Tipo de PK ya resuelto:** UUID (ver arriba).
 
 > **Actualización v0.2 — reconciliación con el alcance objetivo.** El alcance funcional confirmado por el equipo incorpora `username`, `avatar_url` y `bio` como **columnas OBJETIVO** de `users` (§4.B › Perfil). Se añadirán cuando el modelo de `users` se ratifique por ADR, **no ahora**: el modelo *implementado* de esta sección se mantiene sin cambios para no cruzar la línea requisito → persistencia por iniciativa propia.
 
@@ -338,7 +338,7 @@ Decisiones que este documento **no toma** porque no están respaldadas por la do
 - **Driver/adaptador Python** y **ORM** — **implementado en código** (`psycopg` v3 + SQLAlchemy + Flask-Migrate/Alembic, ver §2); ratificación formal por el Comité Técnico pendiente de confirmar.
 
 ### Esquema
-- ~~Tipo de PK de `users`~~ — **resuelto: BIGINT autoincremental** (implementado, ver §5; ratificación formal pendiente de confirmar).
+- ~~Tipo de PK de `users`~~ — **resuelto: UUID** (implementado, ver §5; ratificación formal pendiente de confirmar).
 - **Longitudes máximas** de columnas de texto — valores por defecto aplicados en código (`name` 120, `email`/`password_hash` 255), no ratificados formalmente.
 - **Normalización de `email`** (¿minúsculas a nivel de esquema? ¿`CITEXT`?).
 - **Algoritmo de hashing** de contraseñas.

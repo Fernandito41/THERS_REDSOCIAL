@@ -6,7 +6,10 @@
 # infraestructura/persistencia, no a `domain/`. `domain/auth/auth_service.py`
 # no debe importar SQLAlchemy ni este módulo directamente.
 
+import uuid
 from datetime import datetime, timezone
+
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from app.extensions import db
 
@@ -18,9 +21,11 @@ def _utcnow():
 class User(db.Model):
     __tablename__ = "users"
 
-    # BIGINT autoincremental (decisión aplicada sobre DATABASE_ARCHITECTURE.md §14,
-    # "tipo de PK" — antes PENDIENTE, ahora resuelto para esta entidad).
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    # UUID (decisión aplicada sobre DATABASE_ARCHITECTURE.md §14, "tipo de PK" —
+    # antes BIGINT autoincremental, cambiado a UUID por indicación del Tech Lead
+    # Backend). Se genera en Python (uuid.uuid4) al crear el objeto, no en la base
+    # de datos, para no depender de la extensión pgcrypto/uuid-ossp de PostgreSQL.
+    id = db.Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     name = db.Column(db.String(120), nullable=False)
 

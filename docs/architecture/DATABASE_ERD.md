@@ -38,7 +38,7 @@ Solo se dibuja la entidad ratificada. No se dibujan entidades ni relaciones espe
 ```mermaid
 erDiagram
     USERS {
-        identifier id PK "PENDIENTE: BIGINT autoincremental vs UUID"
+        bigint id PK "autoincremental — implementado en código"
         string name "NOT NULL"
         string email UK "UNIQUE, NOT NULL — identificador de login"
         string password_hash "NOT NULL — nunca en claro"
@@ -47,7 +47,7 @@ erDiagram
     }
 ```
 
-> **Nota sobre el tipo de `id`:** el token `identifier` es un marcador; el tipo real (BIGINT autoincremental vs UUID) está **PENDIENTE** (`DATABASE_ARCHITECTURE.md` §14). No se afirma un tipo que aún no está decidido.
+> **Nota sobre el tipo de `id`:** BIGINT autoincremental, implementado en `backend/app/infrastructure/persistence/models.py` (`DATABASE_ARCHITECTURE.md` §5). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — fue una decisión indicada directamente por el Tech Lead Backend, no consensuada por los 4 integrantes en la tarea que la implementó.
 
 ---
 

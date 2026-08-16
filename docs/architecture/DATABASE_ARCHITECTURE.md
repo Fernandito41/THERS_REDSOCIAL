@@ -43,8 +43,8 @@ Este documento cubre:
 | Aspecto | Valor | Fuente |
 |---|---|---|
 | Motor | **PostgreSQL** | `HB-001` (portada del stack) y `REPOSITORY_STRUCTURE.md` §4 |
-| Versión | **PENDIENTE DE APROBACIÓN** — ninguna versión concreta está documentada en `/docs` | — |
-| Driver / adaptador Python | **PENDIENTE DE APROBACIÓN** — no hay `requirements.txt`/`pyproject.toml` en `backend/`; ningún driver (`psycopg`, etc.) está instalado | Estado real del repo; `CLAUDE.md` §4 |
+| Versión | **PENDIENTE DE APROBACIÓN** — ninguna versión concreta está documentada en `/docs`; tampoco hay todavía una instancia de PostgreSQL real conectada (ver §4.A) | — |
+| Driver / adaptador Python | **`psycopg` (v3), `psycopg[binary]==3.3.4`** — agregado a `backend/requirements.txt` junto con `Flask-SQLAlchemy` y `Flask-Migrate` | Implementado en código (`BACKEND_ARCHITECTURE.md` §2). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend, no consensuada por los 4 integrantes en esta tarea |
 
 ### Razones técnicas
 La elección de PostgreSQL **ya está tomada** a nivel de organización (`HB-001` la fija como parte del stack y asigna al Tech Lead Backend "Administrar el esquema de base de datos (PostgreSQL) y migraciones"). Este documento **no re-justifica** esa decisión ni añade razones que la documentación no haya declarado; se limita a heredarla.
@@ -204,7 +204,7 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 | Columna | Tipo (conceptual) | Nulo | Justificación / origen |
 |---|---|---|---|
-| `id` | identificador único (PK) | No | Clave primaria. Tipo concreto (BIGINT autoincremental vs UUID) → **PENDIENTE**, §14 |
+| `id` | **BIGINT autoincremental** | No | Clave primaria. Implementado en `app/infrastructure/persistence/models.py` (`db.BigInteger`, `autoincrement=True`) — ratificación formal por el Comité Técnico pendiente de confirmar (`HB-001` §11.1; ver `BACKEND_ARCHITECTURE.md` §2 nota de gobernanza) |
 | `name` | texto | No | Campo `name` recolectado en `Register.jsx`; devuelto por el backend |
 | `email` | texto | No | Campo `email` de registro; **login se hace por email** → identificador de acceso |
 | `password_hash` | texto | No | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11) |
@@ -222,7 +222,7 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 - `name` **NOT NULL** — el formulario lo exige (`isValid` requiere `name.trim()`).
 - `password_hash` **NOT NULL**.
 
-**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): tipo de PK; longitudes máximas de columnas; si se normaliza el `email` (minúsculas) a nivel de esquema; algoritmo de hashing; campos anticipados por la UI pero **no** recolectados en registro (`username`/`@usuario` y teléfono aparecen solo como placeholder en `Login.jsx`, no como campos reales) → no se añaden por inferencia.
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): longitudes máximas de columnas (implementadas como `name VARCHAR(120)`, `email`/`password_hash VARCHAR(255)` — valores por defecto razonables aplicados en el código, no ratificados formalmente); si se normaliza el `email` (minúsculas) a nivel de esquema o de aplicación (no implementado todavía en ningún caso de uso); algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9); campos anticipados por la UI pero **no** recolectados en registro (`username`/`@usuario` y teléfono aparecen solo como placeholder en `Login.jsx`, no como campos reales) → no se añaden por inferencia. **Tipo de PK ya resuelto:** BIGINT autoincremental (ver arriba).
 
 > **Actualización v0.2 — reconciliación con el alcance objetivo.** El alcance funcional confirmado por el equipo incorpora `username`, `avatar_url` y `bio` como **columnas OBJETIVO** de `users` (§4.B › Perfil). Se añadirán cuando el modelo de `users` se ratifique por ADR, **no ahora**: el modelo *implementado* de esta sección se mantiene sin cambios para no cruzar la línea requisito → persistencia por iniciativa propia.
 
@@ -334,12 +334,12 @@ Se describe la responsabilidad de cada capa **usando la estructura ya observada*
 Decisiones que este documento **no toma** porque no están respaldadas por la documentación oficial ni por una necesidad técnica evidente. Cada una debe resolverse como ADR (`HB-001` §11–12) antes de implementarse.
 
 ### Motor y dependencias
-- **Versión de PostgreSQL** — no documentada.
-- **Driver/adaptador Python** y **ORM** (o SQL directo) — ninguna dependencia instalada; `CLAUDE.md` §4 prohíbe asumirla.
+- **Versión de PostgreSQL** — no documentada; tampoco hay todavía una instancia real conectada.
+- **Driver/adaptador Python** y **ORM** — **implementado en código** (`psycopg` v3 + SQLAlchemy + Flask-Migrate/Alembic, ver §2); ratificación formal por el Comité Técnico pendiente de confirmar.
 
 ### Esquema
-- **Tipo de PK** de `users` (entero autoincremental vs UUID).
-- **Longitudes máximas** de columnas de texto.
+- ~~Tipo de PK de `users`~~ — **resuelto: BIGINT autoincremental** (implementado, ver §5; ratificación formal pendiente de confirmar).
+- **Longitudes máximas** de columnas de texto — valores por defecto aplicados en código (`name` 120, `email`/`password_hash` 255), no ratificados formalmente.
 - **Normalización de `email`** (¿minúsculas a nivel de esquema? ¿`CITEXT`?).
 - **Algoritmo de hashing** de contraseñas.
 - **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo).
@@ -348,12 +348,12 @@ Decisiones que este documento **no toma** porque no están respaldadas por la do
 La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. Entre las candidatas confirmadas por el alcance funcional: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`username`/`avatar_url`/`bio`), `posts`, `media`, `reactions`, `comments`, `saves`, `mentions`, `hashtags` (+`post_hashtags`), `follows`, `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.
 
 ### Operación
-- **Herramienta de migraciones** y **ubicación de la carpeta `database/`**.
+- ~~Herramienta de migraciones~~ — **resuelto en código: Flask-Migrate/Alembic**, scaffolding en `backend/migrations/` (ver `BACKEND_ARCHITECTURE.md` §8); ratificación formal pendiente de confirmar. **Ubicación de la carpeta `database/`** sigue sin definir — las migraciones quedaron dentro de `backend/`, no en una carpeta `database/` separada.
 - **Procedimiento de rollback** en entornos desplegados (DevOps).
 - **Estrategia de backups y recuperación** — §12, sección completa pendiente.
-- **Lista oficial de variables de entorno** (incluida la cadena de conexión).
+- **Lista oficial de variables de entorno** — `DATABASE_URL` ya documentada en `backend/.env.example` (formato `postgresql+psycopg://usuario:password@host:puerto/nombre_bd`); sigue sin existir una lista oficial completa más allá de `JWT_SECRET_KEY` y `DATABASE_URL`.
 - **Roles/privilegios de acceso** de PostgreSQL.
-- **Ubicación exacta de la capa de repositorios** dentro de la estructura de backend (sin documento de arquitectura de backend ratificado — `CLAUDE.md` §4, §14).
+- **Ubicación exacta de la capa de repositorios** dentro de la estructura de backend — el modelo ya vive en `backend/app/infrastructure/persistence/models.py`, pero el repositorio que lo conecte con `application/`/`domain/` todavía no existe.
 
 ### Contradicciones / hallazgos reportados (no resueltos aquí)
 - **README raíz dice MySQL** vs. PostgreSQL oficial (§2). Gana `/docs`; corregir el README en tarea aparte.

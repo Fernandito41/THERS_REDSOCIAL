@@ -203,7 +203,7 @@ Carpetas que el repositorio podrá incorporar más adelante, sin que su llegada 
 | Carpeta futura | Propósito |
 |---|---|
 | `database/` | Scripts de migración, semillas de datos y esquema versionado de PostgreSQL, hoy gestionados presumiblemente dentro de `backend/` |
-| `docker/` | Definiciones de contenedores para entorno de desarrollo/despliegue reproducible de las tres aplicaciones |
+| `docker/` | Definiciones de contenedores para entorno de desarrollo/despliegue reproducible de las tres aplicaciones. **Nota (2026-08-16):** ya existe un `docker-compose.yml` en la raíz del repositorio (PostgreSQL 16 para desarrollo local del backend, ver `DATABASE_ARCHITECTURE.md`); se mantiene en la raíz y no en esta carpeta futura porque un único archivo no justifica todavía una carpeta dedicada (regla de no sobreingeniería). Si el número de definiciones de contenedores crece, migrar a `docker/` queda pendiente de decisión |
 | `.github/` | Workflows de CI/CD — validación automática de PRs, lint, tests, y los validadores de frontmatter/enlaces rotos ya previstos para el Handbook (ARC-001 §17) |
 | `scripts/` | Utilidades de automatización de uso interno del equipo (setup de entorno, tareas recurrentes) |
 | `tools/` | Herramientas de desarrollo compartidas entre aplicaciones que no encajen como dependencia de una sola |

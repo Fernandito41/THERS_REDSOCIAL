@@ -8,7 +8,9 @@
 | Depende de | ARC-001, DS-001, WF-001, PV-001, HB-001 |
 | Fuente de la estructura documentada | Captura de pantalla del explorador de archivos, raíz `THERS_REDSOCIAL_2026` |
 
-> ⚠️ **Nota de verificación.** Este documento distingue explícitamente entre **estructura confirmada visualmente** (la carpeta `Frontend/`, completamente expandida en la captura recibida) y **estructura no confirmada** (`backend/`, `docs/` y `handbook/`, que aparecen colapsadas en la misma captura — se conoce su nombre y su ubicación en la raíz, no su contenido interno). Donde se describe contenido no confirmado, se marca explícitamente como tal y se indica la fuente de la inferencia (un documento oficial ya aprobado, nunca una suposición sin respaldo). Ninguna carpeta se documenta como si existiera sin haber sido vista o citada de una fuente ya aprobada.
+>  **Nota de verificación.** Este documento distingue explícitamente entre **estructura confirmada visualmente** (la carpeta `Frontend/`, completamente expandida en la captura recibida) y **estructura no confirmada** (`backend/`, `docs/` y `handbook/`, que aparecen colapsadas en la misma captura — se conoce su nombre y su ubicación en la raíz, no su contenido interno). Donde se describe contenido no confirmado, se marca explícitamente como tal y se indica la fuente de la inferencia (un documento oficial ya aprobado, nunca una suposición sin respaldo). Ninguna carpeta se documenta como si existiera sin haber sido vista o citada de una fuente ya aprobada.
+>
+>  **Corrección posterior (auditoría arquitectónica integral de THERS, verificación directa del filesystem real).** La captura de referencia usada para este documento mostraba `Frontend/src/app/providers/` y `Frontend/src/app/store/` como carpetas existentes (sección 3). Una verificación directa contra el código real confirmó que **no existen** — `Frontend/src/app/` solo contiene `router/`. La sección 3 se corrige más abajo para reflejar el árbol real; `providers/` y `store/` quedan documentados como estructura futura, no como estructura ya implementada, coherente con `FRONTEND_ARCHITECTURE.md` §4/§8, que ya trata esta discrepancia como `[CONFLICTO]` resuelto. No se elimina la mención a `providers/`/`store/` por completo: siguen siendo una extensión razonable de `app/` cuando se ratifique una estrategia de estado global (`FRONTEND_ARCHITECTURE.md` §24, ítem 1) — se marcan como propuesta, no como hecho.
 >
 > También se identificó, a partir del nombre de la carpeta raíz (`THERS_REDSOCIAL_2026`), que el producto de THERS es **una red social** — información que hasta ahora no estaba confirmada en `PROJECT_CONTEXT.md` (sección 1, marcada como pendiente). Se recomienda actualizar ese documento con este dato una vez confirmado el resto del alcance funcional.
 >
@@ -48,10 +50,11 @@ THERS_REDSOCIAL_2026/
 │   ├── public/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── providers/
-│   │   │   ├── router/
-│   │   │   │   └── router.jsx
-│   │   │   └── store/
+│   │   │   └── router/
+│   │   │       └── router.jsx
+│   │   │       # providers/ y store/ NO existen todavía (corregido — ver nota de
+│   │   │       # verificación al inicio del documento; propuesta futura en
+│   │   │       # FRONTEND_ARCHITECTURE.md §24, ítem 1)
 │   │   ├── assets/
 │   │   ├── features/
 │   │   │   ├── auth/
@@ -84,7 +87,7 @@ THERS_REDSOCIAL_2026/
 └── handbook/                    # No expandida en la captura de referencia — ver sección 5
 ```
 
-Todo lo mostrado dentro de `Frontend/` corresponde exactamente a lo visible en la captura de referencia — ningún archivo o carpeta fue agregado, renombrado ni reorganizado.
+Lo mostrado dentro de `Frontend/` corresponde a la captura de referencia original, **con una corrección aplicada** (`providers/`/`store/` retirados de `app/` por no existir en el filesystem real — ver nota de verificación al inicio del documento). Ningún otro archivo o carpeta fue agregado, renombrado ni reorganizado respecto a la captura original.
 
 ---
 

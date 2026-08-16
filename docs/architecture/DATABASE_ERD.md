@@ -9,7 +9,7 @@
 | Depende de | `DATABASE_ARCHITECTURE.md` (fuente de verdad directa), `HB-001`, `REPOSITORY_STRUCTURE.md` |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
-> ⚠️ **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado. Al escribirlo, el backend **no tiene base de datos, ni ORM, ni modelos**: la única entidad ratificada es `users` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias.
+>  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado. Al escribirlo, el backend **no tiene base de datos, ni ORM, ni modelos**: la única entidad ratificada es `users` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias.
 
 ---
 
@@ -76,7 +76,7 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 
 | Entidad | Estado | Justificación | Atributos (según `DATABASE_ARCHITECTURE.md` §5) |
 |---|---|---|---|
-| `users` | ✅ Ratificada | Registro recolecta `name`/`email`/`password`; login autentica por `email`; el backend ya devuelve `{ email, name }` | `id` (PK), `name`, `email` (UK), `password_hash`, `created_at`, `updated_at` |
+| `users` |  Ratificada | Registro recolecta `name`/`email`/`password`; login autentica por `email`; el backend ya devuelve `{ email, name }` | `id` (PK), `name`, `email` (UK), `password_hash`, `created_at`, `updated_at` |
 
 **Constraints relevantes de `users`:**
 - `email`: **UNIQUE** + **NOT NULL** (login por email; genera el único índice justificado, `DATABASE_ARCHITECTURE.md` §8).
@@ -107,7 +107,7 @@ Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHI
 
 El alcance funcional confirmado por el equipo se traduce aquí a **entidades candidatas** que **aún no se modelan** en el diagrama. Cada grupo requiere ratificación como ADR (`HB-001` §11–12) y su incorporación previa a `DATABASE_ARCHITECTURE.md` antes de dibujarse. La lista **no** es un esquema aprobado: es el mapa de lo que falta decidir.
 
-### ⚠️ Contradicción detectada — no resuelta aquí
+###  Contradicción detectada — no resuelta aquí
 El equipo **confirma** un alcance funcional amplio (incluida la sección **PERFIL**: `username`, foto de perfil, biografía). Sin embargo, la fuente de verdad de esta tarea (`DATABASE_ARCHITECTURE.md`) **solo ratifica `users`** con `name/email/password_hash/timestamps`, y su §5 marca `username`/teléfono como **PENDIENTES, a no añadir por inferencia**. Por la jerarquía de fuentes, el ERD **no** los añade y reporta el desajuste. **Acción requerida:** actualizar `DATABASE_ARCHITECTURE.md` vía ADR para incorporar los campos/entidades del alcance confirmado; recién entonces este ERD podrá crecer. **PENDIENTE DE APROBACIÓN.**
 
 ### Entidades candidatas por dominio (no modeladas)

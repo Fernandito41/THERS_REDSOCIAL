@@ -92,23 +92,23 @@ Estructura de primer y segundo nivel. Todo documento vive dentro de una de estas
 ```
 / (Home)
 │
-├── /organizacion                     📘 Organización
+├── /organizacion                      Organización
 │   ├── manual-de-organizacion        (ya existente — este repo)
 │   ├── manual-operativo
 │   ├── roles-y-responsabilidades
 │   └── reglas-oficiales-del-equipo
 │
-├── /estrategia                       🧠 Estrategia
+├── /estrategia                        Estrategia
 │   ├── plan-estrategico-ia
 │   └── vision-y-objetivos
 │
-├── /arquitectura                     🏗️ Arquitectura
+├── /arquitectura                      Arquitectura
 │   ├── vision-general
 │   ├── diagramas-de-sistema
 │   ├── decisiones-tecnicas (ADR)
 │   └── integraciones
 │
-├── /ingenieria                       💻 Ingeniería
+├── /ingenieria                        Ingeniería
 │   ├── /frontend
 │   │   ├── convenciones-react
 │   │   ├── componentes-y-estado
@@ -129,21 +129,21 @@ Estructura de primer y segundo nivel. Todo documento vive dentro de una de estas
 │       ├── commits-y-prs
 │       └── code-review
 │
-├── /academy                          🎓 Academy
+├── /academy                           Academy
 │   ├── onboarding-nuevo-integrante
 │   ├── glosario-thers
 │   └── tutoriales-paso-a-paso
 │
-├── /playbooks                        📋 Playbooks
+├── /playbooks                         Playbooks
 │   ├── proceso-de-release
 │   ├── respuesta-a-incidentes
 │   ├── checklist-de-code-review
 │   └── checklist-de-onboarding
 │
-├── /roadmap                          🗺️ Roadmap
+├── /roadmap                           Roadmap
 │   └── roadmap-actual
 │
-└── /meta                             ⚙️ Meta (sobre el propio handbook)
+└── /meta                              Meta (sobre el propio handbook)
     ├── como-contribuir
     ├── convenciones-de-documentacion
     └── changelog-del-handbook
@@ -186,7 +186,7 @@ En todos los flujos, dos elementos permanecen **fijos y persistentes**: el Sideb
 
 Jerarquía visual de 3 niveles:
 ```
-📘 CATEGORÍA (mayúscula, bold, con icono)
+ CATEGORÍA (mayúscula, bold, con icono)
    Página de nivel 1
    Página de nivel 1 (activa) ┃ ← barra de acento
       Subsección (heading h2 de esa página, si se ancla en sidebar extendido)

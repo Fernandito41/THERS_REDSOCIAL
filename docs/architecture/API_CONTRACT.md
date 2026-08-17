@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.1 (Propuesta) |
+| Versión | 0.2 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -13,6 +13,8 @@
 > Sigue el mismo método que `BACKEND_ARCHITECTURE.md`, `DATABASE_ARCHITECTURE.md` y `FRONTEND_ARCHITECTURE.md` ya validaron: separa explícitamente **lo implementado** (un único endpoint real, con limitaciones conocidas) de **lo pendiente de definición** (formato de error estándar, convención de paginación, versionado de API, etc.). No se inventa aquí ningún endpoint, contrato o convención que el código o la documentación oficial no respalden todavía.
 >
 > Este documento no implementa, refactoriza ni modifica ningún código de `backend/` ni de `Frontend/`. Documenta el contrato tal como existe hoy y, donde falta una decisión, señala el hueco explícito — nunca un contrato inventado.
+>
+> **v0.2 — integración de autenticación con persistencia real:** `POST /api/register` pasó de "esperado pero no implementado" a **implementado** (§4.1), y `POST /api/login` se actualizó para consultar `users` real en vez de una credencial hardcodeada, incluyendo el cambio de `identity` del JWT de `email` a `user.id` (UUID). Reflejado en §4, §5, §6, §9. El Frontend (`Register.jsx`, `useAuth.js`) todavía no consume este contrato — esa integración queda fuera del alcance de esta tarea, que fue exclusivamente de backend.
 
 ---
 
@@ -65,11 +67,51 @@
 
 ### 4.1 Implementados
 
+#### `POST /api/register`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** (esta tarea — integración de persistencia real, ver `DATABASE_ARCHITECTURE.md` §5 y `BACKEND_ARCHITECTURE.md` §8) |
+| Blueprint | `auth_bp` (`backend/app/interfaces/routes/auth_routes.py`) |
+| Auth requerida | No (endpoint público) |
+
+**Request body**
+```json
+{
+  "name": "string",
+  "email": "string",
+  "password": "string"
+}
+```
+
+**Response — éxito (201)**
+```json
+{
+  "user": {
+    "id": "string (UUID)",
+    "email": "string",
+    "name": "string"
+  }
+}
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Body vacío, o `name`/`email`/`password` ausentes | `{"msg": "..."}` |
+| `409` | Ya existe un usuario con ese email (comparación case-insensitive, `CITEXT`) | `{"msg": "..."}` |
+
+**Notas de implementación:**
+- `password_hash` se genera con `werkzeug.security.generate_password_hash` (scrypt) — nunca se persiste ni se devuelve la contraseña en claro.
+- `id` lo genera PostgreSQL (`gen_random_uuid()`), nunca Python (`DATABASE_ARCHITECTURE.md` §5).
+- **`PENDIENTE DE APROBACIÓN`** (no decidido en esta tarea, deliberadamente): longitud mínima de contraseña, formato de email válido, y cualquier otra regla de negocio de registro más allá de la presencia de los tres campos y la unicidad de `email` ya impuesta por el esquema.
+
 #### `POST /api/login`
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** |
+| Estado | **IMPLEMENTADO** — actualizado en esta tarea para usar persistencia real |
 | Blueprint | `auth_bp` (`backend/app/interfaces/routes/auth_routes.py`) |
 | Auth requerida | No (endpoint público — emite el token) |
 
@@ -86,6 +128,7 @@
 {
   "token": "string (JWT)",
   "user": {
+    "id": "string (UUID)",
     "email": "string",
     "name": "string"
   }
@@ -97,25 +140,13 @@
 | Código | Causa | Body |
 |---|---|---|
 | `400` | Body vacío, o `email`/`password` ausentes | `{"msg": "..."}` |
-| `401` | Credenciales inválidas | `{"msg": "..."}` |
+| `401` | Credenciales inválidas — email inexistente **o** contraseña incorrecta, mismo mensaje en ambos casos deliberadamente, para no permitir enumerar emails registrados | `{"msg": "..."}` |
 
-**Limitaciones conocidas (heredadas literalmente de `BACKEND_ARCHITECTURE.md` §9/§19 — no se repiten como novedad, se citan porque afectan directamente lo que el Frontend puede asumir de este endpoint):**
-- La validación compara contra una única credencial hardcodeada en código (`test@test.com` / `123456`) — no hay usuarios reales ni base de datos detrás.
-- El objeto `user` devuelto es siempre `{"email": email, "name": "Fernando"}` — el campo `name` está hardcodeado, no proviene de ningún dato real asociado al `email` recibido.
-- **Corregido:** la contraseña ya no se compara en texto plano — `domain/auth/auth_service.py` usa `werkzeug.security.check_password_hash` contra un hash `scrypt` de la credencial de prueba. Sigue siendo una única credencial hardcodeada (sin tabla `users` real); el algoritmo definitivo para el modelo de datos persistido sigue sin ratificar (`BACKEND_ARCHITECTURE.md` §20, ítem 3).
-- El token no tiene política de expiración explícita configurada.
-
-### 4.2 Esperados por el Frontend pero NO implementados
-
-#### `POST /api/register` — **NO EXISTE EN EL BACKEND**
-
-| Campo | Valor |
-|---|---|
-| Estado | **NO IMPLEMENTADO** |
-| Evidencia de que se espera | `Frontend/src/features/auth/pages/Register.jsx` ya recolecta `name`/`email`/`password` en un formulario completo, pero `handleRegister` no llama a ningún endpoint — hace `console.log(form)` y navega a `/login` (comentario `// temporal` en el propio código) |
-| Confirmación del hueco | `BACKEND_ARCHITECTURE.md` §9: "Sin registro (`register`): el Frontend ya tiene una página `Register.jsx`... pero el backend no expone ningún endpoint de registro" |
-
-**No se define aquí un contrato hipotético para este endpoint** (request/response, validaciones) — hacerlo sería inventar una decisión de backend/base de datos que no está ratificada (`DATABASE_ARCHITECTURE.md` §5 solo ratifica `users` con `name`/`email`/`password_hash`, sin definir reglas de negocio de registro como duplicados de email, longitud mínima de contraseña, etc.). Se lista en §9 como decisión pendiente de mayor prioridad del roadmap (Fase 1 de la hoja de ruta técnica de THERS).
+**Cambios respecto a la versión anterior de este documento:**
+- La validación ya **no** compara contra una credencial hardcodeada — consulta la tabla `users` real vía `SQLAlchemyUserRepository` (`backend/app/infrastructure/persistence/repositories/user_repository.py`).
+- El objeto `user` devuelto (`id`, `email`, `name`) ahora proviene de datos reales persistidos, no de un valor fijo (`"name": "Fernando"` eliminado).
+- **`identity` del JWT cambió de `email` a `user.id` (UUID, como string)** — cualquier endpoint protegido futuro que use `get_jwt_identity()` recibirá un UUID de `users.id`, no un email. Ver `BACKEND_ARCHITECTURE.md` §9.
+- El token sigue sin política de expiración explícita configurada (`PENDIENTE DE APROBACIÓN`, sin cambios en esta tarea).
 
 ### 4.3 Endpoints protegidos — ninguno existe
 
@@ -129,7 +160,7 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 
 | Objeto | Campos expuestos hoy | Fuente |
 |---|---|---|
-| `user` (en response de login) | `email`, `name` | `BACKEND_ARCHITECTURE.md` §6; coincide con la única entidad ratificada `users` en `DATABASE_ARCHITECTURE.md` §4.A, sin exponer `password_hash` (correcto — nunca debe exponerse) |
+| `user` (en response de register y login) | `id`, `email`, `name` | `BACKEND_ARCHITECTURE.md` §6/§8; coincide con la única entidad ratificada `users` en `DATABASE_ARCHITECTURE.md` §4.A, sin exponer `password_hash` (correcto — nunca debe exponerse) |
 
 Cuando `DATABASE_ARCHITECTURE.md` incorpore columnas objetivo de `users` (`username`, `avatar_url`, `bio` — §4.B de ese documento), este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 
@@ -137,7 +168,7 @@ Cuando `DATABASE_ARCHITECTURE.md` incorpore columnas objetivo de `users` (`usern
 
 ## 6. Autenticación y autorización
 
-- **Mecanismo:** JWT emitido por `flask_jwt_extended`, `create_access_token(identity=user["email"])` (`BACKEND_ARCHITECTURE.md` §9).
+- **Mecanismo:** JWT emitido por `flask_jwt_extended`, `create_access_token(identity=user["id"])` — `identity` es el `id` (UUID, como string) de `users`, no el email (cambiado en esta tarea; ver `BACKEND_ARCHITECTURE.md` §9).
 - **Convención de envío (para cuando exista el primer endpoint protegido):** header `Authorization: Bearer <token>` — convención estándar de la librería usada, no verificada contra código real todavía.
 - **Almacenamiento en el Frontend:** `localStorage` (`useAuth.js`) — decisión ya registrada como `PENDIENTE DE APROBACIÓN` en `FRONTEND_ARCHITECTURE.md` §16, no se repite la discusión aquí.
 - **Autorización (roles/permisos):** no existe ningún concepto en el sistema — no se documenta lo que no existe.
@@ -153,10 +184,9 @@ Cuando `DATABASE_ARCHITECTURE.md` incorpore columnas objetivo de `users` (`usern
 
 ## 8. Qué NO cambia con este documento
 
-- No se crea, modifica ni elimina ningún endpoint real.
-- No se ratifica un formato de error nuevo — se documenta el actual y se señala como pendiente de estandarizar.
+- No se ratifica un formato de error nuevo — se documenta el actual (`{"msg": "..."}`) y se señala como pendiente de estandarizar.
 - No se adopta OpenAPI/Swagger en esta versión.
-- No se define el contrato de `/register` ni de ningún endpoint futuro — se señala su ausencia, no se inventa su forma.
+- No se define el contrato de ningún endpoint futuro más allá de `/register` y `/login` (ya implementados) — se señala su ausencia, no se inventa su forma.
 
 ---
 
@@ -165,7 +195,7 @@ Cuando `DATABASE_ARCHITECTURE.md` incorpore columnas objetivo de `users` (`usern
 Decisiones que este documento **no toma** porque no están respaldadas por código ni por documentación oficial ratificada. Cada una debe resolverse como ADR (`HB-001` §11–12) antes de implementarse:
 
 1. **Formato estándar de error** para toda la API (heredado de `BACKEND_ARCHITECTURE.md` §20, ítem 5 — este documento debe reflejarlo, no decidirlo).
-2. **Contrato de `POST /api/register`** — campos, validaciones (unicidad de email, longitud mínima de contraseña), respuesta.
+2. ~~Contrato de `POST /api/register`~~ — **resuelto e implementado** en esta tarea (§4.1). Sigue `PENDIENTE`: longitud mínima de contraseña y validación de formato de email (la unicidad de email ya está resuelta, la impone el esquema vía `CITEXT UNIQUE`).
 3. **Convención de verbos HTTP** para operaciones futuras (colecciones, actualización parcial, borrado).
 4. **Versionado de API** (`/api/v1` u otro mecanismo) — o la decisión explícita de no versionar todavía.
 5. **Paginación** — formato (offset/limit, cursor) para cuando exista el primer endpoint de colección (p. ej. feed).

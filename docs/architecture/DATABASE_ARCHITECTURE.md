@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.3 |
+| Versión | 0.4 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -13,6 +13,8 @@
 > ⚠️ **Nota de alcance y honestidad de fuentes.** Este documento es un **contrato técnico previo a la implementación**, no una descripción de un esquema ya existente. Al momento de escribirlo (v0.1), el backend **no tenía base de datos, ni ORM, ni driver de PostgreSQL instalado**: la autenticación funcionaba contra credenciales hardcodeadas (ver §4). Todo lo que aquí se define como "decidido" se limita a lo que la documentación oficial ya respalda o a lo que el estado real del código justifica de forma evidente. Todo lo demás está marcado explícitamente como **PENDIENTE DE APROBACIÓN** (§14). No se inventan entidades, columnas, índices ni políticas que el proyecto no necesite hoy.
 >
 > **v0.3 — cierre de la capa de persistencia (auditoría y validación real de esta tarea).** Se corrigió la referencia a una instalación nativa de PostgreSQL 17.11 (no reproducible por el equipo) por el entorno estandarizado real: **PostgreSQL 16 vía Docker Compose** (`docker-compose.yml`, raíz del repo, imagen `postgres:16-alpine`), verificado end-to-end (`flask db upgrade`/`downgrade` repetidos, INSERT sin `id` confirmando `gen_random_uuid()` en PostgreSQL, UPDATE confirmando el trigger de `updated_at`, unicidad case-insensitive de `email` vía `CITEXT`, y reconstrucción completa desde un volumen Docker vacío). Se marcó como resuelta la herramienta de migraciones (§9) donde el documento aún decía `PENDIENTE`, pese a que Flask-Migrate/Alembic ya estaba implementado. Ningún esquema, entidad ni columna cambió — solo se sincronizó el documento con el código real ya existente.
+>
+> **v0.4 — integración de autenticación con persistencia real.** `users` pasó de "modelo implementado pero no conectado" a **en uso real**: `POST /api/register` y `POST /api/login` (`BACKEND_ARCHITECTURE.md` §8/§9, v0.6) ya crean/consultan filas reales, y la credencial hardcodeada (`test@test.com`/`123456`) se eliminó del código por completo. Reflejado en §4 y §5. No se agregó ninguna entidad, columna ni índice nuevo — sigue siendo únicamente `users`, sin cambios de esquema.
 
 ---
 
@@ -79,19 +81,19 @@ Se distingue entre:
 - **Decisiones de persistencia** → capa **4.C** (lo que falta ratificar).
 
 ### Evidencia disponible (código actual)
-- Backend: solo existe el flujo de **autenticación** (`POST /api/login`). `auth_service.validate_user` valida contra credenciales **hardcodeadas** (`test@test.com` / `123456`) y `login_use_case.login_user` devuelve un objeto fijo `{ email, name }`. **No hay persistencia real de ningún tipo.**
-- Frontend: `Register.jsx` recolecta exactamente tres campos — `name`, `email`, `password`. `Login.jsx` usa `email` (la contraseña está fijada como `"123456" // temporal`). El objeto de usuario que la app espera de vuelta es `{ email, name }` (`useAuth.js`).
+- Backend: **autenticación con persistencia real** (`POST /api/register`, `POST /api/login`). `register_use_case.register_user` crea filas reales en `users` (id generado por PostgreSQL); `login_use_case.login_user` consulta `users` por email (vía `SQLAlchemyUserRepository`) y verifica el hash. La credencial hardcodeada (`test@test.com`/`123456`) que existía en `auth_service.validate_user` **se eliminó por completo** (`BACKEND_ARCHITECTURE.md` §9, v0.6). El backend devuelve `{ id, email, name }`, con datos reales, no un objeto fijo.
+- Frontend: `Register.jsx` recolecta exactamente tres campos — `name`, `email`, `password`. `Login.jsx` usa `email` (la contraseña está fijada como `"123456" // temporal`). El objeto de usuario que la app espera de vuelta es `{ email, name }` (`useAuth.js`) — el Frontend **todavía no** consume los endpoints reales; esa integración queda fuera de esta actualización (backend-only).
 - Frontend `legal/` (`Terms`, `Privacy`, `Cookies`): páginas **estáticas**, sin datos que persistir.
 
 ---
 
 ### 4.A ESTADO ACTUAL IMPLEMENTADO
 
-> Aclaración honesta: hoy **no hay persistencia implementada** (no existen tablas ni base de datos). "Implementado" aquí significa **la única entidad que el código actual justifica y ratifica** como modelo de datos — la que se implementará primero para reemplazar la validación hardcodeada.
+> Actualización (v0.3): la persistencia de `users` ya está implementada y en uso real por `register`/`login` (`BACKEND_ARCHITECTURE.md` §8/§9, v0.6) — verificada con pruebas de integración contra PostgreSQL 16 real (`backend/tests/test_auth.py`). "Implementada" en la tabla de abajo ya no es solo una ratificación de modelo: es el estado real y verificado del backend.
 
 | Entidad | Estado | Justificación |
 |---|---|---|
-| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5) | Registro recolecta `name`/`email`/`password`; login autentica por `email`; el backend ya devuelve `{ email, name }` |
+| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`) | Registro persiste `name`/`email`/`password_hash` reales; login autentica consultando `users` por `email`; el backend devuelve `{ id, email, name }` con datos reales |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -200,7 +202,7 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 > Única entidad con definición formal en esta versión (capa 4.A). El resto está en §4.B (objetivo) y §14 (pendientes).
 
-**Propósito.** Representar a una persona registrada en THERS y ser la fuente de verdad para autenticación (reemplazar la validación hardcodeada actual).
+**Propósito.** Representar a una persona registrada en THERS y ser la fuente de verdad para autenticación — rol que ya cumple en producción de código desde v0.3 (`register`/`login` reales, `BACKEND_ARCHITECTURE.md` §8/§9).
 
 **Atributos principales**
 
@@ -285,11 +287,11 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 
 | Aspecto | Definición |
 |---|---|
-| Propósito | Poblar la base con datos mínimos para desarrollo local y pruebas manuales, reemplazando de forma controlada la validación hardcodeada actual. |
+| Propósito | Poblar la base con datos mínimos para desarrollo local y pruebas manuales. |
 | Datos de desarrollo | Un conjunto pequeño de usuarios de prueba con contraseñas **de prueba** documentadas como tales. Nunca contraseñas reales de personas. |
 | Separación desarrollo / producción | Los seeds de desarrollo **nunca** se ejecutan contra producción. Producción no lleva usuarios de ejemplo. La forma concreta de separar entornos (variable de entorno, comando distinto) depende de la configuración de entornos, hoy **PENDIENTE** (§14). |
 
-> Nota: el usuario hardcodeado actual (`test@test.com` / `123456`) vive en el **código** (`auth_service.py`), no en un seed. Al implementar la base de datos, ese caso debería migrar a un seed de desarrollo y **eliminarse del código** — pero esa es una tarea de implementación, no de este documento.
+> Actualización (v0.3): el usuario hardcodeado (`test@test.com` / `123456`) que vivía en `auth_service.py` **se eliminó del código** al integrar `register`/`login` con `users` real (`BACKEND_ARCHITECTURE.md` §9, v0.6) — no migró a un seed, simplemente se retiró. Sigue sin existir ninguna estrategia de seeds implementada (script, comando, datos de ejemplo); esta sección sigue describiendo el diseño esperado, no algo ya construido.
 
 ---
 

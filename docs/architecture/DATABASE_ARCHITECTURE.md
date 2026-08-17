@@ -4,13 +4,17 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.2 |
+| Versión | 0.4 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
-> ⚠️ **Nota de alcance y honestidad de fuentes.** Este documento es un **contrato técnico previo a la implementación**, no una descripción de un esquema ya existente. Al momento de escribirlo, el backend **no tiene base de datos, ni ORM, ni driver de PostgreSQL instalado**: la autenticación funciona contra credenciales hardcodeadas (ver §4). Todo lo que aquí se define como "decidido" se limita a lo que la documentación oficial ya respalda o a lo que el estado real del código justifica de forma evidente. Todo lo demás está marcado explícitamente como **PENDIENTE DE APROBACIÓN** (§14). No se inventan entidades, columnas, índices ni políticas que el proyecto no necesite hoy.
+> ⚠️ **Nota de alcance y honestidad de fuentes.** Este documento es un **contrato técnico previo a la implementación**, no una descripción de un esquema ya existente. Al momento de escribirlo (v0.1), el backend **no tenía base de datos, ni ORM, ni driver de PostgreSQL instalado**: la autenticación funcionaba contra credenciales hardcodeadas (ver §4). Todo lo que aquí se define como "decidido" se limita a lo que la documentación oficial ya respalda o a lo que el estado real del código justifica de forma evidente. Todo lo demás está marcado explícitamente como **PENDIENTE DE APROBACIÓN** (§14). No se inventan entidades, columnas, índices ni políticas que el proyecto no necesite hoy.
+>
+> **v0.3 — cierre de la capa de persistencia (auditoría y validación real de esta tarea).** Se corrigió la referencia a una instalación nativa de PostgreSQL 17.11 (no reproducible por el equipo) por el entorno estandarizado real: **PostgreSQL 16 vía Docker Compose** (`docker-compose.yml`, raíz del repo, imagen `postgres:16-alpine`), verificado end-to-end (`flask db upgrade`/`downgrade` repetidos, INSERT sin `id` confirmando `gen_random_uuid()` en PostgreSQL, UPDATE confirmando el trigger de `updated_at`, unicidad case-insensitive de `email` vía `CITEXT`, y reconstrucción completa desde un volumen Docker vacío). Se marcó como resuelta la herramienta de migraciones (§9) donde el documento aún decía `PENDIENTE`, pese a que Flask-Migrate/Alembic ya estaba implementado. Ningún esquema, entidad ni columna cambió — solo se sincronizó el documento con el código real ya existente.
+>
+> **v0.4 — integración de autenticación con persistencia real.** `users` pasó de "modelo implementado pero no conectado" a **en uso real**: `POST /api/register` y `POST /api/login` (`BACKEND_ARCHITECTURE.md` §8/§9, v0.6) ya crean/consultan filas reales, y la credencial hardcodeada (`test@test.com`/`123456`) se eliminó del código por completo. Reflejado en §4 y §5. No se agregó ninguna entidad, columna ni índice nuevo — sigue siendo únicamente `users`, sin cambios de esquema.
 
 ---
 
@@ -43,7 +47,7 @@ Este documento cubre:
 | Aspecto | Valor | Fuente |
 |---|---|---|
 | Motor | **PostgreSQL** | `HB-001` (portada del stack) y `REPOSITORY_STRUCTURE.md` §4 |
-| Versión | **PENDIENTE DE APROBACIÓN** — ninguna versión concreta está documentada en `/docs`; tampoco hay todavía una instancia de PostgreSQL real conectada (ver §4.A) | — |
+| Versión | **PostgreSQL 16** (imagen `postgres:16-alpine`) — entorno de desarrollo local estandarizado vía Docker Compose (`docker-compose.yml`, raíz del repo), reproducible para los 4 integrantes. Reemplaza la nota de v0.2 sobre una instalación nativa de PostgreSQL 17.11 verificada solo en una máquina — esa instancia no era reproducible por el equipo y ya no es la referencia. Versión oficial para un entorno compartido/producción sigue sin ratificación formal (DevOps, `CLAUDE.md` §5) | `docker-compose.yml`; verificado end-to-end en esta tarea (migración, UUID, CITEXT, trigger, downgrade/upgrade, reconstrucción desde volumen vacío) |
 | Driver / adaptador Python | **`psycopg` (v3), `psycopg[binary]==3.3.4`** — agregado a `backend/requirements.txt` junto con `Flask-SQLAlchemy` y `Flask-Migrate` | Implementado en código (`BACKEND_ARCHITECTURE.md` §2). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend, no consensuada por los 4 integrantes en esta tarea |
 
 ### Razones técnicas
@@ -77,19 +81,19 @@ Se distingue entre:
 - **Decisiones de persistencia** → capa **4.C** (lo que falta ratificar).
 
 ### Evidencia disponible (código actual)
-- Backend: solo existe el flujo de **autenticación** (`POST /api/login`). `auth_service.validate_user` valida contra credenciales **hardcodeadas** (`test@test.com` / `123456`) y `login_use_case.login_user` devuelve un objeto fijo `{ email, name }`. **No hay persistencia real de ningún tipo.**
-- Frontend: `Register.jsx` recolecta exactamente tres campos — `name`, `email`, `password`. `Login.jsx` usa `email` (la contraseña está fijada como `"123456" // temporal`). El objeto de usuario que la app espera de vuelta es `{ email, name }` (`useAuth.js`).
+- Backend: **autenticación con persistencia real** (`POST /api/register`, `POST /api/login`). `register_use_case.register_user` crea filas reales en `users` (id generado por PostgreSQL); `login_use_case.login_user` consulta `users` por email (vía `SQLAlchemyUserRepository`) y verifica el hash. La credencial hardcodeada (`test@test.com`/`123456`) que existía en `auth_service.validate_user` **se eliminó por completo** (`BACKEND_ARCHITECTURE.md` §9, v0.6). El backend devuelve `{ id, email, name }`, con datos reales, no un objeto fijo.
+- Frontend: `Register.jsx` recolecta exactamente tres campos — `name`, `email`, `password`. `Login.jsx` usa `email` (la contraseña está fijada como `"123456" // temporal`). El objeto de usuario que la app espera de vuelta es `{ email, name }` (`useAuth.js`) — el Frontend **todavía no** consume los endpoints reales; esa integración queda fuera de esta actualización (backend-only).
 - Frontend `legal/` (`Terms`, `Privacy`, `Cookies`): páginas **estáticas**, sin datos que persistir.
 
 ---
 
 ### 4.A ESTADO ACTUAL IMPLEMENTADO
 
-> Aclaración honesta: hoy **no hay persistencia implementada** (no existen tablas ni base de datos). "Implementado" aquí significa **la única entidad que el código actual justifica y ratifica** como modelo de datos — la que se implementará primero para reemplazar la validación hardcodeada.
+> Actualización (v0.3): la persistencia de `users` ya está implementada y en uso real por `register`/`login` (`BACKEND_ARCHITECTURE.md` §8/§9, v0.6) — verificada con pruebas de integración contra PostgreSQL 16 real (`backend/tests/test_auth.py`). "Implementada" en la tabla de abajo ya no es solo una ratificación de modelo: es el estado real y verificado del backend.
 
 | Entidad | Estado | Justificación |
 |---|---|---|
-| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5) | Registro recolecta `name`/`email`/`password`; login autentica por `email`; el backend ya devuelve `{ email, name }` |
+| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`) | Registro persiste `name`/`email`/`password_hash` reales; login autentica consultando `users` por `email`; el backend devuelve `{ id, email, name }` con datos reales |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -198,7 +202,7 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 > Única entidad con definición formal en esta versión (capa 4.A). El resto está en §4.B (objetivo) y §14 (pendientes).
 
-**Propósito.** Representar a una persona registrada en THERS y ser la fuente de verdad para autenticación (reemplazar la validación hardcodeada actual).
+**Propósito.** Representar a una persona registrada en THERS y ser la fuente de verdad para autenticación — rol que ya cumple en producción de código desde v0.3 (`register`/`login` reales, `BACKEND_ARCHITECTURE.md` §8/§9).
 
 **Atributos principales**
 
@@ -272,7 +276,7 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 | Aspecto | Estado |
 |---|---|
 | Estrategia | **Migraciones versionadas e incrementales**, cada cambio de esquema como un archivo de migración revisado por PR (coherente con el git flow de `HB-001` §7–9: nada al esquema sin PR + aprobación). |
-| Herramienta | **PENDIENTE DE APROBACIÓN.** No hay herramienta de migraciones instalada ni documentada. En el ecosistema Flask lo habitual sería Alembic / Flask-Migrate, pero `CLAUDE.md` §4 prohíbe asumir dependencias Python sin confirmarlas con el equipo. **No se decide aquí.** |
+| Herramienta | ~~PENDIENTE DE APROBACIÓN~~ — **resuelto: Flask-Migrate/Alembic** (`backend/migrations/`), implementado y verificado en esta tarea: `flask db upgrade`/`downgrade` probados dos veces cada uno contra PostgreSQL 16 real (Docker), incluida la reconstrucción completa desde un volumen vacío. Ratificación formal por el Comité Técnico pendiente de confirmar (`HB-001` §11.1). |
 | Versionado | Cada migración es inmutable una vez fusionada a `develop`/`main`; los cambios posteriores son migraciones nuevas, no ediciones de una anterior. |
 | Rollback | Cada migración debe declarar su reverso (downgrade). El **procedimiento operativo** de rollback en un entorno desplegado depende de DevOps, que es territorio no especificado (`CLAUDE.md` §14) → **PENDIENTE**. |
 | Ubicación de artefactos | `REPOSITORY_STRUCTURE.md` §10 anticipa una carpeta futura `database/` para "scripts de migración, semillas y esquema versionado", hoy "presumiblemente dentro de `backend/`". La ubicación definitiva queda **PENDIENTE** hasta que el equipo la confirme. |
@@ -283,11 +287,11 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 
 | Aspecto | Definición |
 |---|---|
-| Propósito | Poblar la base con datos mínimos para desarrollo local y pruebas manuales, reemplazando de forma controlada la validación hardcodeada actual. |
+| Propósito | Poblar la base con datos mínimos para desarrollo local y pruebas manuales. |
 | Datos de desarrollo | Un conjunto pequeño de usuarios de prueba con contraseñas **de prueba** documentadas como tales. Nunca contraseñas reales de personas. |
 | Separación desarrollo / producción | Los seeds de desarrollo **nunca** se ejecutan contra producción. Producción no lleva usuarios de ejemplo. La forma concreta de separar entornos (variable de entorno, comando distinto) depende de la configuración de entornos, hoy **PENDIENTE** (§14). |
 
-> Nota: el usuario hardcodeado actual (`test@test.com` / `123456`) vive en el **código** (`auth_service.py`), no en un seed. Al implementar la base de datos, ese caso debería migrar a un seed de desarrollo y **eliminarse del código** — pero esa es una tarea de implementación, no de este documento.
+> Actualización (v0.3): el usuario hardcodeado (`test@test.com` / `123456`) que vivía en `auth_service.py` **se eliminó del código** al integrar `register`/`login` con `users` real (`BACKEND_ARCHITECTURE.md` §9, v0.6) — no migró a un seed, simplemente se retiró. Sigue sin existir ninguna estrategia de seeds implementada (script, comando, datos de ejemplo); esta sección sigue describiendo el diseño esperado, no algo ya construido.
 
 ---
 
@@ -335,7 +339,7 @@ Se describe la responsabilidad de cada capa **usando la estructura ya observada*
 Decisiones que este documento **no toma** porque no están respaldadas por la documentación oficial ni por una necesidad técnica evidente. Cada una debe resolverse como ADR (`HB-001` §11–12) antes de implementarse.
 
 ### Motor y dependencias
-- **Versión de PostgreSQL** — instancia real verificada localmente: **PostgreSQL 17.11** (instalada para desarrollo en esta tarea). No hay todavía una base compartida por el equipo o de producción; la versión oficial para esos entornos sigue sin ratificación formal.
+- ~~Versión de PostgreSQL para desarrollo local~~ — **resuelto: PostgreSQL 16** (`postgres:16-alpine` vía `docker-compose.yml`, raíz del repo), reproducible por cualquier integrante con `docker compose up -d`. No hay todavía una base compartida por el equipo o de producción; la versión oficial para esos entornos sigue sin ratificación formal.
 - **Driver/adaptador Python** y **ORM** — **implementado en código** (`psycopg` v3 + SQLAlchemy + Flask-Migrate/Alembic, ver §2); ratificación formal por el Comité Técnico pendiente de confirmar.
 
 ### Esquema

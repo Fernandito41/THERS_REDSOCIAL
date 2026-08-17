@@ -1,20 +1,15 @@
-from werkzeug.security import check_password_hash
+# Reglas de negocio puras de autenticación. No conoce Flask, SQLAlchemy ni
+# PostgreSQL (BACKEND_ARCHITECTURE.md §7/§17) — el algoritmo de hashing sigue
+# siendo werkzeug.security (scrypt), ya aprobado como corrección puntual para
+# la credencial de prueba (BACKEND_ARCHITECTURE.md §9) y mantenido aquí como
+# el algoritmo real para `users.password_hash`.
 
-# Credencial de prueba temporal (ver BACKEND_ARCHITECTURE.md §9). El hash corresponde
-# a la contraseña "123456", generado con werkzeug.security.generate_password_hash.
-# Se reemplaza por una consulta real a la tabla `users` (DATABASE_ARCHITECTURE.md §5)
-# cuando la capa de persistencia se implemente.
-_TEST_USER_EMAIL = "test@test.com"
-_TEST_USER_PASSWORD_HASH = (
-    "scrypt:32768:8:1$xtvTwCsjfHDhcG71$02b458e2725e058ac7b963e0429ebe4606888921691c"
-    "f2cd9603b45d2287d55957ea8280c0f84353cad816a38ddd68ee1f053dd33e2804e6b6d20b4ece6"
-    "697a2"
-)
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
-def validate_user(email, password):
+def hash_password(password):
+    return generate_password_hash(password)
 
-    return (
-        email == _TEST_USER_EMAIL
-        and check_password_hash(_TEST_USER_PASSWORD_HASH, password)
-    )
+
+def verify_password(password, password_hash):
+    return check_password_hash(password_hash, password)

@@ -1,16 +1,21 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { IoClose } from "react-icons/io5";
+import { IoClose, IoInformationCircleOutline } from "react-icons/io5";
 import { FcGoogle } from "react-icons/fc";
+import { FaApple } from "react-icons/fa";
 import Logo from "@shared/components/Logo";
 import { Link } from "react-router-dom";
+import { useAuth, useOAuthNotice } from "@features/auth";
 
 
 export default function Register() {
   const navigate = useNavigate();
+  const { registerLocally } = useAuth();
+  const { notice, notify } = useOAuthNotice();
 
   const [form, setForm] = useState({
     name: "",
+    username: "",
     email: "",
     password: "",
   });
@@ -24,12 +29,22 @@ export default function Register() {
 
   const handleRegister = (e) => {
     e.preventDefault();
-    console.log(form);
-    navigate("/login"); // temporal
+
+    // POST /api/register no existe todavía (API_CONTRACT.md §4.2): no hay backend
+    // real detrás de este formulario. Se guarda localmente lo que el usuario
+    // escribió para que el Feed muestre su identidad real, no un usuario mock.
+    registerLocally({
+      name: form.name.trim(),
+      username: form.username.trim(),
+      email: form.email.trim(),
+    });
+
+    navigate("/feed");
   };
 
   const isValid =
     form.name.trim() &&
+    form.username.trim() &&
     form.email.trim() &&
     form.password.trim();
 
@@ -63,10 +78,32 @@ export default function Register() {
         </p>
 
         {/* GOOGLE */}
-        <button className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition">
+        <button
+          type="button"
+          onClick={() => notify("google")}
+          className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition"
+        >
           <FcGoogle size={20} />
           Crear cuenta con Google
         </button>
+
+        {/* APPLE */}
+        <button
+          type="button"
+          onClick={() => notify("apple")}
+          className="w-full flex items-center justify-center gap-3 bg-black text-white border border-gray-700 py-3 rounded-full font-semibold hover:bg-gray-900 transition mt-3"
+        >
+          <FaApple size={18} />
+          Crear cuenta con Apple
+        </button>
+
+        {notice && (
+          <p className="flex items-start gap-1.5 text-xs text-gray-400 bg-black/30 rounded-lg px-3 py-2 mt-3">
+            <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
+            {notice === "google" ? "Google" : "Apple"} todavía no está configurado en el backend de THERS
+            — esta cuenta no puede registrarse así por ahora.
+          </p>
+        )}
 
         {/* DIVISOR */}
         <div className="flex items-center my-6">
@@ -83,6 +120,15 @@ export default function Register() {
             name="name"
             placeholder="Nombre"
             value={form.name}
+            onChange={handleChange}
+            className="w-full bg-transparent border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+
+          <input
+            type="text"
+            name="username"
+            placeholder="Nombre de usuario"
+            value={form.username}
             onChange={handleChange}
             className="w-full bg-transparent border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
           />

@@ -1,7 +1,7 @@
 export default function Logo({ size = "text-4xl" }) {
   return (
     <div className={`flex items-center gap-1 ${size}`}>
-      
+
       <span className="font-extrabold text-white">
         T
       </span>

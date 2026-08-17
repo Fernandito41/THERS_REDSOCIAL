@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
-import { IoClose } from "react-icons/io5";
+import { FaApple } from "react-icons/fa";
+import { IoClose, IoInformationCircleOutline } from "react-icons/io5";
 import Logo from "@shared/components/Logo";
-import { useAuth } from "@features/auth";
+import { useAuth, useOAuthNotice } from "@features/auth";
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { notice, notify } = useOAuthNotice();
 
   const [input, setInput] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleNext = async (e) => {
     e.preventDefault();
@@ -17,7 +20,7 @@ export default function Login() {
     try {
       await login({
         email: input,
-        password: "123456" // temporal
+        password
       });
 
       navigate("/feed");
@@ -57,10 +60,32 @@ export default function Login() {
         </p>
 
         {/* GOOGLE LOGIN */}
-        <button className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition">
+        <button
+          type="button"
+          onClick={() => notify("google")}
+          className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition"
+        >
           <FcGoogle size={20} />
           Iniciar sesión con Google
         </button>
+
+        {/* APPLE LOGIN */}
+        <button
+          type="button"
+          onClick={() => notify("apple")}
+          className="w-full flex items-center justify-center gap-3 bg-black text-white border border-gray-700 py-3 rounded-full font-semibold hover:bg-gray-900 transition mt-3"
+        >
+          <FaApple size={18} />
+          Iniciar sesión con Apple
+        </button>
+
+        {notice && (
+          <p className="flex items-start gap-1.5 text-xs text-gray-400 bg-black/30 rounded-lg px-3 py-2 mt-3">
+            <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
+            {notice === "google" ? "Google" : "Apple"} todavía no está configurado en el backend de THERS
+            — esta cuenta no puede iniciar sesión así por ahora.
+          </p>
+        )}
 
         {/* DIVISOR */}
         <div className="flex items-center my-6">
@@ -80,10 +105,18 @@ export default function Login() {
             className="w-full bg-transparent border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
 
+          <input
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full bg-transparent border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+
           <button
-            disabled={!input}
+            disabled={!input || !password}
             className={`w-full py-3 rounded-full font-semibold transition ${
-              input
+              input && password
                 ? "bg-purple-600 hover:bg-purple-700 text-white"
                 : "bg-gray-700 text-gray-400 cursor-not-allowed"
             }`}

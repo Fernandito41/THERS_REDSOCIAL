@@ -1,11 +1,87 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: [
     "./index.html",
     "./src/**/*.{js,jsx,ts,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        // Fondos/tarjetas del modo oscuro fijados al hex exacto de la primera
+        // versión de THERS (Login/Register siguen usando estos mismos valores
+        // hardcodeados: bg-[#0f0f11] / bg-[#18181b]) -- se recupera aquí como
+        // token para que el resto de la app (feed, perfil, mensajes...) use
+        // la misma identidad sin tener que reescribir cada componente.
+        canvas: { DEFAULT: "#FAFAFC", dark: "#0f0f11" },
+        surface: { DEFAULT: "#FFFFFF", dark: "#18181b" },
+        ink: { DEFAULT: "#14141A", dark: "#FFFFFF" },
+        muted: { DEFAULT: "#6B6B76", dark: "#9CA3AF" },
+        line: { DEFAULT: "#ECECF2", dark: "#27272A" },
+        // "pulse" = el morado original de THERS (idéntico a la escala `purple`
+        // de Tailwind que ya usaban los botones/enlaces hardcodeados). Es el
+        // único acento de marca -- no se reemplaza por otra paleta.
+        pulse: {
+          50: "#faf5ff",
+          100: "#f3e8ff",
+          200: "#e9d5ff",
+          300: "#d8b4fe",
+          400: "#c084fc",
+          500: "#a855f7",
+          600: "#9333ea",
+          700: "#7e22ce",
+          800: "#6b21a8",
+          900: "#581c87",
+        },
+        // "ember" ya no es un segundo acento de marca -- queda como color
+        // semántico (error/destructivo) únicamente, para no competir con el
+        // morado como identidad visual.
+        ember: {
+          50: "#fef2f2",
+          100: "#fee2e2",
+          300: "#fca5a5",
+          400: "#f87171",
+          500: "#ef4444",
+          600: "#dc2626",
+          700: "#b91c1c",
+        },
+      },
+      boxShadow: {
+        soft: "0 1px 2px rgba(0,0,0,0.06), 0 12px 28px -14px rgba(0,0,0,0.18)",
+        lift: "0 24px 48px -18px rgba(147,51,234,0.35)",
+        glow: "0 0 0 4px rgba(147,51,234,0.16)",
+      },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        capsuleIn: {
+          "0%": { opacity: 0, transform: "translateY(14px)" },
+          "100%": { opacity: 1, transform: "translateY(0)" },
+        },
+        popLike: {
+          "0%": { transform: "scale(1)" },
+          "40%": { transform: "scale(1.35)" },
+          "100%": { transform: "scale(1)" },
+        },
+        moodGlow: {
+          "0%, 100%": { opacity: 0.5 },
+          "50%": { opacity: 1 },
+        },
+        floatIn: {
+          "0%": { opacity: 0, transform: "translateY(10px) scale(0.98)" },
+          "100%": { opacity: 1, transform: "translateY(0) scale(1)" },
+        },
+      },
+      animation: {
+        marquee: "marquee 30s linear infinite",
+        "capsule-in": "capsuleIn 0.45s cubic-bezier(0.16,1,0.3,1) both",
+        "pop-like": "popLike 0.35s ease-in-out",
+        "mood-glow": "moodGlow 2.6s ease-in-out infinite",
+        "float-in": "floatIn 0.2s ease-out both",
+      },
+    },
   },
   plugins: [],
 }

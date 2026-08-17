@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { IoClose } from "react-icons/io5";
+import { IoClose, IoInformationCircleOutline } from "react-icons/io5";
 import { FcGoogle } from "react-icons/fc";
+import { FaApple } from "react-icons/fa";
 import Logo from "@shared/components/Logo";
 import { Link } from "react-router-dom";
-import { useAuth } from "@features/auth";
+import { useAuth, useOAuthNotice } from "@features/auth";
 import { getErrorMessage } from "@shared/lib/api";
 
 
 export default function Register() {
   const navigate = useNavigate();
   const { register } = useAuth();
+  const { notice, notify } = useOAuthNotice();
 
   const [form, setForm] = useState({
     name: "",
@@ -72,10 +74,32 @@ export default function Register() {
         </p>
 
         {/* GOOGLE */}
-        <button className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition">
+        <button
+          type="button"
+          onClick={() => notify("google")}
+          className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition"
+        >
           <FcGoogle size={20} />
           Crear cuenta con Google
         </button>
+
+        {/* APPLE */}
+        <button
+          type="button"
+          onClick={() => notify("apple")}
+          className="w-full flex items-center justify-center gap-3 bg-black text-white border border-gray-700 py-3 rounded-full font-semibold hover:bg-gray-900 transition mt-3"
+        >
+          <FaApple size={18} />
+          Crear cuenta con Apple
+        </button>
+
+        {notice && (
+          <p className="flex items-start gap-1.5 text-xs text-gray-400 bg-black/30 rounded-lg px-3 py-2 mt-3">
+            <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
+            {notice === "google" ? "Google" : "Apple"} todavía no está configurado en el backend de THERS
+            — esta cuenta no puede registrarse así por ahora.
+          </p>
+        )}
 
         {/* DIVISOR */}
         <div className="flex items-center my-6">

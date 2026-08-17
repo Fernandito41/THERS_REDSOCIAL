@@ -1,0 +1,23 @@
+# Este .gitignore cubre solo la raíz del repositorio. backend/, Frontend/ y
+# handbook/ son aplicaciones independientes con su propio .gitignore — ver
+# docs/architecture/REPOSITORY_STRUCTURE.md §2.
+
+# Dependencias / builds que no deben instalarse ni generarse en la raíz
+node_modules/
+dist/
+dist-ssr/
+
+# Entornos y secretos
+.env
+.env.local
+*.local
+
+# Config local de Claude Code (no compartida por convención — ver .claude/settings.local.json)
+.claude/settings.local.json
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db

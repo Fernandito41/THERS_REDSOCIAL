@@ -4,10 +4,13 @@ import { IoClose } from "react-icons/io5";
 import { FcGoogle } from "react-icons/fc";
 import Logo from "@shared/components/Logo";
 import { Link } from "react-router-dom";
+import { useAuth } from "@features/auth";
+import { getErrorMessage } from "@shared/lib/api";
 
 
 export default function Register() {
   const navigate = useNavigate();
+  const { register } = useAuth();
 
   const [form, setForm] = useState({
     name: "",
@@ -22,10 +25,16 @@ export default function Register() {
     });
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
-    console.log(form);
-    navigate("/login"); // temporal
+
+    try {
+      await register(form);
+      navigate("/login");
+    } catch (error) {
+      console.error(error);
+      alert(getErrorMessage(error));
+    }
   };
 
   const isValid =

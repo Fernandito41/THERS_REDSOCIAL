@@ -4,26 +4,25 @@ import { FcGoogle } from "react-icons/fc";
 import { IoClose } from "react-icons/io5";
 import Logo from "@shared/components/Logo";
 import { useAuth } from "@features/auth";
+import { getErrorMessage } from "@shared/lib/api";
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [input, setInput] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleNext = async (e) => {
     e.preventDefault();
 
     try {
-      await login({
-        email: input,
-        password: "123456" // temporal
-      });
+      await login({ email, password });
 
       navigate("/feed");
     } catch (error) {
       console.error(error);
-      alert("Error al iniciar sesión");
+      alert(getErrorMessage(error));
     }
   };
 
@@ -73,17 +72,25 @@ export default function Login() {
         <form onSubmit={handleNext} className="space-y-4">
 
           <input
-            type="text"
-            placeholder="Correo, teléfono o @usuario"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+            type="email"
+            placeholder="Correo electrónico"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full bg-transparent border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+
+          <input
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             className="w-full bg-transparent border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
 
           <button
-            disabled={!input}
+            disabled={!email || !password}
             className={`w-full py-3 rounded-full font-semibold transition ${
-              input
+              email && password
                 ? "bg-purple-600 hover:bg-purple-700 text-white"
                 : "bg-gray-700 text-gray-400 cursor-not-allowed"
             }`}

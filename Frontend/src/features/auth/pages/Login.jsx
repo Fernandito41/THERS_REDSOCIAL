@@ -1,151 +1,156 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
-import { IoClose, IoInformationCircleOutline } from "react-icons/io5";
-import Logo from "@shared/components/Logo";
+import { IoInformationCircleOutline } from "react-icons/io5";
 import { useAuth, useOAuthNotice } from "@features/auth";
 import { getErrorMessage } from "@shared/lib/api";
+import { useToast } from "@shared/components/Toast";
+import Spinner from "@shared/components/Spinner";
+import AuthCard from "../components/AuthCard";
+import TextField from "../components/TextField";
+import PasswordField from "../components/PasswordField";
+import { isValidEmail } from "../lib/validators";
 
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const { notice, notify } = useOAuthNotice();
+  const toast = useToast();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleNext = async (e) => {
+  const validate = () => {
+    const next = {};
+    if (!email.trim()) next.email = "Ingresá tu correo electrónico.";
+    else if (!isValidEmail(email)) next.email = "Ingresá un correo electrónico válido.";
+    if (!password) next.password = "Ingresá tu contraseña.";
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting || !validate()) return;
 
+    setIsSubmitting(true);
     try {
-      await login({ email, password });
-
+      // .trim() solo en email (mismo motivo que en backend/auth_routes.py) --
+      // la contraseña nunca se normaliza, se envía tal cual la escribió el usuario.
+      await login({ email: email.trim(), password });
       navigate("/feed");
     } catch (error) {
       console.error(error);
-      alert(getErrorMessage(error));
+      toast.error(getErrorMessage(error), { title: "No pudimos iniciar sesión" });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const isValid = email.trim() && password;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f0f11] px-4">
-
-      <div className="w-full max-w-md bg-[#18181b] p-8 rounded-2xl shadow-xl border border-gray-800 relative">
-
-        {/* CERRAR */}
-        <div className="absolute top-3 left-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="text-white hover:bg-gray-800 p-2 rounded-full"
-          >
-            <IoClose size={24} />
-          </button>
-        </div>
-
-        {/* LOGO */}
-        <div className="flex justify-center mb-4">
-          <Logo />
-        </div>
-
-        {/* TITULO */}
-        <h2 className="text-2xl font-semibold text-white text-center">
+    <AuthCard
+      title={
+        <>
           Inicia sesión en <span className="font-bold">Thers</span>
-        </h2>
+        </>
+      }
+      subtitle="Bienvenido de nuevo"
+    >
+      {/* GOOGLE LOGIN */}
+      <button
+        type="button"
+        onClick={() => notify("google")}
+        className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition"
+      >
+        <FcGoogle size={20} />
+        Iniciar sesión con Google
+      </button>
 
-        <p className="text-gray-400 text-sm text-center mt-2 mb-6">
-          Bienvenido de nuevo
+      {/* APPLE LOGIN */}
+      <button
+        type="button"
+        onClick={() => notify("apple")}
+        className="w-full flex items-center justify-center gap-3 bg-black text-white border border-line-dark py-3 rounded-full font-semibold hover:bg-gray-900 transition mt-3"
+      >
+        <FaApple size={18} />
+        Iniciar sesión con Apple
+      </button>
+
+      {notice && (
+        <p
+          role="status"
+          className="flex items-start gap-1.5 text-xs text-muted-dark bg-black/30 rounded-lg px-3 py-2 mt-3"
+        >
+          <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
+          {notice === "google" ? "Google" : "Apple"} todavía no está configurado en el backend de THERS
+          — esta cuenta no puede iniciar sesión así por ahora.
         </p>
+      )}
 
-        {/* GOOGLE LOGIN */}
+      {/* DIVISOR */}
+      <div className="flex items-center my-6">
+        <div className="flex-1 h-px bg-line-dark"></div>
+        <span className="px-3 text-muted-dark text-sm">o</span>
+        <div className="flex-1 h-px bg-line-dark"></div>
+      </div>
+
+      {/* FORM */}
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <TextField
+          label="Correo electrónico"
+          type="email"
+          placeholder="Correo electrónico"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          error={errors.email}
+        />
+
+        <PasswordField
+          label="Contraseña"
+          placeholder="Contraseña"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          error={errors.password}
+        />
+
         <button
-          type="button"
-          onClick={() => notify("google")}
-          className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition"
+          type="submit"
+          disabled={!isValid || isSubmitting}
+          className={`w-full py-3 rounded-full font-semibold transition flex items-center justify-center gap-2 ${
+            isValid && !isSubmitting
+              ? "bg-pulse-600 hover:bg-pulse-700 text-white"
+              : "bg-line-dark text-muted-dark cursor-not-allowed"
+          }`}
         >
-          <FcGoogle size={20} />
-          Iniciar sesión con Google
+          {isSubmitting && <Spinner />}
+          {isSubmitting ? "Iniciando sesión..." : "Iniciar sesión"}
         </button>
+      </form>
 
-        {/* APPLE LOGIN */}
-        <button
-          type="button"
-          onClick={() => notify("apple")}
-          className="w-full flex items-center justify-center gap-3 bg-black text-white border border-gray-700 py-3 rounded-full font-semibold hover:bg-gray-900 transition mt-3"
-        >
-          <FaApple size={18} />
-          Iniciar sesión con Apple
-        </button>
+      {/* LINKS */}
+      <div className="text-center mt-6 space-y-3">
+        <Link to="/forgot-password" className="text-sm text-pulse-400 hover:underline">
+          ¿Olvidaste tu contraseña?
+        </Link>
 
-        {notice && (
-          <p className="flex items-start gap-1.5 text-xs text-gray-400 bg-black/30 rounded-lg px-3 py-2 mt-3">
-            <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
-            {notice === "google" ? "Google" : "Apple"} todavía no está configurado en el backend de THERS
-            — esta cuenta no puede iniciar sesión así por ahora.
-          </p>
-        )}
-
-        {/* DIVISOR */}
-        <div className="flex items-center my-6">
-          <div className="flex-1 h-px bg-gray-700"></div>
-          <span className="px-3 text-gray-400 text-sm">o</span>
-          <div className="flex-1 h-px bg-gray-700"></div>
-        </div>
-
-        {/* FORM */}
-        <form onSubmit={handleNext} className="space-y-4">
-
-          <input
-            type="email"
-            placeholder="Correo electrónico"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-transparent border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          />
-
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-transparent border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          />
+        <div className="mt-6">
+          <p className="text-sm text-muted-dark text-center mb-3">¿No tienes una cuenta?</p>
 
           <button
-            disabled={!email || !password}
-            className={`w-full py-3 rounded-full font-semibold transition ${
-              email && password
-                ? "bg-purple-600 hover:bg-purple-700 text-white"
-                : "bg-gray-700 text-gray-400 cursor-not-allowed"
-            }`}
+            onClick={() => navigate("/register")}
+            className="w-full border border-line-dark text-ink-dark py-3 rounded-full font-semibold hover:bg-line-dark transition"
           >
-            Iniciar sesión
+            Crear cuenta
           </button>
-
-        </form>
-
-        {/* LINKS */}
-        <div className="text-center mt-6 space-y-3">
-
-          <button className="text-sm text-purple-400 hover:underline">
-            ¿Olvidaste tu contraseña?
-          </button>
-
-          <div className="mt-6">
-  <p className="text-sm text-gray-400 text-center mb-3">
-    ¿No tienes una cuenta?
-  </p>
-
-  <button
-    onClick={() => navigate("/register")}
-    className="w-full border border-gray-700 text-white py-3 rounded-full font-semibold hover:bg-gray-800 transition"
-  >
-    Crear cuenta
-  </button>
-</div>
         </div>
-
       </div>
-    </div>
+    </AuthCard>
   );
 }

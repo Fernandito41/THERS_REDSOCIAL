@@ -26,7 +26,12 @@ def register():
         return jsonify({"msg": "No se enviaron datos"}), 400
 
     name = data.get("name")
-    email = data.get("email")
+    # .strip() solo en email -- CITEXT ya resuelve mayúsculas/minúsculas a
+    # nivel de motor (models.py), pero no espacios en blanco; sin esto, un
+    # email con espacio final (autocompletado/copy-paste) se guarda distinto
+    # a como se compara en el login, y find_by_email() nunca hace match.
+    # La contraseña nunca se normaliza (no aplica, y alteraría su valor real).
+    email = data.get("email").strip() if isinstance(data.get("email"), str) else data.get("email")
     password = data.get("password")
 
     if not name or not email or not password:
@@ -48,7 +53,10 @@ def login():
     if not data:
         return jsonify({"msg": "No se enviaron datos"}), 400
 
-    email = data.get("email")
+    # Mismo .strip() que en /register (ver comentario ahí) -- sin esto, un
+    # login con un espacio de más en el email produce 401 aunque la
+    # contraseña sea correcta, porque find_by_email() no hace match.
+    email = data.get("email").strip() if isinstance(data.get("email"), str) else data.get("email")
     password = data.get("password")
 
     if not email or not password:

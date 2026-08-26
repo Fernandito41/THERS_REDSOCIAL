@@ -17,6 +17,7 @@ import {
 import { Home, Discover, Messages, Notifications, Profile, Settings } from "@features/feed";
 import AppShell from "@/app/layout/AppShell";
 import PublicLayout from "@/app/layout/PublicLayout";
+import ProtectedRoute from "./ProtectedRoute";
 
 export default function AppRouter() {
   return (
@@ -29,14 +30,18 @@ export default function AppRouter() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* THERS -- shell con navegación propia (rail/FAB) + páginas anidadas */}
-        <Route element={<AppShell />}>
-          <Route path="/feed" element={<Home />} />
-          <Route path="/discover" element={<Discover />} />
-          <Route path="/messages" element={<Messages />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/settings" element={<Settings />} />
+        {/* THERS -- shell con navegación propia (rail/FAB) + páginas anidadas.
+            ProtectedRoute es la única responsable de decidir si hay sesión;
+            AppShell ya no redirige por su cuenta. */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppShell />}>
+            <Route path="/feed" element={<Home />} />
+            <Route path="/discover" element={<Discover />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
         </Route>
 
         {/* PÚBLICO -- páginas informativas/legales, con Footer y navegación pública propia */}

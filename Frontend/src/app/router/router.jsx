@@ -2,8 +2,21 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { AuthPage, Login, Register, ForgotPassword, ResetPassword } from "@features/auth";
 import { Terms, Privacy, Cookies } from "@features/legal";
+import {
+  Information,
+  HowItWorks,
+  Community,
+  Security,
+  Faq,
+  Blog,
+  HelpCenter,
+  Locations,
+  Popular,
+  ImportContacts,
+} from "@features/public";
 import { Home, Discover, Messages, Notifications, Profile, Settings } from "@features/feed";
 import AppShell from "@/app/layout/AppShell";
+import PublicLayout from "@/app/layout/PublicLayout";
 
 export default function AppRouter() {
   return (
@@ -26,10 +39,22 @@ export default function AppRouter() {
           <Route path="/settings" element={<Settings />} />
         </Route>
 
-        {/* LEGAL */}
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/cookies" element={<Cookies />} />
+        {/* PÚBLICO -- páginas informativas/legales, con Footer y navegación pública propia */}
+        <Route element={<PublicLayout />}>
+          <Route path="/information" element={<Information />} />
+          <Route path="/information/how-it-works" element={<HowItWorks />} />
+          <Route path="/information/community" element={<Community />} />
+          <Route path="/information/security" element={<Security />} />
+          <Route path="/information/faq" element={<Faq />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/help" element={<HelpCenter />} />
+          <Route path="/popular" element={<Popular />} />
+          <Route path="/locations" element={<Locations />} />
+          <Route path="/contacts/import" element={<ImportContacts />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/cookies" element={<Cookies />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

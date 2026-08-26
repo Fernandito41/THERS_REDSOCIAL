@@ -1,0 +1,22 @@
+# Node / Frontend
+node_modules/
+dist/
+build/
+
+# Python / Backend
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Entornos y secretos
+.env
+.env.*
+!.env.example
+
+# Cobertura de tests
+coverage/
+.coverage
+
+# Editor
+.vscode/

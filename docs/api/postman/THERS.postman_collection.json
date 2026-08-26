@@ -1,0 +1,114 @@
+{
+  "info": {
+    "_postman_id": "09ef9a5d-906a-468a-acef-c9c1a6dfec3d",
+    "name": "THERS",
+    "description": "Colección oficial de pruebas de la API de THERS.  \nDebe mantenerse alineada con docs/architecture/API_CONTRACT.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "56834585"
+  },
+  "item": [
+    {
+      "name": "01_AUTH",
+      "item": [
+        {
+          "name": "register",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"THERS Test\",\r\n  \"email\": \"{{test_email}}\",\r\n  \"password\": \"{{test_password}}\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Status code is 200\", function () {\r",
+                  "    pm.response.to.have.status(200);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains token\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"token\");\r",
+                  "    pm.expect(json.token).to.be.a(\"string\").and.not.empty;\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains user\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"user\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains id\", function () {\r",
+                  "    pm.expect(json.user).to.have.property(\"id\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains email\", function () {\r",
+                  "    pm.expect(json.user).to.have.property(\"email\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains name\", function () {\r",
+                  "    pm.expect(json.user).to.have.property(\"name\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.environment.set(\"jwt_token\", json.token);\r",
+                  "pm.environment.set(\"user_id\", json.user.id);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"thers.test.001@example.com\",\r\n  \"password\": \"123456\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

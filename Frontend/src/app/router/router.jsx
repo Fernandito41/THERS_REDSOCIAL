@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import { AuthPage, Login, Register } from "@features/auth";
+import { AuthPage, Login, Register, ForgotPassword, ResetPassword } from "@features/auth";
 import { Terms, Privacy, Cookies } from "@features/legal";
 import { Home, Discover, Messages, Notifications, Profile, Settings } from "@features/feed";
 import AppShell from "@/app/layout/AppShell";
@@ -13,6 +13,8 @@ export default function AppRouter() {
         <Route path="/" element={<AuthPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* THERS -- shell con navegación propia (rail/FAB) + páginas anidadas */}
         <Route element={<AppShell />}>

@@ -1,7 +1,7 @@
 // Datos mock: representan SOLO a otras personas dentro de THERS (Momentos, Cápsulas
 // ajenas, sugerencias, conversaciones, notificaciones, Descubrir). El usuario
-// actualmente autenticado nunca sale de este archivo -- se lee de la sesión real
-// (useAuth.getStoredUser, consumido en AppShell).
+// actualmente autenticado nunca sale de este archivo -- se lee del AuthProvider
+// (useAuth().user, consumido en AppShell).
 //
 // Imágenes: Picsum Photos (picsum.photos/seed/<seed>) -- servicio público estable,
 // cada seed devuelve siempre la misma imagen (determinista), sin necesitar API key.

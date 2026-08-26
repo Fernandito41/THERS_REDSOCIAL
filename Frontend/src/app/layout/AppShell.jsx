@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Outlet, useNavigate, Link } from "react-router-dom";
 import {
   IoSearchOutline,
@@ -21,22 +21,19 @@ import { mockCapsules, mockNotifications } from "@features/feed/data/mockData";
 
 export default function AppShell() {
   const navigate = useNavigate();
-  const { getStoredUser, updateStoredUser, logout } = useAuth();
+  // AppShell ya no decide si hay sesión -- eso es responsabilidad exclusiva de
+  // ProtectedRoute (app/router/ProtectedRoute.jsx), que envuelve esta rama de
+  // rutas y solo renderiza AppShell cuando isAuthenticated es true. Acá solo
+  // se consume el usuario ya resuelto por AuthProvider.
+  const { user: currentUser, updateStoredUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
-  const [currentUser, setCurrentUser] = useState(() => getStoredUser());
   const [capsules, setCapsules] = useState(mockCapsules);
   const [followingIds, setFollowingIds] = useState(() => new Set());
   const [notifications, setNotifications] = useState(mockNotifications);
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (!currentUser) {
-      navigate("/login", { replace: true });
-    }
-  }, [currentUser, navigate]);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
@@ -60,9 +57,10 @@ export default function AppShell() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
+  // updateStoredUser ya actualiza el estado de AuthProvider internamente --
+  // no hace falta duplicar ese estado acá.
   const handleUpdateUser = (patch) => {
-    const updated = updateStoredUser(patch);
-    if (updated) setCurrentUser(updated);
+    updateStoredUser(patch);
   };
 
   const handleLogout = () => {
@@ -87,6 +85,10 @@ export default function AppShell() {
     setComposerOpen(false);
   };
 
+  // Guard defensivo, no una decisión de ruteo: ProtectedRoute ya garantiza
+  // isAuthenticated antes de montar AppShell; esto solo evita un crash en el
+  // instante de re-render que sigue a logout() (currentUser pasa a null un
+  // tick antes de que la navegación a /login desmonte este árbol).
   if (!currentUser) return null;
 
   return (

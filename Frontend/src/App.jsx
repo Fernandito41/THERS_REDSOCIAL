@@ -2,6 +2,7 @@ import Router from "./app/router/router";
 import { useState, useEffect } from "react";
 import logo from "./assets/logo_TH.png";
 import { ToastProvider } from "@shared/components/Toast";
+import { AuthProvider } from "@features/auth";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -21,9 +22,11 @@ function App() {
   }
 
   return (
-    <ToastProvider>
-      <Router />
-    </ToastProvider>
+    <AuthProvider>
+      <ToastProvider>
+        <Router />
+      </ToastProvider>
+    </AuthProvider>
   );
 }
 

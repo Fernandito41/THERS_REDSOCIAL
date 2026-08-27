@@ -12,12 +12,45 @@
       "item": [
         {
           "name": "register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Status code is 201\", function () {\r",
+                  "    pm.response.to.have.status(201);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains user\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"user\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains expected public fields\", function () {\r",
+                  "    [\"id\", \"username\", \"email\", \"name\", \"phone\", \"country_code\", \"birth_date\"].forEach((field) => {\r",
+                  "        pm.expect(json.user).to.have.property(field);\r",
+                  "    });\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response never exposes sensitive fields\", function () {\r",
+                  "    [\"password\", \"password_hash\", \"confirm_password\"].forEach((field) => {\r",
+                  "        pm.expect(json.user).to.not.have.property(field);\r",
+                  "    });\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\r\n  \"name\": \"THERS Test\",\r\n  \"email\": \"{{test_email}}\",\r\n  \"password\": \"{{test_password}}\"\r\n}",
+              "raw": "{\r\n  \"name\": \"THERS Test\",\r\n  \"username\": \"{{test_username}}\",\r\n  \"email\": \"{{test_email}}\",\r\n  \"phone\": \"7000-1234\",\r\n  \"country_code\": \"+503\",\r\n  \"birth_date\": \"1995-05-20\",\r\n  \"password\": \"{{test_password}}\",\r\n  \"confirm_password\": \"{{test_password}}\"\r\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -88,7 +121,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\r\n  \"email\": \"thers.test.001@example.com\",\r\n  \"password\": \"123456\"\r\n}",
+              "raw": "{\r\n  \"email\": \"{{test_email}}\",\r\n  \"password\": \"{{test_password}}\"\r\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -103,6 +136,108 @@
               "path": [
                 "api",
                 "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02_USERS",
+      "item": [
+        {
+          "name": "get current user (me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Status code is 200\", function () {\r",
+                  "    pm.response.to.have.status(200);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains user\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"user\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User matches the logged-in user_id\", function () {\r",
+                  "    pm.expect(json.user.id).to.eql(pm.environment.get(\"user_id\"));\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response never exposes sensitive fields\", function () {\r",
+                  "    [\"password\", \"password_hash\", \"confirm_password\", \"token\", \"secret\"].forEach((field) => {\r",
+                  "        pm.expect(json.user).to.not.have.property(field);\r",
+                  "    });\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get current user (me) - sin token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\r",
+                  "    pm.response.to.have.status(401);\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
               ]
             }
           },

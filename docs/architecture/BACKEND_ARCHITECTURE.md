@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/BACKEND_ARCHITECTURE.md` |
-| Versión | 0.6 (Propuesta) |
+| Versión | 0.7 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `HB-001` (Manual de Organización), `REPOSITORY_STRUCTURE.md` §6, `CLAUDE.md` §4/§14, código real de `backend/` |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -17,6 +17,8 @@
 > **v0.6 — cierre y validación real de la capa de persistencia:** se reemplazó la referencia a una instalación nativa de PostgreSQL 17.11 (verificada en una sola máquina, no reproducible por el equipo) por el entorno estandarizado real, **PostgreSQL 16 vía Docker Compose** (`docker-compose.yml`, raíz del repo, imagen `postgres:16-alpine`). Se verificó de punta a punta contra esa base: `flask db upgrade`/`downgrade` repetidos, generación de `id` por `gen_random_uuid()` en PostgreSQL (no en Python), trigger de `updated_at`, unicidad case-insensitive de `email` vía `CITEXT`, y reconstrucción completa desde un volumen Docker vacío. Reflejado en las secciones 2, 8 y 19. Ninguna decisión de esquema ni de capas cambió — solo se sincronizó el documento con el código real y se corrigió el entorno de referencia.
 >
 > Fuera de esta actualización puntual, este documento no implementa, refactoriza ni modifica código de `backend/` por iniciativa propia. Documenta lo que existe y propone, donde falta una decisión, el hueco explícito — nunca una arquitectura inventada.
+>
+> **v0.7 — perfil completo de registro + primer endpoint protegido (THERS Backend Fase 2.1, `ADR-002-user-profile-fields.md`):** `users` gana `username`/`phone`/`country_code`/`birth_date` (migración `a1edcbff74d8`); `domain/auth/validators.py` (nuevo) valida su formato; `domain/auth/repositories.py` gana `find_by_id`; `application/auth/user_presenter.py` (nuevo) centraliza la forma pública del `user` para register/login/`me`; `application/auth/get_current_user_use_case.py` (nuevo) orquesta el primer endpoint protegido; `interfaces/routes/user_routes.py` (nuevo blueprint `users_bp`) implementa `GET /api/users/me` con `@jwt_required()`; `app/extensions.py` gana callbacks de error JWT (`unauthorized_loader`/`invalid_token_loader`/`expired_token_loader`) para homogenizar a `401`. Reflejado en §2, §6, §7, §8, §9, §14, §15, §18, §19, §20.
 
 ---
 
@@ -118,9 +120,10 @@ El flujo real hoy termina en `domain/` — `validate_user()` compara contra cred
 
 ## 6. Application
 
-- **Casos de uso — v0.6, migrados a persistencia real:** `login_user(email, password, user_repository)` (`application/auth/login_use_case.py`) y `register_user(name, email, password, user_repository)` (`application/auth/register_use_case.py`, nuevo). Ambos reciben el repositorio como parámetro (inyectado por `interfaces/routes/auth_routes.py`, ver §8) en vez de importar SQLAlchemy — `login_user` ya no llama a `validate_user()`, sino a `user_repository.find_by_email()` + `verify_password()` del dominio; `register_user` llama a `hash_password()` del dominio y `user_repository.create()`.
-- **Orquestación:** los casos de uso no conocen Flask ni HTTP — reciben primitivos (`email`, `password`, `name`) y un objeto `UserRepository` (interfaz de dominio, no la implementación concreta), y devuelven un `dict` o lanzan una excepción de dominio (`EmailAlreadyExistsError`, `InvalidCredentialsError` — ver §7). Esto es coherente con el principio de que `application/` no debería depender del framework de entrada ni de infraestructura concreta.
-- **DTOs / Schemas:** **siguen sin estar definidos** como estrategia general. El `dict` de respuesta (`{"id": ..., "email": ..., "name": ...}`) ahora proviene de datos reales persistidos, no de un valor hardcodeado — pero sigue siendo un `dict` construido a mano, no un DTO/schema formal. Definir una estrategia general de DTOs queda como `PENDIENTE DE APROBACIÓN`.
+- **Casos de uso — v0.7:** `login_user(email, password, user_repository)`, `register_user(name, username, email, phone, country_code, birth_date, password, user_repository)` (firma ampliada v0.7, `ADR-002`) y `get_current_user(user_id, user_repository)` (nuevo, `application/auth/get_current_user_use_case.py`, usado por `GET /api/users/me`). Todos reciben el repositorio como parámetro (inyectado desde `interfaces/routes/`, ver §8) en vez de importar SQLAlchemy.
+- **Orquestación:** los casos de uso no conocen Flask ni HTTP — reciben primitivos y un objeto `UserRepository` (interfaz de dominio, no la implementación concreta), y devuelven un `dict` o lanzan una excepción de dominio (`EmailAlreadyExistsError`, `UsernameAlreadyExistsError`, `InvalidCredentialsError`, `UserNotFoundError` — ver §7). Esto es coherente con el principio de que `application/` no debería depender del framework de entrada ni de infraestructura concreta.
+- **`user_presenter.py` — nuevo, v0.7:** `application/auth/user_presenter.py` centraliza `to_public_user(user)`, la forma pública compartida del objeto `user` (`id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date`) que devuelven `register`/`login`/`me` — evita duplicar esa construcción en los tres casos de uso.
+- **DTOs / Schemas:** **siguen sin estar definidos** como estrategia general — `user_presenter.py` (arriba) resuelve la duplicación puntual del objeto `user`, no es un framework de DTOs/schemas. Definir una estrategia general (Marshmallow/Pydantic) queda como `PENDIENTE DE APROBACIÓN`.
 
 ---
 
@@ -128,17 +131,18 @@ El flujo real hoy termina en `domain/` — `validate_user()` compara contra cred
 
 - **Entidades:** sigue sin existir una clase de entidad `User` de dominio (el `User` con el que trabaja el resto del código es el modelo SQLAlchemy de `infrastructure/persistence/models.py` — ver §8; formalizar una entidad de dominio separada sigue `PENDIENTE`, no se justificó como necesaria para esta tarea).
 - **Reglas de negocio — v0.6:** la credencial hardcodeada (`test@test.com`/`123456`) **se eliminó por completo**. `domain/auth/auth_service.py` expone únicamente `hash_password(password)` y `verify_password(password, password_hash)` (ambas envoltorios directos de `werkzeug.security`). Las demás reglas de negocio de auth (unicidad de email, "usuario no encontrado") viven como excepciones de dominio en `domain/auth/exceptions.py` (`EmailAlreadyExistsError`, `InvalidCredentialsError`) — deliberadamente sin distinguir "email inexistente" de "password incorrecta" en el mensaje/código HTTP, para no permitir enumerar emails registrados.
-- **Repository (puerto) — nuevo, v0.6:** `domain/auth/repositories.py` define `UserRepository` (`abc.ABC`) con `create(name, email, password_hash)` y `find_by_email(email)`. Vive en `domain/` porque es un contrato de negocio puro (sin I/O real, solo `abc`) — la implementación concreta con SQLAlchemy vive en `infrastructure/` (ver §8) y depende de este puerto, nunca al revés.
-- **Lógica actualmente ubicada en domain:** `auth_service.py`, `exceptions.py` y `repositories.py`. Ninguno depende de nada externo (ni Flask, ni SQLAlchemy, ni una base de datos real) — `repositories.py` solo usa `abc` de la librería estándar.
+- **Repository (puerto) — v0.7:** `domain/auth/repositories.py` define `UserRepository` (`abc.ABC`) con `create(name, username, email, phone, country_code, birth_date, password_hash)`, `find_by_email(email)` y `find_by_id(user_id)` (nuevo, usado por `GET /api/users/me`). Vive en `domain/` porque es un contrato de negocio puro (sin I/O real, solo `abc`) — la implementación concreta con SQLAlchemy vive en `infrastructure/` (ver §8) y depende de este puerto, nunca al revés.
+- **Validators — nuevo, v0.7:** `domain/auth/validators.py` (funciones puras, solo `re`/`datetime` de la librería estándar) valida formato de `username`, `phone`, `country_code` y edad mínima de `birth_date` (`ADR-002-user-profile-fields.md` §3). Deliberadamente no valida `email` ni longitud de `password` (siguen `PENDIENTE DE APROBACIÓN`, `API_CONTRACT.md` §9 ítem 2).
+- **Lógica actualmente ubicada en domain:** `auth_service.py`, `exceptions.py`, `repositories.py` y `validators.py`. Ninguno depende de nada externo (ni Flask, ni SQLAlchemy, ni una base de datos real).
 - **Qué NO debe depender del framework:** por diseño de Clean Architecture (la misma que `REPOSITORY_STRUCTURE.md` §6 propone), `domain/` no debe importar Flask, `flask_jwt_extended`, ni ningún detalle de infraestructura (ORM, HTTP, PostgreSQL). El código actual **cumple** esto, incluso tras la integración de persistencia — verificado explícitamente en esta tarea (ningún archivo de `domain/` importa `sqlalchemy` ni `flask`). Mantener esta regla hacia adelante es un requisito de este documento, no una preferencia personal.
 
 ---
 
 ## 8. Persistencia
 
-- **Repositories — v0.6, implementado:** `app/infrastructure/persistence/repositories/user_repository.py` define `SQLAlchemyUserRepository`, que implementa el puerto `UserRepository` (`domain/auth/repositories.py`, ver §7): `create()` inserta un `User` y traduce `sqlalchemy.exc.IntegrityError` (violación de `UNIQUE` en `email`) a `EmailAlreadyExistsError` de dominio; `find_by_email()` hace `SELECT` por `email` (case-insensitive, vía `CITEXT`). Es el único módulo del backend que importa `sqlalchemy` para acceso a datos de `users`. La instancia concreta se crea una única vez en `interfaces/routes/auth_routes.py` (composition root — ver §14) e inyecta en los casos de uso; `domain/`/`application/` solo conocen el puerto abstracto.
+- **Repositories — v0.7:** `app/infrastructure/persistence/repositories/user_repository.py` define `SQLAlchemyUserRepository`, que implementa el puerto `UserRepository` (`domain/auth/repositories.py`, ver §7): `create()` inserta un `User` (ahora con los campos de perfil, `ADR-002`) y traduce `sqlalchemy.exc.IntegrityError` a `EmailAlreadyExistsError` o `UsernameAlreadyExistsError` de dominio, distinguiendo por `constraint_name` del error de PostgreSQL (`ix_users_email` vs `uq_users_username`) en vez de adivinar por texto; `find_by_email()` hace `SELECT` por `email` (case-insensitive, vía `CITEXT`); `find_by_id()` (nuevo) hace `db.session.get(User, user_id)`, usado por `GET /api/users/me`. Es el único módulo del backend que importa `sqlalchemy` para acceso a datos de `users`. Instanciado en `interfaces/routes/auth_routes.py` **y** en `interfaces/routes/user_routes.py` (cada blueprint compone su propio repositorio, ver §14) e inyectado en los casos de uso; `domain/`/`application/` solo conocen el puerto abstracto.
 - **Acceso a PostgreSQL — v0.5, implementado y verificado localmente:** driver instalado (`psycopg[binary]==3.3.4`), `SQLALCHEMY_DATABASE_URI` leída desde `DATABASE_URL` en `config.py`, modelo `User` definido (`app/infrastructure/persistence/models.py`: `id` **UUID** con `DEFAULT gen_random_uuid()` generado **en PostgreSQL** (no en Python), `name` `VARCHAR(120)`, `email` **`CITEXT`** único+indexado (case-insensitive, extensión `citext`), `password_hash` **`TEXT`**, `created_at`/`updated_at` `TIMESTAMPTZ` con `DEFAULT now()` — `updated_at` mantenida por un trigger de PostgreSQL, no por SQLAlchemy). La migración (`a1b2c3d4e5f6_create_users_table.py`, escrita a mano, no autogenerada) crea la extensión `citext`, la tabla y el trigger `trg_users_updated_at`. El flujo modelo→migración→`flask db upgrade` se verificó contra PostgreSQL 16 real vía Docker Compose (`docker-compose.yml`, imagen `postgres:16-alpine`, base `thers_dev`), confirmando el esquema resultante, el comportamiento del trigger y la unicidad case-insensitive de `email` con `psql` — incluyendo un downgrade + upgrade completo y una reconstrucción desde un volumen Docker vacío (`docker compose down -v && docker compose up -d && flask db upgrade`). **Sigue sin haber una base compartida por el equipo o de producción** — esto es una base de desarrollo local reproducible, no un despliegue real.
-- **Migraciones — v0.4, implementado:** `backend/migrations/` (Flask-Migrate/Alembic), con una migración inicial (`create_users_table`) que crea la tabla `users` con índice único en `email`.
+- **Migraciones — v0.7:** `backend/migrations/` (Flask-Migrate/Alembic), con dos migraciones: `create_users_table` (inicial, `email` único) y `a1edcbff74d8_add_profile_fields_to_users` (v0.7, `ADR-002`) que agrega `username`/`phone`/`country_code`/`birth_date` con `uq_users_username`. Ambas verificadas con `flask db upgrade`/`downgrade` repetidos contra `thers_dev` (PostgreSQL 16, Docker).
 - **Separación negocio/persistencia:** `domain/`/`application/` siguen sin conocer SQLAlchemy (regla de dependencia respetada y verificada — ver §7, §17). El repositorio que conecta ambos lados ya está implementado (arriba) siguiendo el patrón Repository con puerto en `domain/` e implementación en `infrastructure/`.
 - **Estado real de los datos hoy — v0.6:** `POST /api/register` y `POST /api/login` ya operan contra `users` real en PostgreSQL — la credencial hardcodeada se eliminó por completo (§7, §9). Verificado con una suite de pruebas de integración contra PostgreSQL 16 real (`backend/tests/test_auth.py`, ver §15) y manualmente vía `psql`.
 
@@ -163,10 +167,10 @@ Pendiente (no decidido en esta actualización, `PENDIENTE DE APROBACIÓN`): patr
 **Sigue pendiente (sin cambios en esta actualización):**
 - **Hashing de contraseñas:** algoritmo (`werkzeug.security`, scrypt) mantenido tal cual estaba aprobado para la credencial de prueba, ahora aplicado a `users` real. El algoritmo **definitivo** ratificado formalmente sigue `PENDIENTE DE APROBACIÓN` (sección 20) — esta tarea no lo cambia, solo lo reutiliza.
 - **`JWT_SECRET_KEY`:** sin cambios respecto a la corrección anterior (`os.environ` + `.env.example` + `.gitignore`).
-- **Ningún endpoint protegido todavía:** no hay ningún uso de `@jwt_required()` en el código — `/register` y `/login` son públicos por definición. No hay ejemplo real de "protección de endpoint" en el código actual para documentar como patrón ya validado.
+- ~~Ningún endpoint protegido todavía~~ — **resuelto en v0.7:** `GET /api/users/me` (`interfaces/routes/user_routes.py`, blueprint `users_bp`) es el primer endpoint con `@jwt_required()`, identidad resuelta exclusivamente con `get_jwt_identity()`. Fija el patrón: nuevo blueprint por recurso (no reutiliza `auth_bp`), composition root propio (instancia su propio `SQLAlchemyUserRepository()`), y errores JWT homogenizados a `401` vía callbacks en `app/extensions.py` (por defecto `flask_jwt_extended` responde `422` para token malformado — se sobrescribió para que todo caso de token ausente/inválido/expirado responda `401` con `{"msg": "..."}`, mismo formato que el resto de la API).
 - **Sin logout, refresh token, ni expiración configurada explícitamente:** `flask_jwt_extended` trae valores por defecto de expiración de access token, pero no hay ninguna configuración explícita en `config.py` que los fije o los documente.
 - **Sin manejo de roles/autorización:** no hay ningún concepto de rol, permiso o scope en el código.
-- **Validaciones de `register` más allá de presencia y unicidad:** longitud mínima de contraseña, formato de email — no implementadas, no se inventaron por no estar respaldadas (`API_CONTRACT.md` §9, ítem 2).
+- **Validaciones de `register` más allá de presencia y unicidad:** longitud mínima de contraseña, formato de email — siguen sin implementar, no se inventaron por no estar respaldadas (`API_CONTRACT.md` §9, ítem 2). **v0.7:** sí se agregó validación de formato para los campos de perfil nuevos (`username`/`phone`/`country_code`/`birth_date`, incluida edad mínima) en `domain/auth/validators.py`, ratificada por `ADR-002` — no es una extensión silenciosa de este pendiente, es una decisión propia y acotada de ese ADR.
 
 Todo lo anterior son observaciones del estado actual, no una lista de tareas asumidas como aprobadas — la estrategia concreta para resolver cada limitación restante (cómo se protege un endpoint, política de expiración/refresh, reglas de validación adicionales) queda `PENDIENTE DE APROBACIÓN` (sección 20).
 
@@ -221,8 +225,8 @@ No existe todavía un formato de error unificado para toda la API (p. ej. `{"err
 
 Principios generales de diseño de endpoints, basados en lo que los dos endpoints existentes (`POST /api/login`, `POST /api/register`) ya establecen como patrón de facto — **no se define aquí el catálogo completo de endpoints ni su contrato detallado** (eso es `API_CONTRACT.md`), según el alcance explícito de esta tarea:
 
-- **Patrón actualmente observado:** ambos endpoints están registrados en el mismo blueprint (`auth_bp`) en `interfaces/routes/` y montados con prefijo `/api` desde `create_app()` (`url_prefix="/api"`).
-- **Organización futura:** el uso de blueprints organizados por dominio funcional (p. ej. `auth_bp` para autenticación) se observa actualmente en `auth`, pero convertir esta organización en una regla general para futuros endpoints queda `PENDIENTE DE APROBACIÓN`.
+- **Patrón actualmente observado:** `register`/`login` están en el blueprint `auth_bp` (`interfaces/routes/auth_routes.py`); `GET /api/users/me` (v0.7) está en un blueprint separado, `users_bp` (`interfaces/routes/user_routes.py`) — ambos montados con prefijo `/api` desde `create_app()`. La separación se hizo porque `/me` no es un endpoint de autenticación en sí (no emite ni valida credenciales, es el primer endpoint protegido) — es el primer caso real de "más de un blueprint", y sugiere organizar por recurso/dominio (`auth` vs `users`), no todo bajo un único blueprint.
+- **Organización futura:** con dos blueprints ya observados (`auth_bp`, `users_bp`), convertir "un blueprint por dominio funcional" en regla general para futuros endpoints sigue `PENDIENTE DE APROBACIÓN` formal, aunque el patrón de facto ya apunta en esa dirección.
 - Los métodos HTTP se declaran explícitamente por ruta (`methods=["POST"]`), no hay convención documentada todavía sobre verbos para operaciones futuras (GET de colección, PUT/PATCH de actualización, DELETE).
 - Los cuerpos de petición y respuesta son JSON (`request.get_json()` / `jsonify(...)`), sin excepción observada.
 - No existe especificación formal de API (OpenAPI/Swagger) en `/docs` — `CLAUDE.md` §9 y §14 ya lo confirman. `HB-001` §15.1 exige documentar cada endpoint nuevo el mismo día del PR — esa documentación de endpoints, cuando exista, es un artefacto distinto de este documento de arquitectura.
@@ -231,7 +235,7 @@ Principios generales de diseño de endpoints, basados en lo que los dos endpoint
 
 ## 15. Testing
 
-- **Estructura — v0.6, implementada para auth:** `backend/tests/` (`conftest.py`, `test_auth.py`). 13 pruebas de integración para `POST /api/register` y `POST /api/login`, corridas contra PostgreSQL 16 real en Docker (base `thers_test`, separada de `thers_dev` — creada por `docker/postgres-init/01-create-test-db.sql`), no contra mocks. Cubren: creación con UUID generado por PostgreSQL, unicidad de email (incluida case-insensitive), presencia de campos, no exposición de `password_hash`, login correcto/incorrecto, usuario inexistente, mismo mensaje de error para "no existe" y "password incorrecta" (anti-enumeración), e identity del JWT (`sub`) igual al `id` del usuario.
+- **Estructura — v0.7:** `backend/tests/` (`conftest.py`, `test_auth.py`, `test_users_me.py` — nuevo). **27 pruebas de integración** (13 originales + 14 nuevas de v0.7) para `POST /api/register`, `POST /api/login` y `GET /api/users/me`, corridas contra PostgreSQL 16 real en Docker (base `thers_test`, separada de `thers_dev`), no contra mocks. `test_auth.py` cubre además (v0.7): duplicidad de `username`, validación de formato de `username`/`phone`/`country_code`/`birth_date`, edad mínima, y `confirm_password` no coincidente. `test_users_me.py` cubre: token válido (200), sin token (401), token inválido (401), token expirado (401), usuario inexistente (404), forma de la respuesta pública, y no exposición de campos sensibles.
 - **Framework — elegido pragmáticamente en esta tarea, sin ratificación formal:** `pytest==8.3.4`, en `backend/requirements-dev.txt` (separado de `requirements.txt`, que sigue listando solo dependencias de producción). **`PENDIENTE DE APROBACIÓN`** (sección 20): esta elección resuelve la necesidad inmediata de probar `register`/`login`, pero el Comité Técnico no la ratificó formalmente como el framework oficial del proyecto — es el estándar de facto para Flask, no una decisión inventada, pero tampoco un ADR.
 - **Unit tests / Integration tests / API tests:** las 13 pruebas actuales son de integración (HTTP + base de datos real vía `Flask.test_client()`), no hay pruebas unitarias puras de `domain/` todavía (serían triviales dado que `hash_password`/`verify_password` son envoltorios directos de `werkzeug.security`). Ampliar la estrategia a otras capas/flujos sigue `PENDIENTE DE APROBACIÓN`.
 
@@ -286,35 +290,40 @@ backend/
 │   ├── interfaces/
 │   │   └── routes/
 │   │       ├── __init__.py          # (corregido — ver hallazgo sección 3)
-│   │       └── auth_routes.py        # register + login, composition root (ver sección 17)
+│   │       ├── auth_routes.py        # register + login, composition root (ver sección 17)
+│   │       └── user_routes.py        # IMPLEMENTADO — v0.7: GET /api/users/me, blueprint users_bp
 │   ├── application/
 │   │   └── auth/
 │   │       ├── __init__.py
 │   │       ├── login_use_case.py
-│   │       ├── register_use_case.py  # IMPLEMENTADO — v0.6
+│   │       ├── register_use_case.py  # IMPLEMENTADO — v0.7 (firma ampliada, ADR-002)
+│   │       ├── get_current_user_use_case.py  # IMPLEMENTADO — v0.7
+│   │       ├── user_presenter.py     # IMPLEMENTADO — v0.7 (to_public_user, compartido)
 │   │       └── dtos.py               # PROPUESTA — no existe hoy
 │   ├── domain/
 │   │   └── auth/
 │   │       ├── __init__.py
 │   │       ├── auth_service.py       # hash_password / verify_password — v0.6
-│   │       ├── exceptions.py         # IMPLEMENTADO — v0.6
-│   │       ├── repositories.py       # IMPLEMENTADO — v0.6 (puerto UserRepository)
+│   │       ├── exceptions.py         # IMPLEMENTADO — v0.7 (+ UsernameAlreadyExistsError, UserNotFoundError)
+│   │       ├── repositories.py       # IMPLEMENTADO — v0.7 (puerto UserRepository, + find_by_id)
+│   │       ├── validators.py         # IMPLEMENTADO — v0.7 (ADR-002)
 │   │       └── entities.py           # PROPUESTA — no existe hoy
 │   ├── infrastructure/
 │   │   └── persistence/
 │   │       ├── __init__.py
-│   │       ├── models.py             # IMPLEMENTADO — v0.5
+│   │       ├── models.py             # IMPLEMENTADO — v0.7 (+ columnas de perfil, ADR-002)
 │   │       └── repositories/
 │   │           ├── __init__.py       # IMPLEMENTADO — v0.6
-│   │           └── user_repository.py  # IMPLEMENTADO — v0.6 (SQLAlchemyUserRepository)
+│   │           └── user_repository.py  # IMPLEMENTADO — v0.7 (SQLAlchemyUserRepository, + find_by_id)
 │   ├── config.py
-│   ├── extensions.py
+│   ├── extensions.py                  # v0.7: + callbacks de error JWT (ver sección 9)
 │   └── __init__.py
-├── tests/                             # IMPLEMENTADO — v0.6 (ver sección 15)
+├── tests/                             # IMPLEMENTADO — v0.7 (ver sección 15)
 │   ├── __init__.py
 │   ├── conftest.py
-│   └── test_auth.py
-├── migrations/                        # IMPLEMENTADO — v0.4 (ver sección 8)
+│   ├── test_auth.py
+│   └── test_users_me.py               # IMPLEMENTADO — v0.7
+├── migrations/                        # IMPLEMENTADO — v0.7 (ver sección 8, 2 migraciones)
 ├── run.py
 ├── requirements.txt                   # IMPLEMENTADO — ver sección 2 y 19
 ├── requirements-dev.txt               # IMPLEMENTADO — v0.6 (pytest, ver sección 15)
@@ -339,13 +348,14 @@ Todo lo marcado `PROPUESTA` (`dtos.py`, `entities.py`) es una sugerencia de evol
 - `backend/requirements.txt` con las versiones en uso real fijadas (Flask, flask-cors, Flask-JWT-Extended, Flask-SQLAlchemy, Flask-Migrate, psycopg) — ver sección 2.
 - **v0.4:** `db = SQLAlchemy()` / `migrate = Migrate()` inicializados en `create_app()` (`app/extensions.py`, `app/__init__.py`); `SQLALCHEMY_DATABASE_URI` leída desde `DATABASE_URL` (`config.py`, `.env.example`); scaffolding de migraciones (`backend/migrations/`).
 - **v0.5:** modelo `User` alineado a la estrategia de persistencia aprobada por el equipo (`app/infrastructure/persistence/models.py`): `id` **UUID** con `DEFAULT gen_random_uuid()` en PostgreSQL, `email` **`CITEXT`** (case-insensitive), `password_hash` `TEXT`, `created_at`/`updated_at` `TIMESTAMPTZ` con `DEFAULT now()` y `updated_at` mantenida por trigger (`set_updated_at`/`trg_users_updated_at`). Migración escrita a mano (`a1b2c3d4e5f6_create_users_table.py`) que crea la extensión `citext`, la tabla y el trigger — verificada contra PostgreSQL 16 real vía Docker Compose (`docker-compose.yml`, base `thers_dev`), incluyendo el funcionamiento del trigger, la unicidad case-insensitive de `email`, downgrade/upgrade repetido y reconstrucción completa desde un volumen Docker vacío.
-- **v0.6 — integración de autenticación con persistencia real (esta tarea):** `POST /api/register` (nuevo) y `POST /api/login` (migrado) operan contra `users` real, no contra una credencial hardcodeada. Patrón Repository implementado: puerto `UserRepository` en `domain/auth/repositories.py`, adaptador `SQLAlchemyUserRepository` en `infrastructure/persistence/repositories/user_repository.py`, inyectado desde `interfaces/routes/auth_routes.py` (composition root, ver sección 17). Excepciones de dominio (`EmailAlreadyExistsError` → `409`, `InvalidCredentialsError` → `401`, mismo mensaje para "no existe" y "password incorrecta"). `identity` del JWT cambiado de `email` a `user.id` (UUID). `id` sigue generándose exclusivamente en PostgreSQL (`gen_random_uuid()`) — ningún `uuid.uuid4()` en el código Python. 13 pruebas de integración (`backend/tests/`) contra PostgreSQL 16 real (base `thers_test`, separada de `thers_dev`). Documentado el mismo día en `API_CONTRACT.md` §4.1 (`HB-001` §15.1).
+- **v0.6 — integración de autenticación con persistencia real:** `POST /api/register` y `POST /api/login` operan contra `users` real, no contra una credencial hardcodeada. Patrón Repository implementado: puerto `UserRepository` en `domain/auth/repositories.py`, adaptador `SQLAlchemyUserRepository` en `infrastructure/persistence/repositories/user_repository.py`, inyectado desde `interfaces/routes/auth_routes.py` (composition root, ver sección 17). Excepciones de dominio (`EmailAlreadyExistsError` → `409`, `InvalidCredentialsError` → `401`, mismo mensaje para "no existe" y "password incorrecta"). `identity` del JWT cambiado de `email` a `user.id` (UUID). `id` sigue generándose exclusivamente en PostgreSQL (`gen_random_uuid()`) — ningún `uuid.uuid4()` en el código Python. Documentado el mismo día en `API_CONTRACT.md` §4.1 (`HB-001` §15.1).
+- **v0.7 — perfil completo de registro + primer endpoint protegido (THERS Backend Fase 2.1, `ADR-002-user-profile-fields.md`):** `users` gana `username`/`phone`/`country_code`/`birth_date` (migración `a1edcbff74d8`, verificada `flask db upgrade`/`downgrade` contra PostgreSQL 16 real, `thers_dev`). `POST /api/register` valida y persiste los campos nuevos (`domain/auth/validators.py`); `confirm_password` se valida y nunca se persiste. `GET /api/users/me` (nuevo, `@jwt_required()`, `get_jwt_identity()`) es el primer endpoint protegido del backend — identidad exclusivamente del JWT, nunca de query/body/headers. Errores JWT (ausente/inválido/expirado) homogenizados a `401` (`app/extensions.py`). `application/auth/user_presenter.py` centraliza la forma pública del `user`. 27 pruebas de integración (13 + 14 nuevas, `backend/tests/`) contra PostgreSQL 16 real. Flujo completo verificado manualmente (`curl`): register → login → `GET /api/users/me` con fila real en `thers_dev`. Documentado el mismo día en `API_CONTRACT.md` §4.1/§4.2 (`HB-001` §15.1).
 
 ### PENDIENTE
 - **Conexión a una base PostgreSQL compartida por el equipo o de producción** — el modelo y la migración ya se verificaron end-to-end contra PostgreSQL 16 real en Docker (desarrollo local reproducible, `docker-compose.yml`), pero no existe todavía ninguna base compartida por el equipo ni de producción.
 - **Ratificación formal por el Comité Técnico** de las decisiones ya codificadas en v0.4/v0.5/v0.6 (SQLAlchemy, UUID, CITEXT, Flask-Migrate, patrón Repository con puerto en `domain/`, pytest como framework de testing) — ver nota de gobernanza, sección 2.
 - Estrategia de hashing **definitiva** para `users` (la v0.6 reutiliza `werkzeug.security`/scrypt ya usado para la credencial de prueba, no ratifica un algoritmo distinto — sección 20).
-- Endpoints protegidos con `@jwt_required()` (ninguno existe hoy — el primer caso real definirá el patrón de uso de `get_jwt_identity()` sobre el UUID, ver sección 9).
+- ~~Endpoints protegidos con `@jwt_required()`~~ — **resuelto en v0.7** (`GET /api/users/me`, ver sección 9). Un solo caso real todavía; el patrón (`get_jwt_identity()` sobre el UUID, blueprint propio) queda sentado pero no "ratificado" como norma para docenas de endpoints futuros.
 - Política de expiración/refresh de JWT.
 - Roles y autorización.
 - Validación declarativa (schemas/DTOs) — y validaciones adicionales de `register` (longitud mínima de contraseña, formato de email).
@@ -374,7 +384,7 @@ Toda decisión arquitectónica no respaldada hoy por código ni por documento of
 9. **Política de expiración y refresh de tokens JWT.**
 10. **Modelo de roles y autorización.**
 11. **Política de CORS por ambiente** (orígenes permitidos en producción vs. desarrollo).
-12. **Framework y estrategia de testing** (unit/integration/API) — **`pytest` elegido pragmáticamente en v0.6** (13 pruebas de integración para auth, sección 15), sin ratificación formal por el Comité Técnico todavía. Ampliar a otras capas/flujos sigue sin definir.
+12. **Framework y estrategia de testing** (unit/integration/API) — **`pytest` elegido pragmáticamente en v0.6** (27 pruebas de integración a partir de v0.7 — auth + `GET /api/users/me`, sección 15), sin ratificación formal por el Comité Técnico todavía. Ampliar a otras capas/flujos sigue sin definir.
 13. **Especificación formal de API** (OpenAPI/Swagger) y su ubicación (`/docs` vs. Notion, según `HB-001` §15.1 que menciona ambas opciones sin decidir).
 14. **Ratificación formal de las versiones fijadas en `requirements.txt`** — el archivo ya existe (Flask 3.1.3, flask-cors 6.0.2, Flask-JWT-Extended 4.7.1, tomadas del entorno local observado), pero el equipo no lo ha ratificado formalmente como el estándar oficial de versiones; `pyproject.toml` sigue sin existir.
 15. **Propósito de `backend/app.py`** — si se conserva, se elimina o se integra a la arquitectura por capas (fuera de alcance de esta tarea decidirlo).
@@ -392,7 +402,8 @@ Toda decisión arquitectónica no respaldada hoy por código ni por documento of
 - `docs/architecture/Frontend/FAS-001-Frontend-Architecture-Specification.md` — confirma que el backend queda explícitamente fuera de su alcance (§ "Alcance"), y el principio "el código sigue a la documentación, no al revés" (§1), reutilizado aquí.
 - `docs/architecture/ARC-001-handbook-architecture.md.md` — menciones de Backend/JWT/PostgreSQL como temas de contenido del Handbook, sin definir arquitectura técnica.
 - `README.md` (raíz) — fuente no oficial; usado solo para documentar la contradicción MySQL/PostgreSQL ya identificada en `CLAUDE.md` §14.
-- Código fuente completo de `backend/`: `app.py`, `run.py`, `app/__init__.py`, `app/config.py`, `app/extensions.py`, `app/application/auth/login_use_case.py`, `app/domain/auth/auth_service.py`, `app/interfaces/routes/auth_routes.py`, y todos los archivos `_init_.py`.
+- `docs/architecture/ADR-002-user-profile-fields.md` — ratifica las columnas de perfil y `GET /api/users/me` (v0.7).
+- Código fuente completo de `backend/`: `app.py`, `run.py`, `app/__init__.py`, `app/config.py`, `app/extensions.py`, `app/application/auth/*.py`, `app/domain/auth/*.py`, `app/interfaces/routes/*.py`, `app/infrastructure/persistence/**`, `backend/tests/*.py`, y todos los archivos `_init_.py`.
 - `backend/venv` (entorno local) — `pyvenv.cfg` (versión de Python) y `pip freeze` (versiones de paquetes instalados), usados únicamente como observación de estado, no como fuente de decisión.
 - `git ls-files backend` — confirma qué archivos del backend están versionados.
 

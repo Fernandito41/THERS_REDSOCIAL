@@ -43,10 +43,10 @@ Cuatro documentos, todos en `docs/architecture/`, todos con el mismo formato y e
 
 | Documento | Versión | Estado | Cubre |
 |---|---|---|---|
-| `BACKEND_ARCHITECTURE.md` | 0.3 | Pendiente de ratificación formal (`HB-001` §11–12) | Capas del backend, flujo de una petición, autenticación, configuración, seguridad |
-| `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md` + `DATABASE_ERD_OBJETIVO.md` | 0.2 / 0.1 / 0.2 | Pendiente de ratificación formal | Modelo de datos en tres capas: implementado (solo `users`), objetivo del producto (candidatas sin modelado ratificado), pendiente de decisión |
+| `BACKEND_ARCHITECTURE.md` | 0.7 | Pendiente de ratificación formal (`HB-001` §11–12) | Capas del backend, flujo de una petición, autenticación, configuración, seguridad |
+| `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md` + `DATABASE_ERD_OBJETIVO.md` | 0.5 / 0.1 / 0.2 | Pendiente de ratificación formal | Modelo de datos en tres capas: implementado (`users`, incluidas columnas de perfil), objetivo del producto (candidatas sin modelado ratificado), pendiente de decisión |
 | `FRONTEND_ARCHITECTURE.md` | 0.2 | Pendiente de ratificación formal | Stack, estructura, estado, routing, frontera con el backend, seguridad del Frontend del producto |
-| `API_CONTRACT.md` | 0.1 | Pendiente de ratificación formal | Catálogo de endpoints, formato de request/response/error, autenticación — única fuente del contrato HTTP entre `Frontend/` y `backend/` |
+| `API_CONTRACT.md` | 0.3 | Pendiente de ratificación formal | Catálogo de endpoints, formato de request/response/error, autenticación — única fuente del contrato HTTP entre `Frontend/` y `backend/` |
 
 Ninguno de los cuatro es todavía un documento oficial ratificado en el sentido de `HB-001` §11–12: son la mejor fuente disponible para su dominio, con las decisiones sin respaldo marcadas explícitamente como `PENDIENTE DE APROBACIÓN` dentro de cada uno. No copian contenido entre sí — cada decisión vive en un único documento y los demás la referencian.
 
@@ -85,8 +85,8 @@ Ningún cambio de arquitectura o diseño se decide de forma aislada dentro de un
 ### Backend
 - Fuente: `BACKEND_ARCHITECTURE.md` (§3.1) — propuesta v0.3, pendiente de ratificación.
 - Capas observadas y consolidadas: `domain/`, `application/`, `interfaces/routes/`, `config.py`, `extensions.py`, `run.py` — mantenerlas por consistencia, sin tratarlas como contrato cerrado hasta su ratificación.
-- Stack confirmado: Flask + JWT (`flask_jwt_extended`) + PostgreSQL (motor elegido, sin driver ni ORM integrado todavía).
-- `backend/requirements.txt` ya existe, fijando las versiones en uso real (Flask, flask-cors, Flask-JWT-Extended) — no incluye SQLAlchemy a propósito, para no adoptar una decisión de persistencia sin ratificar. `pyproject.toml` sigue sin existir; el equipo no ha ratificado formalmente estas versiones como estándar oficial.
+- Stack confirmado: Flask + JWT (`flask_jwt_extended`) + PostgreSQL — driver (`psycopg` v3) y ORM (SQLAlchemy + Flask-Migrate/Alembic) ya integrados y en uso real (`register`/`login`/`GET /api/users/me` contra PostgreSQL 16 vía Docker Compose; ver `BACKEND_ARCHITECTURE.md` §2/§8, `DATABASE_ARCHITECTURE.md`). Ratificación formal por el Comité Técnico de estas decisiones sigue pendiente de confirmar (`BACKEND_ARCHITECTURE.md` §20).
+- `backend/requirements.txt` ya existe, fijando las versiones en uso real (Flask, flask-cors, Flask-JWT-Extended, Flask-SQLAlchemy, Flask-Migrate, `psycopg[binary]`). `pyproject.toml` sigue sin existir; el equipo no ha ratificado formalmente estas versiones como estándar oficial.
 - `JWT_SECRET_KEY` se lee de variable de entorno (`backend/.env.example` documenta la variable; `backend/.gitignore` protege un `.env` real) — la gestión de secretos en un entorno desplegado sigue pendiente.
 
 ### Frontend (producto — `Frontend/`)
@@ -99,12 +99,12 @@ Ningún cambio de arquitectura o diseño se decide de forma aislada dentro de un
 
 ### Base de Datos
 - Fuente: `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md`/`DATABASE_ERD_OBJETIVO.md` (§3.1) — propuesta v0.2/v0.1/v0.2, pendiente de ratificación.
-- Única entidad con modelo implementado y ratificado: `users`. El resto del alcance funcional del producto está registrado como candidatas objetivo o pendientes de decisión — ninguna se implementa sin ratificación por ADR.
+- Única entidad con modelo implementado: `users` (columnas `name`, `username`, `email`, `phone`, `country_code`, `birth_date`, `password_hash` — las últimas cuatro ratificadas por `ADR-002-user-profile-fields.md`). El resto del alcance funcional del producto está registrado como candidatas objetivo o pendientes de decisión — ninguna se implementa sin ratificación por ADR.
 - No inventar esquema, convención ni entidad nueva sin confirmarlo con el equipo.
 
 ### API (Frontend ↔ Backend)
 - Fuente: `API_CONTRACT.md` (§3.1) — propuesta v0.1, pendiente de ratificación.
-- Único endpoint implementado: `POST /api/login`. `POST /api/register` es esperado por el Frontend pero no existe en el backend — no asumir que existe.
+- Endpoints implementados: `POST /api/register`, `POST /api/login` y `GET /api/users/me` (primer endpoint protegido, `@jwt_required()`, ver `ADR-002-user-profile-fields.md`). El Frontend (`Register.jsx`) ya recolecta los campos que `POST /api/register` requiere pero todavía no los envía — esa integración sigue pendiente, no asumir que ya está conectada.
 - Todo endpoint nuevo se documenta en `API_CONTRACT.md` el mismo día del PR (`HB-001` §15.1).
 
 ### DevOps
@@ -163,7 +163,7 @@ Fuente: `HB-001` §7–9. Reglas vinculantes:
 | **Frontend (producto)** | React 19 + Vite + Tailwind v3. Fuente: `FRONTEND_ARCHITECTURE.md`. Sin Design System propio ratificado — no asumir tokens de `DS-001` (es del Handbook). Seguir la organización por `features/` ya existente y los alias de import ya definidos en `vite.config.js`. |
 | **Backend** | Python + Flask + API REST + JWT. Fuente: `BACKEND_ARCHITECTURE.md`. Estructura de capas consolidada pero no ratificada — mantenerla por consistencia, no como contrato cerrado. Seguridad: documentada en `BACKEND_ARCHITECTURE.md` §16 (no hay documento transversal de seguridad dedicado); `JWT_SECRET_KEY` ya se lee de entorno, sin gestión de secretos de producción todavía. |
 | **Database** | PostgreSQL. Fuente: `DATABASE_ARCHITECTURE.md`. Solo `users` está implementado y ratificado; el resto del alcance funcional es candidato u objetivo, no esquema decidido — no inventar convención sin confirmarlo. |
-| **API** | Fuente única del contrato HTTP: `API_CONTRACT.md`. Solo `POST /api/login` está implementado. |
+| **API** | Fuente única del contrato HTTP: `API_CONTRACT.md`. `POST /api/register`, `POST /api/login` y `GET /api/users/me` están implementados. |
 | **DevOps** | Sin documentación oficial (Docker, CI/CD, deploy, SSL, dominios, monitoreo). Tratar cualquier tarea de esta área como territorio no especificado. |
 | **Handbook** | Código implementado (Release Candidate, Módulo 10); ver matiz de ratificación documental en §3.2. Toda decisión visual/estructural pasa por `ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001` en ese orden de precedencia. |
 
@@ -175,9 +175,9 @@ Fuente: `HB-001` §7–9. Reglas vinculantes:
 - **Estructura de archivos:** organización por dominio funcional (`features/<dominio>/{hooks,pages}` + `index.js`), no por tipo de archivo.
 - **Imports:** el Handbook usa el alias `@ui` → `handbook/src/components/ui` (`vite.config.js`). El Frontend del producto usa los alias `@`, `@features`, `@shared`, `@assets`, definidos en `Frontend/vite.config.js` y documentados en `FRONTEND_ARCHITECTURE.md` §20 — usarlos en vez de rutas relativas para código nuevo dentro de `src/`.
 - **Componentes:** en el Handbook, todo componente interactivo implementa el set completo de estados (`default/hover/focus-visible/disabled` según aplique — `PV-001` Parte 6 §8). En el Frontend del producto no hay un catálogo equivalente documentado.
-- **APIs:** `API_CONTRACT.md` (§3.1) es la fuente única del contrato HTTP — no es una especificación OpenAPI/Swagger, es un catálogo ligero. Solo `POST /api/login` está implementado. Documentar cada endpoint nuevo en ese documento el mismo día del PR (`HB-001` §15.1), no retroactivamente.
-- **Variables de entorno:** nunca se sube `.env` ni credenciales al repositorio (`HB-001` §20, regla innegociable). `backend/.env.example` documenta `JWT_SECRET_KEY` — no hay todavía una lista oficial completa ni variables de entorno del lado del Frontend.
-- **Testing:** no hay framework de testing configurado en ningún `package.json` del repo, ni estrategia documentada en `/docs`. No asumir Jest/Vitest/pytest sin confirmarlo primero.
+- **APIs:** `API_CONTRACT.md` (§3.1) es la fuente única del contrato HTTP — no es una especificación OpenAPI/Swagger, es un catálogo ligero. `POST /api/register`, `POST /api/login` y `GET /api/users/me` están implementados. Documentar cada endpoint nuevo en ese documento el mismo día del PR (`HB-001` §15.1), no retroactivamente.
+- **Variables de entorno:** nunca se sube `.env` ni credenciales al repositorio (`HB-001` §20, regla innegociable). `backend/.env.example` documenta `JWT_SECRET_KEY` y `DATABASE_URL` — no hay todavía variables de entorno del lado del Frontend más allá de `VITE_API_URL`.
+- **Testing:** `pytest` está en uso real en `backend/` (`requirements-dev.txt`, `backend/tests/`, ver `BACKEND_ARCHITECTURE.md` §15) — elegido pragmáticamente, sin ratificación formal del Comité Técnico como estándar del proyecto. `Frontend/`/`handbook/` siguen sin ningún framework de testing configurado en su `package.json`. No asumir Jest/Vitest sin confirmarlo primero.
 
 ---
 
@@ -205,13 +205,28 @@ npm run preview             # sirve el build de producción
 # Backend (backend/)
 python -m venv venv
 # Windows: venv\Scripts\activate — macOS/Linux: source venv/bin/activate
-pip install -r requirements.txt   # backend/requirements.txt ya existe (Flask,
-                                   # flask-cors, Flask-JWT-Extended); pyproject.toml
-                                   # sigue sin existir
-python run.py                     # punto de entrada
-# Copiar backend/.env.example a backend/.env y definir JWT_SECRET_KEY antes de
-# correr fuera de desarrollo local; sin esa variable, config.py usa un valor de
-# desarrollo inseguro y lo advierte por stderr.
+pip install -r requirements-dev.txt   # incluye requirements.txt (Flask, flask-cors,
+                                       # Flask-JWT-Extended, Flask-SQLAlchemy, Flask-Migrate,
+                                       # psycopg[binary]) + pytest; pyproject.toml sigue sin existir
+
+# Copiar backend/.env.example a backend/.env y definir JWT_SECRET_KEY y DATABASE_URL
+# antes de correr fuera de desarrollo local; sin JWT_SECRET_KEY, config.py usa un valor
+# de desarrollo inseguro (advertido por stderr); sin DATABASE_URL, la app arranca pero
+# cualquier operación contra la base de datos falla.
+
+docker compose up -d              # PostgreSQL 16 (docker-compose.yml, raíz del repo) —
+                                   # si el puerto 5432 del host ya está en uso (p. ej. un
+                                   # PostgreSQL nativo instalado), fijar POSTGRES_PORT a otro
+                                   # puerto libre (p. ej. 5433) y ajustar DATABASE_URL igual
+set FLASK_APP=run.py              # PowerShell: $env:FLASK_APP = "run.py"
+python -m flask db upgrade        # aplica migraciones (backend/migrations/) — deja `users`
+                                   # alineada al modelo (incluye username/phone/country_code/
+                                   # birth_date, ADR-002-user-profile-fields.md)
+python run.py                     # punto de entrada — sirve en http://127.0.0.1:5000
+
+# Tests (requieren una base `thers_test` separada, ya migrada igual que arriba)
+python -m pytest                  # 27 pruebas de integración contra PostgreSQL real,
+                                   # no mocks (backend/tests/conftest.py)
 ```
 
 ---
@@ -246,12 +261,12 @@ Si una solicitud contradice la documentación oficial (`/docs`), **detenerse ant
 Si `/docs` no tiene información suficiente, **no inventar la decisión**: señalar el hueco. Huecos ya identificados en esta revisión:
 
 - **DevOps completo** (Docker, CI/CD, deploy, SSL, dominios, monitoreo) — `HB-001` §0 confirma que no está escrito aún.
-- **Persistencia real de datos** — `BACKEND_ARCHITECTURE.md` y `DATABASE_ARCHITECTURE.md` existen como propuestas (§3.1), pero no hay driver de PostgreSQL, ORM ni tabla `users` real implementada todavía; el login sigue validando contra una única credencial hardcodeada en código (ya no en texto plano, ver §5 Backend).
-- **Esquema de base de datos más allá de `users`** — el resto del alcance funcional está registrado como candidato u objetivo en `DATABASE_ARCHITECTURE.md` §4.B, sin modelado ratificado.
+- **Persistencia real de datos — implementada.** Driver (`psycopg` v3), ORM (SQLAlchemy) y migraciones (Flask-Migrate/Alembic) están en uso real contra PostgreSQL 16 (Docker Compose); `register`/`login`/`GET /api/users/me` operan sobre la tabla `users` real, ya sin ninguna credencial hardcodeada en código. Ratificación formal por el Comité Técnico de estas decisiones sigue pendiente (`BACKEND_ARCHITECTURE.md` §20).
+- **Esquema de base de datos más allá de `users`** — `users` ya incluye `username`/`phone`/`country_code`/`birth_date` (ratificadas por `ADR-002-user-profile-fields.md`); el resto del alcance funcional del producto sigue registrado como candidato u objetivo en `DATABASE_ARCHITECTURE.md` §4.B, sin modelado ratificado.
 - **Design System del Frontend del producto** — no existe; `DS-001` §1.2 confirma textualmente que es exclusivo del Handbook.
 - **Especificación de API completa** — `API_CONTRACT.md` existe (§3.1) pero es un catálogo ligero, no OpenAPI/Swagger, y documenta explícitamente varios puntos como pendientes (formato de error estándar, versionado, paginación, convención de endpoints protegidos).
-- **Variables de entorno requeridas** — `backend/.env.example` documenta `JWT_SECRET_KEY` y `Frontend/.env.example` documenta `VITE_API_URL`. No hay todavía una lista oficial completa más allá de estas dos (p. ej. variables de conexión a base de datos, inexistentes porque la persistencia no está implementada).
-- **Estrategia de testing** — no hay framework configurado ni documento de estrategia.
+- **Variables de entorno requeridas** — `backend/.env.example` documenta `JWT_SECRET_KEY` y `DATABASE_URL`; `Frontend/.env.example` documenta `VITE_API_URL`. No hay todavía una lista oficial completa más allá de estas tres.
+- **Estrategia de testing** — `pytest` en uso real (`backend/requirements-dev.txt`, `backend/tests/`), elegido pragmáticamente sin ratificación formal del Comité Técnico como framework oficial del proyecto (`BACKEND_ARCHITECTURE.md` §20, ítem 12); sin documento de estrategia más allá de eso.
 - **Dos documentos oficiales sin analizar:** `Manual_Operativo/THERS_Manual_Operativo_v1.0.docx` (+ `.pdf`) y `Plan_Estrategico/Plan_Estrategico_IA_THERS.docx` (+ `.pdf`) — el entorno actual no pudo procesar `.docx` ni renderizar el `.pdf` (falta `poppler-utils`). Requieren revisión manual o una herramienta capaz de leerlos antes de asumir que no contienen reglas relevantes.
 - **Contradicción del `README.md` raíz — corregida.** El `README.md` describía MySQL, una estructura `frontend/`/`backend/` distinta a la real y una tabla de equipo distinta a `HB-001`; fue actualizado para coincidir con `/docs` y el código real (motor de base de datos, estructura de carpetas, stack, estado real de endpoints, tabla de equipo). El contenido no verificable contra un documento oficial (descripción del producto, roadmap, flujo de contribución) no se tocó — sigue siendo informativo, no autoritativo.
 - **Matiz de gobernanza en la cascada del Handbook** — `ARC-001` se autodeclara "Propuesta, pendiente de aprobación" mientras `DS-001`, que depende de él, se autodeclara "Oficial, vinculante" (ver §3.2). No resuelto — señalar si es relevante para la tarea en curso.

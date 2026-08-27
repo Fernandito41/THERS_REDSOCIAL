@@ -6,6 +6,7 @@ import { IoInformationCircleOutline } from "react-icons/io5";
 import { useAuth, useOAuthNotice } from "@features/auth";
 import { getErrorMessage } from "@shared/lib/api";
 import { useToast } from "@shared/components/Toast";
+import { useLanguage } from "@shared/i18n";
 import Spinner from "@shared/components/Spinner";
 import AuthCard from "../components/AuthCard";
 import TextField from "../components/TextField";
@@ -17,6 +18,7 @@ export default function Login() {
   const { login } = useAuth();
   const { notice, notify } = useOAuthNotice();
   const toast = useToast();
+  const { t } = useLanguage();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,9 +27,9 @@ export default function Login() {
 
   const validate = () => {
     const next = {};
-    if (!email.trim()) next.email = "Ingresá tu correo electrónico.";
-    else if (!isValidEmail(email)) next.email = "Ingresá un correo electrónico válido.";
-    if (!password) next.password = "Ingresá tu contraseña.";
+    if (!email.trim()) next.email = t("auth.login.errorEmailRequired");
+    else if (!isValidEmail(email)) next.email = t("auth.login.errorEmailInvalid");
+    if (!password) next.password = t("auth.login.errorPasswordRequired");
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -44,7 +46,7 @@ export default function Login() {
       navigate("/feed");
     } catch (error) {
       console.error(error);
-      toast.error(getErrorMessage(error), { title: "No pudimos iniciar sesión" });
+      toast.error(getErrorMessage(error, t), { title: t("auth.login.toastErrorTitle") });
     } finally {
       setIsSubmitting(false);
     }
@@ -56,10 +58,10 @@ export default function Login() {
     <AuthCard
       title={
         <>
-          Inicia sesión en <span className="font-bold">Thers</span>
+          {t("auth.login.titlePrefix")} <span className="font-bold">Thers</span>
         </>
       }
-      subtitle="Bienvenido de nuevo"
+      subtitle={t("auth.login.subtitle")}
     >
       {/* GOOGLE LOGIN */}
       <button
@@ -68,7 +70,7 @@ export default function Login() {
         className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition"
       >
         <FcGoogle size={20} />
-        Iniciar sesión con Google
+        {t("auth.oauthGoogleLogin")}
       </button>
 
       {/* APPLE LOGIN */}
@@ -78,7 +80,7 @@ export default function Login() {
         className="w-full flex items-center justify-center gap-3 bg-black text-white border border-line-dark py-3 rounded-full font-semibold hover:bg-gray-900 transition mt-3"
       >
         <FaApple size={18} />
-        Iniciar sesión con Apple
+        {t("auth.oauthAppleLogin")}
       </button>
 
       {notice && (
@@ -87,24 +89,25 @@ export default function Login() {
           className="flex items-start gap-1.5 text-xs text-muted-dark bg-black/30 rounded-lg px-3 py-2 mt-3"
         >
           <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
-          {notice === "google" ? "Google" : "Apple"} todavía no está configurado en el backend de THERS
-          — esta cuenta no puede iniciar sesión así por ahora.
+          {t("auth.oauthNoticeLogin", {
+            provider: notice === "google" ? t("auth.providerGoogle") : t("auth.providerApple"),
+          })}
         </p>
       )}
 
       {/* DIVISOR */}
       <div className="flex items-center my-6">
         <div className="flex-1 h-px bg-line-dark"></div>
-        <span className="px-3 text-muted-dark text-sm">o</span>
+        <span className="px-3 text-muted-dark text-sm">{t("auth.or")}</span>
         <div className="flex-1 h-px bg-line-dark"></div>
       </div>
 
       {/* FORM */}
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <TextField
-          label="Correo electrónico"
+          label={t("auth.login.emailLabel")}
           type="email"
-          placeholder="Correo electrónico"
+          placeholder={t("auth.login.emailPlaceholder")}
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -112,8 +115,8 @@ export default function Login() {
         />
 
         <PasswordField
-          label="Contraseña"
-          placeholder="Contraseña"
+          label={t("auth.login.passwordLabel")}
+          placeholder={t("auth.login.passwordPlaceholder")}
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -130,24 +133,24 @@ export default function Login() {
           }`}
         >
           {isSubmitting && <Spinner />}
-          {isSubmitting ? "Iniciando sesión..." : "Iniciar sesión"}
+          {isSubmitting ? t("auth.login.submitting") : t("auth.login.submit")}
         </button>
       </form>
 
       {/* LINKS */}
       <div className="text-center mt-6 space-y-3">
         <Link to="/forgot-password" className="text-sm text-pulse-400 hover:underline">
-          ¿Olvidaste tu contraseña?
+          {t("auth.login.forgotPassword")}
         </Link>
 
         <div className="mt-6">
-          <p className="text-sm text-muted-dark text-center mb-3">¿No tienes una cuenta?</p>
+          <p className="text-sm text-muted-dark text-center mb-3">{t("auth.login.noAccount")}</p>
 
           <button
             onClick={() => navigate("/register")}
             className="w-full border border-line-dark text-ink-dark py-3 rounded-full font-semibold hover:bg-line-dark transition"
           >
-            Crear cuenta
+            {t("auth.login.createAccount")}
           </button>
         </div>
       </div>

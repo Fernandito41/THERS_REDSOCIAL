@@ -69,7 +69,7 @@ export default function Profile() {
   };
 
   // Sin backend todavía para persistir esto (DATABASE_ARCHITECTURE.md §4.B) --
-  // se actualiza la sesión local real (misma que useAuth.getStoredUser lee) y,
+  // se actualiza la sesión local real (mismo AuthProvider que expone `user`) y,
   // si cambia el username, se migra la clave del perfil extendido con él para
   // no perder bio/mood/intereses ya guardados.
   const handleSaveIdentity = (e) => {

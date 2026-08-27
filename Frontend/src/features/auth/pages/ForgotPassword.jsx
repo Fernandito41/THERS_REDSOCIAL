@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { IoArrowBack, IoInformationCircleOutline } from "react-icons/io5";
 import { useToast } from "@shared/components/Toast";
+import { useLanguage } from "@shared/i18n";
 import Spinner from "@shared/components/Spinner";
 import AuthCard from "../components/AuthCard";
 import TextField from "../components/TextField";
@@ -22,6 +23,7 @@ import { isValidEmail } from "../lib/validators";
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { t } = useLanguage();
 
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
@@ -38,11 +40,11 @@ export default function ForgotPassword() {
     if (isSubmitting) return;
 
     if (!email.trim()) {
-      setError("Ingresá tu correo electrónico.");
+      setError(t("auth.forgotPassword.errorEmailRequired"));
       return;
     }
     if (!isValidEmail(email)) {
-      setError("Ingresá un correo electrónico válido.");
+      setError(t("auth.forgotPassword.errorEmailInvalid"));
       return;
     }
 
@@ -53,15 +55,15 @@ export default function ForgotPassword() {
     // API_CONTRACT.md. No se llama a ningún endpoint inventado.
     setSubmitted(true);
     setIsSubmitting(false);
-    toast.info(
-      "El equipo de Backend está terminando de implementar el envío del correo de recuperación. Todavía no podemos enviarte el enlace, pero esta pantalla ya está lista para conectarse en cuanto esté disponible.",
-      { title: "Función en construcción", duration: 8000 }
-    );
+    toast.info(t("auth.forgotPassword.inProgressToast"), {
+      title: t("auth.forgotPassword.inProgressTitle"),
+      duration: 8000,
+    });
     // --- fin del punto de integración pendiente
   };
 
   return (
-    <AuthCard title="Recuperar contraseña" subtitle="Te ayudamos a volver a tu cuenta.">
+    <AuthCard title={t("auth.forgotPassword.title")} subtitle={t("auth.forgotPassword.subtitle")}>
       {submitted ? (
         <div className="space-y-4">
           <p
@@ -69,9 +71,7 @@ export default function ForgotPassword() {
             className="flex items-start gap-1.5 text-sm text-muted-dark bg-black/30 rounded-lg px-3 py-3"
           >
             <IoInformationCircleOutline size={18} className="shrink-0 mt-0.5 text-pulse-400" />
-            La recuperación de contraseña por correo está en desarrollo en el Backend de THERS.
-            Todavía no podemos enviarte el enlace, pero muy pronto vas a poder recuperar tu cuenta
-            desde acá.
+            {t("auth.forgotPassword.inProgressNotice")}
           </p>
 
           <button
@@ -79,20 +79,17 @@ export default function ForgotPassword() {
             onClick={() => navigate("/login")}
             className="w-full border border-line-dark text-ink-dark py-3 rounded-full font-semibold hover:bg-line-dark transition"
           >
-            Volver a iniciar sesión
+            {t("auth.forgotPassword.backToLogin")}
           </button>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <p className="text-sm text-muted-dark">
-            Ingresá el correo electrónico asociado a tu cuenta y te ayudaremos a recuperar el
-            acceso.
-          </p>
+          <p className="text-sm text-muted-dark">{t("auth.forgotPassword.intro")}</p>
 
           <TextField
-            label="Correo electrónico"
+            label={t("auth.forgotPassword.emailLabel")}
             type="email"
-            placeholder="Correo electrónico"
+            placeholder={t("auth.forgotPassword.emailLabel")}
             autoComplete="email"
             value={email}
             onChange={handleChange}
@@ -109,7 +106,7 @@ export default function ForgotPassword() {
             }`}
           >
             {isSubmitting && <Spinner />}
-            {isSubmitting ? "Enviando..." : "Enviar enlace de recuperación"}
+            {isSubmitting ? t("auth.forgotPassword.submitting") : t("auth.forgotPassword.submit")}
           </button>
         </form>
       )}
@@ -120,7 +117,7 @@ export default function ForgotPassword() {
           className="inline-flex items-center gap-1.5 text-sm text-pulse-400 hover:underline"
         >
           <IoArrowBack size={14} />
-          Volver a iniciar sesión
+          {t("auth.forgotPassword.backToLogin")}
         </Link>
       </div>
     </AuthCard>

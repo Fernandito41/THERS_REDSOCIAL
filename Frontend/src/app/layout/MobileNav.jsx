@@ -7,20 +7,23 @@ import {
   IoPersonOutline,
   IoAddOutline,
 } from "react-icons/io5";
-
-const ITEMS = [
-  { to: "/feed", label: "Inicio", icon: IoSparklesOutline },
-  { to: "__search__", label: "Buscar", icon: IoSearchOutline },
-  { to: "/discover", label: "Descubrir", icon: IoCompassOutline },
-  { to: "__create__", label: "Crear", icon: IoAddOutline },
-  { to: "/notifications", label: "Notificaciones", icon: IoNotificationsOutline },
-  { to: "/profile", label: "Perfil", icon: IoPersonOutline },
-];
+import { useLanguage } from "@shared/i18n";
 
 export default function MobileNav({ onOpenComposer, onOpenSearch, unreadCount = 0 }) {
+  const { t } = useLanguage();
+
+  const ITEMS = [
+    { to: "/feed", label: t("nav.home"), icon: IoSparklesOutline },
+    { to: "__search__", label: t("nav.search"), icon: IoSearchOutline },
+    { to: "/discover", label: t("nav.discover"), icon: IoCompassOutline },
+    { to: "__create__", label: t("nav.createCapsule"), icon: IoAddOutline },
+    { to: "/notifications", label: t("nav.notifications"), icon: IoNotificationsOutline },
+    { to: "/profile", label: t("nav.profile"), icon: IoPersonOutline },
+  ];
+
   return (
     <nav
-      aria-label="Navegación principal"
+      aria-label={t("nav.ariaMain")}
       className="lg:hidden fixed bottom-4 inset-x-4 z-40 flex items-center justify-around bg-surface dark:bg-surface-dark border border-line dark:border-line-dark rounded-full shadow-lift py-2 px-2"
     >
       {ITEMS.map(({ to, label, icon: Icon }) =>
@@ -46,7 +49,7 @@ export default function MobileNav({ onOpenComposer, onOpenSearch, unreadCount = 
           <NavLink
             key={to}
             to={to}
-            aria-label={to === "/notifications" && unreadCount > 0 ? `${label}, ${unreadCount} sin leer` : label}
+            aria-label={to === "/notifications" && unreadCount > 0 ? t("nav.notificationsUnread", { count: unreadCount }) : label}
             className={({ isActive }) =>
               `relative flex items-center justify-center w-11 h-11 rounded-full transition ${
                 isActive ? "bg-pulse-50 dark:bg-pulse-900/30 text-pulse-600" : "text-muted dark:text-muted-dark"

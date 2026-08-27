@@ -29,6 +29,16 @@ class User(db.Model):
 
     name = db.Column(db.String(120), nullable=False)
 
+    # Columnas de perfil (ADR-002 — docs/architecture/ADR-002-user-profile-fields.md),
+    # recolectadas por Register.jsx pero no persistidas hasta esta tarea.
+    # `username` es case-sensitive a propósito (a diferencia de `email`): hoy
+    # ningún flujo (login sigue siendo por email) requiere comparación
+    # case-insensitive de username -- ver ADR-002 §3.
+    username = db.Column(db.String(30), unique=True, nullable=False)
+    phone = db.Column(db.String(20), nullable=False)
+    country_code = db.Column(db.String(6), nullable=False)
+    birth_date = db.Column(db.Date, nullable=False)
+
     # CITEXT (case-insensitive text, extensión de PostgreSQL) en vez de VARCHAR:
     # el UNIQUE sobre email ignora mayúsculas/minúsculas a nivel de motor, sin
     # normalizar manualmente en la capa de aplicación. Requiere

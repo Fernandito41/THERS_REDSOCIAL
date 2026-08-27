@@ -9,20 +9,38 @@
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.domain.auth.exceptions import EmailAlreadyExistsError
+from app.domain.auth.exceptions import EmailAlreadyExistsError, UsernameAlreadyExistsError
 from app.domain.auth.repositories import UserRepository
 from app.extensions import db
 from app.infrastructure.persistence.models import User
 
+# Nombre de la constraint única de `username` (migración
+# a1edcbff74d8_add_profile_fields_to_users.py, ADR-002) -- se inspecciona el
+# `constraint_name` del error de PostgreSQL para distinguir cuál de las dos
+# columnas únicas (`email`/`username`) violó el INSERT, en vez de adivinar
+# por el texto del mensaje de error.
+_USERNAME_UNIQUE_CONSTRAINT = "uq_users_username"
+
 
 class SQLAlchemyUserRepository(UserRepository):
-    def create(self, name, email, password_hash):
-        user = User(name=name, email=email, password_hash=password_hash)
+    def create(self, name, username, email, phone, country_code, birth_date, password_hash):
+        user = User(
+            name=name,
+            username=username,
+            email=email,
+            phone=phone,
+            country_code=country_code,
+            birth_date=birth_date,
+            password_hash=password_hash,
+        )
         db.session.add(user)
         try:
             db.session.commit()
-        except IntegrityError:
+        except IntegrityError as exc:
             db.session.rollback()
+            constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+            if constraint_name == _USERNAME_UNIQUE_CONSTRAINT:
+                raise UsernameAlreadyExistsError(username)
             raise EmailAlreadyExistsError(email)
         return user
 
@@ -30,3 +48,6 @@ class SQLAlchemyUserRepository(UserRepository):
         return db.session.execute(
             select(User).where(User.email == email)
         ).scalar_one_or_none()
+
+    def find_by_id(self, user_id):
+        return db.session.get(User, user_id)

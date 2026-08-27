@@ -5,6 +5,7 @@
 
 from app.domain.auth.auth_service import verify_password
 from app.domain.auth.exceptions import InvalidCredentialsError
+from app.application.auth.user_presenter import to_public_user
 
 
 def login_user(email, password, user_repository):
@@ -13,8 +14,4 @@ def login_user(email, password, user_repository):
     if user is None or not verify_password(password, user.password_hash):
         raise InvalidCredentialsError()
 
-    return {
-        "id": str(user.id),
-        "email": user.email,
-        "name": user.name,
-    }
+    return to_public_user(user)

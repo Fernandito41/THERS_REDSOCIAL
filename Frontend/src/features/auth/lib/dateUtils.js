@@ -64,10 +64,13 @@ export function isValidISODate(iso) {
 }
 
 // Formato "18 / Agosto / 2009" -- el mismo que pidió el wireframe de la tarea.
-export function formatDisplayDate(iso) {
+// `monthNames` es opcional (default = MONTH_NAMES en español) para que
+// BirthDateField.jsx pueda pasar los nombres traducidos de shared/i18n sin
+// que esta función deje de ser utilizable de forma independiente.
+export function formatDisplayDate(iso, monthNames = MONTH_NAMES) {
   if (!isValidISODate(iso)) return "";
   const [year, month, day] = iso.split("-").map(Number);
-  return `${day} / ${MONTH_NAMES[month - 1]} / ${year}`;
+  return `${day} / ${monthNames[month - 1]} / ${year}`;
 }
 
 export function calculateAge(iso, referenceDate = new Date()) {

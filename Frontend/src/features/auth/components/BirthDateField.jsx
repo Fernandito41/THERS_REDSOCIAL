@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { IoCalendarOutline, IoChevronBack, IoChevronForward } from "react-icons/io5";
-import { MONTH_NAMES, WEEKDAY_LABELS, MIN_AGE_YEARS, buildCalendarWeeks, formatDisplayDate } from "../lib/dateUtils";
+import { MIN_AGE_YEARS, buildCalendarWeeks, formatDisplayDate } from "../lib/dateUtils";
+import { useLanguage } from "@shared/i18n";
 import InfoTooltip from "./InfoTooltip";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -19,7 +20,12 @@ function parseISO(iso) {
 // selects nativos de mes/año (accesibles por teclado sin esfuerzo extra) +
 // grilla de días en una <table> semántica real, no un <div> con ARIA
 // reinventado a mano.
-export default function BirthDateField({ label = "Fecha de nacimiento", value, onChange, error, className = "" }) {
+export default function BirthDateField({ label, value, onChange, error, className = "" }) {
+  const { t, tList } = useLanguage();
+  const resolvedLabel = label || t("auth.birthDateField.label");
+  const monthNames = tList("auth.birthDateField.months");
+  const weekdayLabels = tList("auth.birthDateField.weekdays");
+
   const [isOpen, setIsOpen] = useState(false);
   const parsed = parseISO(value);
   const [viewYear, setViewYear] = useState(parsed?.year ?? MAX_YEAR);
@@ -91,17 +97,12 @@ export default function BirthDateField({ label = "Fecha de nacimiento", value, o
     <div ref={containerRef} className={`relative ${className}`}>
       <div className="flex items-center gap-1.5 mb-1.5">
         <label htmlFor={id} className="text-xs font-medium text-muted-dark">
-          {label}
+          {resolvedLabel}
         </label>
-        <InfoTooltip label="Por qué pedimos tu fecha de nacimiento">
-          <p>
-            Usamos tu fecha de nacimiento para mostrarte una experiencia más adecuada para tu
-            edad y para ayudar a que la comunidad de THERS siga siendo un lugar seguro. Esta
-            fecha se guarda en la configuración de tu cuenta y no se muestra públicamente en tu
-            perfil.
-          </p>
+        <InfoTooltip label={t("auth.birthDateField.tooltipLabel")}>
+          <p>{t("auth.birthDateField.tooltipBody")}</p>
           <Link to="/privacy" className="mt-1.5 inline-block text-pulse-400 hover:underline">
-            Ver Política de Privacidad
+            {t("auth.birthDateField.tooltipPrivacyLink")}
           </Link>
         </InfoTooltip>
       </div>
@@ -119,7 +120,7 @@ export default function BirthDateField({ label = "Fecha de nacimiento", value, o
       >
         <IoCalendarOutline className="text-muted-dark shrink-0" size={18} aria-hidden="true" />
         <span className={value ? "text-ink-dark" : "text-muted-dark"}>
-          {value ? formatDisplayDate(value) : "Seleccionar fecha"}
+          {value ? formatDisplayDate(value, monthNames) : t("auth.birthDateField.selectDate")}
         </span>
       </button>
 
@@ -139,7 +140,7 @@ export default function BirthDateField({ label = "Fecha de nacimiento", value, o
               type="button"
               onClick={goPrevMonth}
               disabled={atMinBound}
-              aria-label="Mes anterior"
+              aria-label={t("auth.birthDateField.prevMonth")}
               className="p-1.5 rounded-full text-muted-dark hover:text-ink-dark hover:bg-line-dark focus:outline-none focus:ring-2 focus:ring-pulse-500 disabled:opacity-30 disabled:pointer-events-none"
             >
               <IoChevronBack size={16} />
@@ -147,7 +148,7 @@ export default function BirthDateField({ label = "Fecha de nacimiento", value, o
 
             <div className="flex items-center gap-1.5">
               <label className="sr-only" htmlFor={`${id}-month`}>
-                Mes
+                {t("auth.birthDateField.month")}
               </label>
               <select
                 id={`${id}-month`}
@@ -155,7 +156,7 @@ export default function BirthDateField({ label = "Fecha de nacimiento", value, o
                 onChange={(e) => setViewMonth(Number(e.target.value))}
                 className="bg-transparent text-sm font-semibold text-ink-dark focus:outline-none focus:ring-2 focus:ring-pulse-500 rounded"
               >
-                {MONTH_NAMES.map((m, i) => (
+                {monthNames.map((m, i) => (
                   <option key={m} value={i} className="text-ink bg-white">
                     {m}
                   </option>
@@ -163,7 +164,7 @@ export default function BirthDateField({ label = "Fecha de nacimiento", value, o
               </select>
 
               <label className="sr-only" htmlFor={`${id}-year`}>
-                Año
+                {t("auth.birthDateField.year")}
               </label>
               <select
                 id={`${id}-year`}
@@ -183,7 +184,7 @@ export default function BirthDateField({ label = "Fecha de nacimiento", value, o
               type="button"
               onClick={goNextMonth}
               disabled={atMaxBound}
-              aria-label="Mes siguiente"
+              aria-label={t("auth.birthDateField.nextMonth")}
               className="p-1.5 rounded-full text-muted-dark hover:text-ink-dark hover:bg-line-dark focus:outline-none focus:ring-2 focus:ring-pulse-500 disabled:opacity-30 disabled:pointer-events-none"
             >
               <IoChevronForward size={16} />
@@ -192,11 +193,11 @@ export default function BirthDateField({ label = "Fecha de nacimiento", value, o
 
           <table className="w-full text-center border-collapse">
             <caption className="sr-only">
-              {MONTH_NAMES[viewMonth]} {viewYear}
+              {monthNames[viewMonth]} {viewYear}
             </caption>
             <thead>
               <tr>
-                {WEEKDAY_LABELS.map((d, i) => (
+                {weekdayLabels.map((d, i) => (
                   <th key={`${d}-${i}`} scope="col" className="text-[11px] font-medium text-muted-dark pb-2">
                     {d}
                   </th>

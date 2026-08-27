@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { IoInformationCircleOutline } from "react-icons/io5";
 import { useToast } from "@shared/components/Toast";
+import { useLanguage } from "@shared/i18n";
 import Spinner from "@shared/components/Spinner";
 import AuthCard from "../components/AuthCard";
 import PasswordField from "../components/PasswordField";
@@ -23,6 +24,7 @@ export default function ResetPassword() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const toast = useToast();
+  const { t } = useLanguage();
 
   const [form, setForm] = useState({ password: "", confirmPassword: "" });
   const [errors, setErrors] = useState({});
@@ -39,9 +41,10 @@ export default function ResetPassword() {
 
   const validate = () => {
     const next = {};
-    if (!form.password) next.password = "Ingresá una nueva contraseña.";
-    else if (form.password.length < 8) next.password = "Usá al menos 8 caracteres.";
-    if (form.confirmPassword !== form.password) next.confirmPassword = "Las contraseñas no coinciden.";
+    if (!form.password) next.password = t("auth.resetPassword.errorPasswordRequired");
+    else if (form.password.length < 8) next.password = t("auth.resetPassword.errorPasswordTooShort");
+    if (form.confirmPassword !== form.password)
+      next.confirmPassword = t("auth.resetPassword.errorConfirmPasswordMismatch");
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -56,29 +59,29 @@ export default function ResetPassword() {
     // al Backend (token + nueva contraseña) cuando el endpoint exista y esté
     // documentado en API_CONTRACT.md. En éxito real: setSuccess(true).
     setIsSubmitting(false);
-    toast.info(
-      "El equipo de Backend está terminando de implementar el reseteo de contraseña. Este formulario ya valida los datos y está listo para conectarse en cuanto el endpoint esté disponible.",
-      { title: "Función en construcción", duration: 8000 }
-    );
+    toast.info(t("auth.resetPassword.inProgressToast"), {
+      title: t("auth.resetPassword.inProgressTitle"),
+      duration: 8000,
+    });
     // --- fin del punto de integración pendiente
   };
 
   if (!token) {
     return (
-      <AuthCard title="Enlace inválido" subtitle="Este enlace de recuperación no es válido o expiró.">
+      <AuthCard title={t("auth.resetPassword.invalidLinkTitle")} subtitle={t("auth.resetPassword.invalidLinkSubtitle")}>
         <p
           role="alert"
           className="flex items-start gap-1.5 text-sm text-muted-dark bg-black/30 rounded-lg px-3 py-3"
         >
           <IoInformationCircleOutline size={18} className="shrink-0 mt-0.5 text-pulse-400" />
-          Pedí un nuevo enlace desde la pantalla de recuperación de contraseña.
+          {t("auth.resetPassword.invalidLinkNotice")}
         </p>
 
         <Link
           to="/forgot-password"
           className="w-full mt-4 block text-center bg-pulse-600 hover:bg-pulse-700 text-white py-3 rounded-full font-semibold transition"
         >
-          Solicitar nuevo enlace
+          {t("auth.resetPassword.requestNewLink")}
         </Link>
       </AuthCard>
     );
@@ -86,9 +89,9 @@ export default function ResetPassword() {
 
   if (success) {
     return (
-      <AuthCard title="Contraseña actualizada" subtitle="Ya podés iniciar sesión con tu nueva contraseña.">
+      <AuthCard title={t("auth.resetPassword.successTitle")} subtitle={t("auth.resetPassword.successSubtitle")}>
         <p role="status" className="text-sm text-muted-dark text-center">
-          Tu contraseña fue actualizada correctamente.
+          {t("auth.resetPassword.successMessage")}
         </p>
 
         <button
@@ -96,7 +99,7 @@ export default function ResetPassword() {
           onClick={() => navigate("/login")}
           className="w-full mt-4 bg-pulse-600 hover:bg-pulse-700 text-white py-3 rounded-full font-semibold transition"
         >
-          Ir a iniciar sesión
+          {t("auth.resetPassword.goToLogin")}
         </button>
       </AuthCard>
     );
@@ -105,13 +108,13 @@ export default function ResetPassword() {
   const isValid = form.password && form.confirmPassword;
 
   return (
-    <AuthCard title="Crear nueva contraseña" subtitle="Elegí una contraseña segura para tu cuenta.">
+    <AuthCard title={t("auth.resetPassword.title")} subtitle={t("auth.resetPassword.subtitle")}>
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div>
           <PasswordField
-            label="Nueva contraseña"
+            label={t("auth.resetPassword.newPasswordLabel")}
             name="password"
-            placeholder="Nueva contraseña"
+            placeholder={t("auth.resetPassword.newPasswordLabel")}
             autoComplete="new-password"
             value={form.password}
             onChange={handleChange}
@@ -121,9 +124,9 @@ export default function ResetPassword() {
         </div>
 
         <PasswordField
-          label="Confirmar contraseña"
+          label={t("auth.resetPassword.confirmPasswordLabel")}
           name="confirmPassword"
-          placeholder="Confirmar contraseña"
+          placeholder={t("auth.resetPassword.confirmPasswordLabel")}
           autoComplete="new-password"
           value={form.confirmPassword}
           onChange={handleChange}
@@ -140,13 +143,13 @@ export default function ResetPassword() {
           }`}
         >
           {isSubmitting && <Spinner />}
-          {isSubmitting ? "Actualizando..." : "Actualizar contraseña"}
+          {isSubmitting ? t("auth.resetPassword.submitting") : t("auth.resetPassword.submit")}
         </button>
       </form>
 
       <div className="text-center mt-6">
         <Link to="/login" className="text-sm text-pulse-400 hover:underline">
-          Volver a iniciar sesión
+          {t("auth.resetPassword.backToLogin")}
         </Link>
       </div>
     </AuthCard>

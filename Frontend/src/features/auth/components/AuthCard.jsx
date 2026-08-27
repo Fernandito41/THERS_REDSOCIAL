@@ -1,13 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { IoClose } from "react-icons/io5";
 import Logo from "@shared/components/Logo";
+import LanguageSwitcher from "@shared/components/LanguageSwitcher";
+import { useLanguage } from "@shared/i18n";
 
 // Shell visual compartido por Login/Register/ForgotPassword/ResetPassword --
 // centraliza el fondo oscuro fijo, la tarjeta, el botón de cerrar y el logo
 // para que las 4 pantallas de auth se mantengan consistentes (Fase 10) sin
 // duplicar el mismo markup en cada página.
-export default function AuthCard({ title, subtitle, children, onClose, closeLabel = "Cerrar" }) {
+export default function AuthCard({ title, subtitle, children, onClose, closeLabel }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const handleClose = onClose || (() => navigate(-1));
 
   return (
@@ -17,11 +20,15 @@ export default function AuthCard({ title, subtitle, children, onClose, closeLabe
           <button
             type="button"
             onClick={handleClose}
-            aria-label={closeLabel}
+            aria-label={closeLabel || t("auth.close")}
             className="text-ink-dark hover:bg-line-dark p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-pulse-500"
           >
             <IoClose size={24} />
           </button>
+        </div>
+
+        <div className="absolute top-3 right-3">
+          <LanguageSwitcher />
         </div>
 
         <div className="flex justify-center mb-4">

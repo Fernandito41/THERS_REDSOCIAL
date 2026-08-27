@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { IoEyeOutline, IoEyeOffOutline } from "react-icons/io5";
+import { useLanguage } from "@shared/i18n";
 
 // Igual que TextField pero con toggle de mostrar/ocultar contraseña --
 // reutilizado por Login, Register (contraseña + confirmar) y Reset Password
@@ -9,6 +10,7 @@ export default function PasswordField({ label, error, className = "", id: idProp
   const id = idProp || generatedId;
   const errorId = `${id}-error`;
   const [visible, setVisible] = useState(false);
+  const { t } = useLanguage();
 
   return (
     <div className={className}>
@@ -29,7 +31,7 @@ export default function PasswordField({ label, error, className = "", id: idProp
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+          aria-label={visible ? t("auth.hidePassword") : t("auth.showPassword")}
           aria-pressed={visible}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-dark hover:text-ink-dark focus:outline-none focus:ring-2 focus:ring-pulse-500 rounded-full p-1"
         >

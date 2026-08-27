@@ -9,11 +9,11 @@ import {
   Security,
   Faq,
   Blog,
-  HelpCenter,
   Locations,
   Popular,
   ImportContacts,
 } from "@features/public";
+import { HelpLayout, HelpCenter, HelpCategoryPage, HelpArticlePage, HelpSearchPage } from "@features/help";
 import { Home, Discover, Messages, Notifications, Profile, Settings } from "@features/feed";
 import AppShell from "@/app/layout/AppShell";
 import PublicLayout from "@/app/layout/PublicLayout";
@@ -52,7 +52,12 @@ export default function AppRouter() {
           <Route path="/information/security" element={<Security />} />
           <Route path="/information/faq" element={<Faq />} />
           <Route path="/blog" element={<Blog />} />
-          <Route path="/help" element={<HelpCenter />} />
+          <Route path="/help" element={<HelpLayout />}>
+            <Route index element={<HelpCenter />} />
+            <Route path="category/:categoryId" element={<HelpCategoryPage />} />
+            <Route path="article/:slug" element={<HelpArticlePage />} />
+            <Route path="search" element={<HelpSearchPage />} />
+          </Route>
           <Route path="/popular" element={<Popular />} />
           <Route path="/locations" element={<Locations />} />
           <Route path="/contacts/import" element={<ImportContacts />} />

@@ -9,10 +9,13 @@ import {
   IoLogOutOutline,
   IoPersonOutline,
   IoSettingsOutline,
+  IoHelpCircleOutline,
 } from "react-icons/io5";
 import Avatar from "@shared/components/Avatar";
 import AmbientGlow from "@shared/components/AmbientGlow";
+import LanguageSwitcher from "@shared/components/LanguageSwitcher";
 import { useTheme } from "@shared/hooks/useTheme";
+import { useLanguage } from "@shared/i18n";
 import { useAuth } from "@features/auth";
 import NavRail from "./NavRail";
 import MobileNav from "./MobileNav";
@@ -27,6 +30,7 @@ export default function AppShell() {
   // se consume el usuario ya resuelto por AuthProvider.
   const { user: currentUser, updateStoredUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { t } = useLanguage();
 
   const [capsules, setCapsules] = useState(mockCapsules);
   const [followingIds, setFollowingIds] = useState(() => new Set());
@@ -110,8 +114,8 @@ export default function AppShell() {
                   autoFocus
                   type="text"
                   onBlur={() => setSearchOpen(false)}
-                  placeholder="Buscar personas, Cápsulas, temas..."
-                  aria-label="Buscar en THERS"
+                  placeholder={t("nav.searchPlaceholder")}
+                  aria-label={t("nav.searchAria")}
                   className="w-full bg-surface dark:bg-surface-dark border border-line dark:border-line-dark rounded-full pl-10 pr-4 py-2 text-sm text-ink dark:text-ink-dark placeholder-muted focus:outline-none focus:ring-2 focus:ring-pulse-500"
                 />
               </div>
@@ -121,7 +125,7 @@ export default function AppShell() {
           <div className="flex items-center gap-1 shrink-0">
             <Link
               to="/messages"
-              aria-label="Mensajes"
+              aria-label={t("nav.messages")}
               className="p-2 rounded-full text-muted dark:text-muted-dark hover:bg-surface dark:hover:bg-surface-dark hover:text-ink dark:hover:text-ink-dark transition"
             >
               <IoChatbubbleEllipsesOutline size={21} />
@@ -129,7 +133,7 @@ export default function AppShell() {
 
             <Link
               to="/notifications"
-              aria-label={`Notificaciones${unreadCount > 0 ? `, ${unreadCount} sin leer` : ""}`}
+              aria-label={unreadCount > 0 ? t("nav.notificationsUnread", { count: unreadCount }) : t("nav.notifications")}
               className="relative p-2 rounded-full text-muted dark:text-muted-dark hover:bg-surface dark:hover:bg-surface-dark hover:text-ink dark:hover:text-ink-dark transition"
             >
               <IoNotificationsOutline size={21} />
@@ -141,7 +145,7 @@ export default function AppShell() {
             </Link>
 
             <div className="relative ml-1">
-              <button onClick={() => setMenuOpen((prev) => !prev)} aria-label="Menú de perfil" title={currentUser.name}>
+              <button onClick={() => setMenuOpen((prev) => !prev)} aria-label={t("nav.profileMenuAria")} title={currentUser.name}>
                 <Avatar name={currentUser.name} size="w-8 h-8" />
               </button>
 
@@ -157,7 +161,7 @@ export default function AppShell() {
                     onClick={() => setMenuOpen(false)}
                     className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm text-ink dark:text-ink-dark hover:bg-canvas dark:hover:bg-canvas-dark"
                   >
-                    <IoPersonOutline size={16} /> Ver perfil
+                    <IoPersonOutline size={16} /> {t("nav.viewProfile")}
                   </Link>
 
                   <Link
@@ -165,7 +169,15 @@ export default function AppShell() {
                     onClick={() => setMenuOpen(false)}
                     className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm text-ink dark:text-ink-dark hover:bg-canvas dark:hover:bg-canvas-dark"
                   >
-                    <IoSettingsOutline size={16} /> Configuración
+                    <IoSettingsOutline size={16} /> {t("nav.settings")}
+                  </Link>
+
+                  <Link
+                    to="/help"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm text-ink dark:text-ink-dark hover:bg-canvas dark:hover:bg-canvas-dark"
+                  >
+                    <IoHelpCircleOutline size={16} /> {t("nav.help")}
                   </Link>
 
                   <button
@@ -173,14 +185,19 @@ export default function AppShell() {
                     className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm text-ink dark:text-ink-dark hover:bg-canvas dark:hover:bg-canvas-dark"
                   >
                     {theme === "dark" ? <IoSunnyOutline size={16} /> : <IoMoonOutline size={16} />}
-                    {theme === "dark" ? "Modo claro" : "Modo oscuro"}
+                    {theme === "dark" ? t("nav.lightMode") : t("nav.darkMode")}
                   </button>
+
+                  <div className="flex items-center justify-between gap-2 px-4 py-2">
+                    <span className="text-sm text-ink dark:text-ink-dark">{t("language.label")}</span>
+                    <LanguageSwitcher />
+                  </div>
 
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm text-ember-600 hover:bg-canvas dark:hover:bg-canvas-dark border-t border-line dark:border-line-dark mt-1 pt-2"
                   >
-                    <IoLogOutOutline size={16} /> Cerrar sesión
+                    <IoLogOutOutline size={16} /> {t("nav.logout")}
                   </button>
                 </div>
               )}

@@ -1,10 +1,16 @@
 import { useId } from "react";
 import { IoCallOutline } from "react-icons/io5";
+import { useLanguage } from "@shared/i18n";
 
 // Lista corta y pragmática (no exhaustiva de todos los países del mundo):
 // El Salvador primero y por defecto (HB-001 confirma que THERS es un
 // proyecto salvadoreño), seguido de la región y algunos códigos frecuentes.
 // Ampliar esta lista no requiere tocar ningún otro archivo.
+//
+// Nombres de país sin traducir a propósito (Fase 1 de i18n, shared/i18n):
+// el alcance de esa fase fue navegación/auth/configuración, no este listado.
+// Si se traduce, mover country a claves shared/i18n (p. ej. "countries.SV")
+// en vez de interpolar el código de idioma acá.
 export const COUNTRY_CODES = [
   { code: "+503", country: "El Salvador", flag: "🇸🇻" },
   { code: "+502", country: "Guatemala", flag: "🇬🇹" },
@@ -27,7 +33,7 @@ export const DEFAULT_COUNTRY_CODE = COUNTRY_CODES[0].code;
 // mensaje de error) pero con un segmento de código de país pegado al input,
 // como pidió el wireframe ("+503  0000-0000" en una sola fila).
 export default function PhoneField({
-  label = "Número de teléfono",
+  label,
   countryCode,
   onCountryCodeChange,
   error,
@@ -39,11 +45,13 @@ export default function PhoneField({
   const id = idProp || generatedId;
   const errorId = `${id}-error`;
   const countrySelectId = `${id}-country`;
+  const { t } = useLanguage();
+  const resolvedLabel = label || t("auth.phoneField.label");
 
   return (
     <div className={className}>
       <label htmlFor={id} className="sr-only">
-        {label}
+        {resolvedLabel}
       </label>
       <div
         className={`flex items-stretch bg-transparent border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-pulse-500 ${
@@ -53,7 +61,7 @@ export default function PhoneField({
         <div className="flex items-center gap-1 pl-3 pr-1.5 border-r border-line-dark shrink-0">
           <IoCallOutline className="text-muted-dark" size={16} aria-hidden="true" />
           <label htmlFor={countrySelectId} className="sr-only">
-            Código de país
+            {t("auth.phoneField.countryCodeLabel")}
           </label>
           <select
             id={countrySelectId}

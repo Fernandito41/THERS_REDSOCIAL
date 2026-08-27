@@ -4,7 +4,6 @@ export { default as Community } from "./pages/Community";
 export { default as Security } from "./pages/Security";
 export { default as Faq } from "./pages/Faq";
 export { default as Blog } from "./pages/Blog";
-export { default as HelpCenter } from "./pages/HelpCenter";
 export { default as Locations } from "./pages/Locations";
 export { default as Popular } from "./pages/Popular";
 export { default as ImportContacts } from "./pages/ImportContacts";

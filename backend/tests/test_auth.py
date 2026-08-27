@@ -4,6 +4,9 @@
 # - el email es único e insensible a mayúsculas (CITEXT);
 # - password_hash nunca es la contraseña en texto plano;
 # - el identity del JWT es el id (UUID) del usuario, no su email.
+#
+# Campos de perfil (username/phone/country_code/birth_date/confirm_password)
+# agregados en ADR-002 (docs/architecture/ADR-002-user-profile-fields.md).
 
 import uuid
 
@@ -12,12 +15,26 @@ from flask_jwt_extended import decode_token
 from app.extensions import db
 from app.infrastructure.persistence.models import User
 
+VALID_PASSWORD = "secretpass"
 
-def _register(client, name="Ada Lovelace", email="ada@example.com", password="secretpass"):
-    return client.post(
-        "/api/register",
-        json={"name": name, "email": email, "password": password},
-    )
+
+def _register_payload(**overrides):
+    payload = {
+        "name": "Ada Lovelace",
+        "username": "ada_lovelace",
+        "email": "ada@example.com",
+        "phone": "7000-1234",
+        "country_code": "+503",
+        "birth_date": "1990-01-01",
+        "password": VALID_PASSWORD,
+        "confirm_password": VALID_PASSWORD,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _register(client, **overrides):
+    return client.post("/api/register", json=_register_payload(**overrides))
 
 
 class TestRegister:
@@ -28,6 +45,10 @@ class TestRegister:
         body = response.get_json()["user"]
         assert body["email"] == "ada@example.com"
         assert body["name"] == "Ada Lovelace"
+        assert body["username"] == "ada_lovelace"
+        assert body["phone"] == "7000-1234"
+        assert body["country_code"] == "+503"
+        assert body["birth_date"] == "1990-01-01"
 
         user_id = uuid.UUID(body["id"])  # no lanza si es un UUID válido
 
@@ -35,15 +56,16 @@ class TestRegister:
             user = db.session.get(User, user_id)
             assert user is not None
             assert user.email == "ada@example.com"
+            assert user.username == "ada_lovelace"
             # nunca se guarda la contraseña en claro
-            assert user.password_hash != "secretpass"
+            assert user.password_hash != VALID_PASSWORD
             assert user.password_hash.startswith("scrypt:")
 
     def test_register_duplicate_email_returns_409(self, client):
-        first = _register(client, email="dup@example.com")
+        first = _register(client, email="dup@example.com", username="dup_one")
         assert first.status_code == 201
 
-        second = _register(client, name="Otra Persona", email="dup@example.com", password="otrapass")
+        second = _register(client, name="Otra Persona", email="dup@example.com", username="dup_two")
 
         assert second.status_code == 409
         assert "msg" in second.get_json()
@@ -52,9 +74,18 @@ class TestRegister:
         first = _register(client, email="ada@example.com")
         assert first.status_code == 201
 
-        second = _register(client, email="ADA@EXAMPLE.COM")
+        second = _register(client, email="ADA@EXAMPLE.COM", username="ada_two")
 
         assert second.status_code == 409
+
+    def test_register_duplicate_username_returns_409(self, client):
+        first = _register(client, username="ada_lovelace", email="ada1@example.com")
+        assert first.status_code == 201
+
+        second = _register(client, username="ada_lovelace", email="ada2@example.com")
+
+        assert second.status_code == 409
+        assert "msg" in second.get_json()
 
     def test_register_missing_fields_returns_400(self, client):
         response = client.post("/api/register", json={"name": "Sin Datos"})
@@ -69,13 +100,45 @@ class TestRegister:
     def test_register_response_never_exposes_password_hash(self, client):
         response = _register(client)
 
-        assert "password_hash" not in response.get_json()["user"]
-        assert "password" not in response.get_json()["user"]
+        body = response.get_json()["user"]
+        assert "password_hash" not in body
+        assert "password" not in body
+        assert "confirm_password" not in body
+
+    def test_register_invalid_username_returns_400(self, client):
+        response = _register(client, username="a?")  # muy corto e inválido
+
+        assert response.status_code == 400
+
+    def test_register_invalid_phone_returns_400(self, client):
+        response = _register(client, phone="123")  # menos de 7 dígitos
+
+        assert response.status_code == 400
+
+    def test_register_invalid_country_code_returns_400(self, client):
+        response = _register(client, country_code="503")  # sin "+"
+
+        assert response.status_code == 400
+
+    def test_register_invalid_birth_date_returns_400(self, client):
+        response = _register(client, birth_date="not-a-date")
+
+        assert response.status_code == 400
+
+    def test_register_underage_birth_date_returns_400(self, client):
+        response = _register(client, birth_date="2020-01-01")  # menor de 13 años
+
+        assert response.status_code == 400
+
+    def test_register_confirm_password_mismatch_returns_400(self, client):
+        response = _register(client, confirm_password="otra-contraseña")
+
+        assert response.status_code == 400
 
 
 class TestLogin:
     def test_login_with_correct_credentials_returns_token(self, client):
-        _register(client, email="ada@example.com", password="secretpass")
+        _register(client, email="ada@example.com", password="secretpass", confirm_password="secretpass")
 
         response = client.post(
             "/api/login", json={"email": "ada@example.com", "password": "secretpass"}
@@ -85,9 +148,10 @@ class TestLogin:
         body = response.get_json()
         assert "token" in body
         assert body["user"]["email"] == "ada@example.com"
+        assert body["user"]["username"] == "ada_lovelace"
 
     def test_login_email_is_case_insensitive(self, client):
-        _register(client, email="ada@example.com", password="secretpass")
+        _register(client, email="ada@example.com", password="secretpass", confirm_password="secretpass")
 
         response = client.post(
             "/api/login", json={"email": "ADA@EXAMPLE.COM", "password": "secretpass"}
@@ -96,7 +160,9 @@ class TestLogin:
         assert response.status_code == 200
 
     def test_login_jwt_identity_is_user_uuid_not_email(self, app, client):
-        register_response = _register(client, email="ada@example.com", password="secretpass")
+        register_response = _register(
+            client, email="ada@example.com", password="secretpass", confirm_password="secretpass"
+        )
         user_id = register_response.get_json()["user"]["id"]
 
         login_response = client.post(
@@ -112,7 +178,7 @@ class TestLogin:
         uuid.UUID(decoded["sub"])  # no lanza si es un UUID válido
 
     def test_login_wrong_password_returns_401(self, client):
-        _register(client, email="ada@example.com", password="secretpass")
+        _register(client, email="ada@example.com", password="secretpass", confirm_password="secretpass")
 
         response = client.post(
             "/api/login", json={"email": "ada@example.com", "password": "wrong-password"}
@@ -129,7 +195,7 @@ class TestLogin:
 
     def test_login_nonexistent_user_and_wrong_password_return_same_message(self, client):
         # No debe ser posible enumerar emails registrados a partir del mensaje de error.
-        _register(client, email="ada@example.com", password="secretpass")
+        _register(client, email="ada@example.com", password="secretpass", confirm_password="secretpass")
 
         wrong_password = client.post(
             "/api/login", json={"email": "ada@example.com", "password": "wrong"}

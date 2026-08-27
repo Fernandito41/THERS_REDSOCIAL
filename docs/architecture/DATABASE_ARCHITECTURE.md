@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.4 |
+| Versión | 0.5 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -15,6 +15,8 @@
 > **v0.3 — cierre de la capa de persistencia (auditoría y validación real de esta tarea).** Se corrigió la referencia a una instalación nativa de PostgreSQL 17.11 (no reproducible por el equipo) por el entorno estandarizado real: **PostgreSQL 16 vía Docker Compose** (`docker-compose.yml`, raíz del repo, imagen `postgres:16-alpine`), verificado end-to-end (`flask db upgrade`/`downgrade` repetidos, INSERT sin `id` confirmando `gen_random_uuid()` en PostgreSQL, UPDATE confirmando el trigger de `updated_at`, unicidad case-insensitive de `email` vía `CITEXT`, y reconstrucción completa desde un volumen Docker vacío). Se marcó como resuelta la herramienta de migraciones (§9) donde el documento aún decía `PENDIENTE`, pese a que Flask-Migrate/Alembic ya estaba implementado. Ningún esquema, entidad ni columna cambió — solo se sincronizó el documento con el código real ya existente.
 >
 > **v0.4 — integración de autenticación con persistencia real.** `users` pasó de "modelo implementado pero no conectado" a **en uso real**: `POST /api/register` y `POST /api/login` (`BACKEND_ARCHITECTURE.md` §8/§9, v0.6) ya crean/consultan filas reales, y la credencial hardcodeada (`test@test.com`/`123456`) se eliminó del código por completo. Reflejado en §4 y §5. No se agregó ninguna entidad, columna ni índice nuevo — sigue siendo únicamente `users`, sin cambios de esquema.
+>
+> **v0.5 — columnas de perfil ratificadas por ADR (THERS Backend Fase 2.1).** `username`, `phone`, `country_code` y `birth_date` pasan de **OBJETIVO** (§4.B) a **IMPLEMENTADAS** en `users`, ratificado por `ADR-002-user-profile-fields.md` — el ADR que esta misma sección (v0.2–v0.4) ya pedía antes de tocar el esquema. Migración `a1edcbff74d8_add_profile_fields_to_users.py`, verificada con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real (`thers_dev`, Docker) y con 27 pruebas de integración (`backend/tests/`). `username` es único (`uq_users_username`) pero **no** usa `CITEXT` (a diferencia de `email`) — decisión explícita en `ADR-002` §3, no una omisión. `avatar_url`/`bio` (§4.B) siguen sin ratificar. Reflejado en §4.A, §4.B y §5.
 
 ---
 
@@ -49,6 +51,8 @@ Este documento cubre:
 | Motor | **PostgreSQL** | `HB-001` (portada del stack) y `REPOSITORY_STRUCTURE.md` §4 |
 | Versión | **PostgreSQL 16** (imagen `postgres:16-alpine`) — entorno de desarrollo local estandarizado vía Docker Compose (`docker-compose.yml`, raíz del repo), reproducible para los 4 integrantes. Reemplaza la nota de v0.2 sobre una instalación nativa de PostgreSQL 17.11 verificada solo en una máquina — esa instancia no era reproducible por el equipo y ya no es la referencia. Versión oficial para un entorno compartido/producción sigue sin ratificación formal (DevOps, `CLAUDE.md` §5) | `docker-compose.yml`; verificado end-to-end en esta tarea (migración, UUID, CITEXT, trigger, downgrade/upgrade, reconstrucción desde volumen vacío) |
 | Driver / adaptador Python | **`psycopg` (v3), `psycopg[binary]==3.3.4`** — agregado a `backend/requirements.txt` junto con `Flask-SQLAlchemy` y `Flask-Migrate` | Implementado en código (`BACKEND_ARCHITECTURE.md` §2). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend, no consensuada por los 4 integrantes en esta tarea |
+
+> ⚠️ **Hallazgo de entorno local (no un cambio de arquitectura, una nota operativa).** En al menos una máquina del equipo, un servicio nativo de PostgreSQL instalado en Windows ya ocupa el puerto `5432` del host, en conflicto con el mapeo de puertos de `docker-compose.yml`. `docker compose ps`/`healthcheck` reportan el contenedor como saludable igualmente (el healthcheck corre *dentro* del contenedor, no prueba el puerto del host), pero cualquier cliente conectando a `localhost:5432` desde el host puede terminar hablando con el Postgres nativo en vez del de Docker, con errores de autenticación confusos. `docker-compose.yml` ya soporta este caso sin modificarse: `ports: "${POSTGRES_PORT:-5432}:5432"` permite fijar `POSTGRES_PORT` (p. ej. `5433`) para evitar el choque, ajustando `DATABASE_URL`/`TEST_DATABASE_URL` al mismo puerto. Ver el informe de la tarea que agregó esta nota para el procedimiento exacto.
 
 ### Razones técnicas
 La elección de PostgreSQL **ya está tomada** a nivel de organización (`HB-001` la fija como parte del stack y asigna al Tech Lead Backend "Administrar el esquema de base de datos (PostgreSQL) y migraciones"). Este documento **no re-justifica** esa decisión ni añade razones que la documentación no haya declarado; se limita a heredarla.
@@ -93,7 +97,7 @@ Se distingue entre:
 
 | Entidad | Estado | Justificación |
 |---|---|---|
-| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`) | Registro persiste `name`/`email`/`password_hash` reales; login autentica consultando `users` por `email`; el backend devuelve `{ id, email, name }` con datos reales |
+| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`/`GET /api/users/me`) | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password_hash` reales (columnas de perfil ratificadas por `ADR-002`, v0.5); login autentica consultando `users` por `email`; el backend devuelve el objeto público completo (§5) con datos reales |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -124,12 +128,14 @@ Estados usados en esta capa:
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
 |---|---|---|---|
 | Nombre | Columna `users.name` (ya existe) | **IMPLEMENTADA** | — |
-| Username | Columna `users.username` (única) | OBJETIVO | Ver contradicción registrada abajo; se añadirá al ratificar el modelo de `users`, no ahora |
+| Username | Columna `users.username` (única) | **IMPLEMENTADA** (v0.5, `ADR-002`) | — |
+| Teléfono | Columnas `users.phone` + `users.country_code` | **IMPLEMENTADA** (v0.5, `ADR-002`) | — |
+| Fecha de nacimiento | Columna `users.birth_date` | **IMPLEMENTADA** (v0.5, `ADR-002`) | — |
 | Foto de perfil | Columna `avatar_url` en `users` **o** referencia a entidad `media` | PENDIENTE DE DECISIÓN | URL simple vs entidad de medios, no decidido |
 | Biografía | Columna `bio` en `users` | OBJETIVO | Longitud/tipo a decidir; no añade PK/FK |
 | Edición del perfil | Comportamiento (UPDATE sobre `users`) | OBJETIVO | No añade estructura |
 
-> ⚠️ **Contradicción registrada y ahora explicada (no resuelta silenciosamente).** La v0.1 (§5) excluía `username` por no recolectarse en el registro. El alcance confirmado por el equipo lo incorpora como **columna objetivo** de `users`. Se **mantiene el modelo implementado de `users` sin cambios** (regla: no modificar `users` sin ratificación) y se registran `username`/`avatar_url`/`bio` como **columnas OBJETIVO** a incorporar cuando el modelo de `users` se actualice por ADR. *Requisito funcional confirmado ≠ decisión de persistencia aplicada.*
+> ⚠️ **Contradicción registrada en v0.1–v0.4, cerrada en v0.5.** La v0.1 (§5) excluía `username` por no recolectarse en el registro; v0.2–v0.4 la registraron como **columna objetivo**, pendiente de ADR. `ADR-002-user-profile-fields.md` (THERS Backend Fase 2.1) resuelve esa pendiente: `username`, `phone`, `country_code` y `birth_date` pasan a **IMPLEMENTADA** (ver §5). `avatar_url`/`bio` **siguen** como objetivo/pendiente — este ADR no las toca.
 
 #### Configuración
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
@@ -210,7 +216,10 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 |---|---|---|---|
 | `id` | **UUID** | No | Clave primaria. `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` — el valor se genera **en PostgreSQL** (`gen_random_uuid()`, función nativa desde PostgreSQL 13, no requiere `pgcrypto`/`uuid-ossp`), no en Python. Implementado en `app/infrastructure/persistence/models.py` (`sqlalchemy.dialects.postgresql.UUID(as_uuid=True)`, `server_default=text("gen_random_uuid()")`) y en la migración `a1b2c3d4e5f6_create_users_table.py` |
 | `name` | `VARCHAR(120)` | No | Campo `name` recolectado en `Register.jsx`; devuelto por el backend |
-| `email` | **CITEXT** | No | `email CITEXT NOT NULL UNIQUE` — tipo case-insensitive de PostgreSQL (extensión `citext`, ver §11); el `UNIQUE` ignora mayúsculas/minúsculas a nivel de motor, sin normalizar manualmente en la capa de aplicación. **login se hace por email** → identificador de acceso |
+| `username` | `VARCHAR(30)`, **UNIQUE** (`uq_users_username`) | No | **v0.5 (`ADR-002`).** Campo `username` recolectado en `Register.jsx`; formato `^[a-zA-Z0-9_]{3,20}$` validado en `domain/auth/validators.py`. A diferencia de `email`, **no** usa `CITEXT` — comparación case-sensitive, decisión explícita (`ADR-002` §3): ningún flujo hoy (login sigue siendo por email) requiere case-insensitivity para username |
+| `phone` | `VARCHAR(20)` | No | **v0.5 (`ADR-002`).** Campo `phone` recolectado en `Register.jsx` (`PhoneField`); validación laxa de 7–15 dígitos tras limpiar separadores |
+| `country_code` | `VARCHAR(6)` | No | **v0.5 (`ADR-002`).** Campo `countryCode` recolectado en `Register.jsx` (`PhoneField`, p. ej. `+503`); formato `^\+[1-9]\d{0,3}$` |
+| `birth_date` | `DATE` | No | **v0.5 (`ADR-002`).** Campo `birthDate` recolectado en `Register.jsx` (`BirthDateField`, ISO `yyyy-mm-dd`); edad mínima 13 años validada en el backend (mismo placeholder que ya usaba el Frontend, `dateUtils.js` `MIN_AGE_YEARS`) |
 | `password_hash` | `TEXT` | No | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11) |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Convención de auditoría (§7); estándar para toda entidad |
 | `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7). Un trigger de PostgreSQL (`set_updated_at`/`trg_users_updated_at`, ver migración) la actualiza en cada `UPDATE` — funciona igual vía ORM o SQL directo, no depende de que el código de aplicación la toque |
@@ -226,9 +235,11 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 - `name` **NOT NULL** — el formulario lo exige (`isValid` requiere `name.trim()`).
 - `password_hash` **NOT NULL**.
 
-**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9); campos anticipados por la UI pero **no** recolectados en registro (`username`/`@usuario` y teléfono aparecen solo como placeholder en `Login.jsx`, no como campos reales) → no se añaden por inferencia. **Ya resueltos:** tipo de PK (UUID, `gen_random_uuid()`), tipo de `email` (`CITEXT`), longitud de `name` (`VARCHAR(120)`), tipo de `password_hash` (`TEXT`), estrategia de `updated_at` (trigger) — ver tabla arriba.
+**`confirm_password`** se valida en la route (`interfaces/routes/auth_routes.py`, debe coincidir con `password`) y **nunca se persiste** — no existe como columna de `users`, ni siquiera transitoriamente.
 
-> **Actualización v0.2 — reconciliación con el alcance objetivo.** El alcance funcional confirmado por el equipo incorpora `username`, `avatar_url` y `bio` como **columnas OBJETIVO** de `users` (§4.B › Perfil). Se añadirán cuando el modelo de `users` se ratifique por ADR, **no ahora**: el modelo *implementado* de esta sección se mantiene sin cambios para no cruzar la línea requisito → persistencia por iniciativa propia.
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9). **Ya resueltos:** tipo de PK (UUID, `gen_random_uuid()`), tipo de `email` (`CITEXT`), longitud de `name` (`VARCHAR(120)`), tipo de `password_hash` (`TEXT`), estrategia de `updated_at` (trigger), y desde v0.5 también `username`/`phone`/`country_code`/`birth_date` (`ADR-002`) — ver tabla arriba.
+
+> **Actualización v0.2 — reconciliación con el alcance objetivo.** El alcance funcional confirmado por el equipo incorporó `username`, `avatar_url` y `bio` como **columnas OBJETIVO** de `users` (§4.B › Perfil), pendientes de ADR. **Actualización v0.5:** `username` (junto con `phone`/`country_code`/`birth_date`, no anticipadas en v0.2) ya se ratificaron e implementaron por `ADR-002-user-profile-fields.md` — ver tabla arriba. `avatar_url`/`bio` siguen como columnas OBJETIVO, sin ADR propio todavía.
 
 ---
 
@@ -266,6 +277,7 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 | Índice propuesto | Tabla / columna | Consulta que lo justifica |
 |---|---|---|
 | Índice único de email | `users(email)` — `UNIQUE` | El login busca al usuario **por email** en cada intento de autenticación (`Login.jsx` envía `email`; el backend deberá hacer `SELECT ... WHERE email = ?`). La restricción `UNIQUE` de §5 crea este índice automáticamente y sirve tanto para integridad como para el lookup de login. |
+| Índice único de username (`uq_users_username`) | `users(username)` — `UNIQUE` | **v0.5 (`ADR-002`).** `POST /api/register` valida unicidad de `username` en cada registro; la constraint `UNIQUE` de §5 crea este índice automáticamente. Ningún flujo consulta hoy por `username` fuera de esa validación de unicidad (login sigue siendo por email) — no se justifica un índice adicional de búsqueda. |
 
 **No se añaden más índices en esta versión.** La PK (`id`) ya está indexada por definición. Cualquier índice adicional (p. ej. sobre columnas de futuras tablas de feed) se justificará **cuando exista la consulta que lo pague**, no antes.
 
@@ -363,7 +375,7 @@ La lista completa de estructuras candidatas del producto objetivo (con su **form
 ### Contradicciones / hallazgos reportados (no resueltos aquí)
 - **README raíz dice MySQL** vs. PostgreSQL oficial (§2). Gana `/docs`; corregir el README en tarea aparte.
 - **`JWT_SECRET_KEY` hardcodeado** en `config.py` (§11), contra `HB-001` §19.1/§20. Corregir en tarea de backend aparte.
-- **`username`/`avatar_url`/`bio` en `users`** — el alcance objetivo (§4.B › Perfil) los confirma como columnas, pero la v0.1 los excluía del modelo implementado; incorporación a `users` **pendiente de ADR** (ver nota v0.2 en §5).
+- ~~`username`/`phone`/`country_code`/`birth_date` en `users`~~ — **resuelto en v0.5** por `ADR-002-user-profile-fields.md` (ver §5). `avatar_url`/`bio` (§4.B › Perfil) **siguen** pendientes de ADR — no cubiertas por `ADR-002`.
 
 ---
 

@@ -6,10 +6,9 @@ const AuthContext = createContext(undefined);
 const TOKEN_KEY = "token";
 const USER_KEY = "user";
 
-// El backend (POST /api/login, POST /api/register) solo devuelve { id, email, name } --
-// API_CONTRACT.md §4.1, sin username. Se deriva de la parte local del email como valor
-// real (no inventado) hasta que exista un campo username ratificado en
-// DATABASE_ARCHITECTURE.md.
+// El backend ya devuelve `username` real (ADR-002, API_CONTRACT.md §4). Este
+// fallback solo cubre sesiones guardadas en localStorage antes de ese cambio,
+// que no tienen la columna todavía -- no es la fuente principal.
 function withUsername(user) {
   return {
     ...user,
@@ -26,16 +25,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // TODO BACKEND: reemplazar el fallback local por GET /api/users/me cuando
-  // Backend implemente el endpoint. Flujo previsto (no implementado todavía
-  // porque el endpoint no existe -- API_CONTRACT.md §4.3 confirma que ningún
-  // endpoint protegido existe hoy):
-  //   App inicia -> AuthProvider -> loadCurrentUser() -> GET /api/users/me
-  //     -> JWT válido: actualizar `user` con la respuesta del backend
-  //     -> JWT inválido/expirado (401): limpiar sesión y quedar en isAuthenticated=false
-  // Mientras tanto, la única fuente de verdad disponible es el usuario que
-  // login() ya guardó en localStorage -- no se inventa una llamada a un
-  // endpoint inexistente.
+  // Fuente de verdad de la identidad: GET /api/users/me (API_CONTRACT.md
+  // §4.2, ADR-002). Un token inválido/expirado (401) o un usuario que ya no
+  // existe (404) limpian la sesión local vía logout().
   const loadCurrentUser = async () => {
     setIsLoading(true);
     const token = localStorage.getItem(TOKEN_KEY);
@@ -46,10 +38,20 @@ export function AuthProvider({ children }) {
       return null;
     }
 
-    const stored = readStoredUser();
-    setUser(stored);
-    setIsLoading(false);
-    return stored;
+    try {
+      const res = await api.get("/users/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const currentUser = withUsername(res.data.user);
+      localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+      setUser(currentUser);
+      return currentUser;
+    } catch {
+      logout();
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {

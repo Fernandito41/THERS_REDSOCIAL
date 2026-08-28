@@ -23,3 +23,14 @@ class UserNotFoundError(Exception):
     """El `id` del JWT (get_jwt_identity()) no corresponde a ningún usuario
     real -- p. ej. la cuenta fue eliminada después de emitirse el token
     (GET /api/users/me, ver ADR-002 §3)."""
+
+
+class UsernameChangeNotAllowedError(Exception):
+    """Se intentó cambiar `username` antes de cumplirse la ventana de 30
+    días desde el último cambio (regla ratificada en ADR-003
+    §Evolución futura — "Cambios de username" —
+    docs/architecture/ADR-003-profile-update-contract.md). El código HTTP
+    quedaba "a definir en la implementación" en ese ADR (§Impacto en
+    Backend); se traduce a 400 en la route para mantenerse dentro del
+    catálogo de códigos que ADR-003 §Contrato PATCH ya documenta (no
+    introduce 429, fuera de ese catálogo)."""

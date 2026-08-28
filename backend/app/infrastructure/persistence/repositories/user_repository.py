@@ -51,3 +51,26 @@ class SQLAlchemyUserRepository(UserRepository):
 
     def find_by_id(self, user_id):
         return db.session.get(User, user_id)
+
+    def update(self, user_id, fields):
+        user = db.session.get(User, user_id)
+        if user is None:
+            return None
+
+        # `fields` ya viene filtrado por la whitelist del caso de uso/route
+        # (ADR-003 §Seguridad) -- este repositorio no decide qué columnas
+        # son editables, solo las persiste.
+        for column, value in fields.items():
+            setattr(user, column, value)
+
+        try:
+            db.session.commit()
+        except IntegrityError as exc:
+            db.session.rollback()
+            constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+            if constraint_name == _USERNAME_UNIQUE_CONSTRAINT:
+                raise UsernameAlreadyExistsError(fields.get("username"))
+            raise
+
+        db.session.refresh(user)
+        return user

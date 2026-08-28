@@ -39,6 +39,14 @@ class User(db.Model):
     country_code = db.Column(db.String(6), nullable=False)
     birth_date = db.Column(db.Date, nullable=False)
 
+    # Soporta la regla de cooldown de cambio de username (ADR-003 —
+    # docs/architecture/ADR-003-profile-update-contract.md §Evolución
+    # futura, "Cambios de username": máx. 1 cambio cada 30 días). `NULL`
+    # significa "nunca cambió su username" -- domain/auth/username_policy.py
+    # trata ese caso como "cambio permitido". No se reutiliza `updated_at`
+    # porque esa cambia con cualquier campo, no solo con `username`.
+    username_changed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
     # CITEXT (case-insensitive text, extensión de PostgreSQL) en vez de VARCHAR:
     # el UNIQUE sobre email ignora mayúsculas/minúsculas a nivel de motor, sin
     # normalizar manualmente en la capa de aplicación. Requiere

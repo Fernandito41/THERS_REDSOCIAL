@@ -35,7 +35,7 @@ export function getErrorMessage(error, t) {
   }
 
   if (status === 409) {
-    return t("errors.emailInUse");
+    return (data && data.msg) || t("errors.emailInUse");
   }
 
   if (status === 400) {

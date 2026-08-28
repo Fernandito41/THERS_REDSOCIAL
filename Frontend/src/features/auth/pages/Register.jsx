@@ -103,16 +103,16 @@ export default function Register() {
 
     setIsSubmitting(true);
     try {
-      // TODO BACKEND: el formulario ya recolecta username, teléfono
-      // (countryCode + phone) y fecha de nacimiento (birthDate, ISO
-      // yyyy-mm-dd), pero el contrato actual de POST /api/register
-      // (API_CONTRACT.md §4.1) solo acepta { name, email, password } -- esa
-      // es la única entidad ratificada de `users` hoy (DATABASE_ARCHITECTURE.md
-      // §4.A). Enviar campos que el backend no espera no los persistiría, así
-      // que se mantiene el contrato actual sin romperlo. Cuando Backend
-      // documente el contrato ampliado en API_CONTRACT.md, agregar acá:
-      //   phone: `${form.countryCode}${form.phone.trim()}`, birthDate: form.birthDate, username: form.username.trim()
-      await register({ name: form.name.trim(), email: form.email.trim(), password: form.password });
+      await register({
+        name: form.name.trim(),
+        username: form.username.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        country_code: form.countryCode,
+        birth_date: form.birthDate,
+        password: form.password,
+        confirm_password: form.confirmPassword,
+      });
       toast.success(t("auth.register.toastSuccess"));
       navigate("/login");
     } catch (error) {

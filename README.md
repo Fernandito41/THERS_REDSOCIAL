@@ -103,10 +103,6 @@ Estado real (no aspiracional): no hay `pyproject.toml` en `backend/` ni herramie
 
 ### 1. Clonar el repositorio
 
-```bash
-git clone <URL_DEL_REPOSITORIO>
-cd THERS_REDSOCIAL_2026
-```
 
 ### 2. Frontend
 

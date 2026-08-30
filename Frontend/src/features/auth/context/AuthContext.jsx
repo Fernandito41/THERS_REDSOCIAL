@@ -16,11 +16,6 @@ function withUsername(user) {
   };
 }
 
-function readStoredUser() {
-  const raw = localStorage.getItem(USER_KEY);
-  return raw ? JSON.parse(raw) : null;
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,16 +78,21 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  // Edición de perfil (nombre/username) sin backend todavía: se actualiza la
-  // misma sesión local que loadCurrentUser() lee, dejando la estructura lista
-  // para reemplazar por una llamada real (ej. PATCH /api/users/me) más adelante.
-  const updateStoredUser = (patch) => {
-    const current = readStoredUser();
-    if (!current) return null;
-    const updated = { ...current, ...patch };
-    localStorage.setItem(USER_KEY, JSON.stringify(updated));
-    setUser(updated);
-    return updated;
+  // Edición de perfil (name/username/phone/country_code/birth_date):
+  // persistida por el backend (ADR-003, API_CONTRACT.md §4.2). La respuesta
+  // de PATCH /api/users/me reemplaza `user` por completo -- misma fuente de
+  // verdad que login()/loadCurrentUser(), nunca un merge parcial local.
+  const updateProfile = async (patch) => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const res = await api.patch("/users/me", patch, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const updatedUser = withUsername(res.data.user);
+
+    localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
+    setUser(updatedUser);
+
+    return updatedUser;
   };
 
   const value = {
@@ -103,7 +103,7 @@ export function AuthProvider({ children }) {
     register,
     logout,
     loadCurrentUser,
-    updateStoredUser,
+    updateProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

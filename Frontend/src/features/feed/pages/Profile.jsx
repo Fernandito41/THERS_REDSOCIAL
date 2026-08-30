@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { IoAdd, IoClose, IoMusicalNotesOutline, IoPencilOutline } from "react-icons/io5";
 import Avatar from "@shared/components/Avatar";
+import { getErrorMessage } from "@shared/lib/api";
+import { useToast } from "@shared/components/Toast";
+import { useLanguage } from "@shared/i18n";
 import MoodBadge from "../components/MoodBadge";
 import CapsuleCard from "../components/CapsuleCard";
 import { MOODS } from "../data/mockData";
@@ -35,6 +38,8 @@ function saveProfile(username, profile) {
 
 export default function Profile() {
   const { currentUser, capsules, followingIds, onUpdateUser } = useOutletContext();
+  const toast = useToast();
+  const { t } = useLanguage();
 
   const [profile, setProfile] = useState(
     () =>
@@ -52,6 +57,7 @@ export default function Profile() {
   const [usernameDraft, setUsernameDraft] = useState(currentUser.username);
   const [bioDraft, setBioDraft] = useState(profile.bio);
   const [interestDraft, setInterestDraft] = useState("");
+  const [isSavingIdentity, setIsSavingIdentity] = useState(false);
 
   const update = (patch) => {
     setProfile((prev) => {
@@ -68,30 +74,40 @@ export default function Profile() {
     setEditingIdentity(true);
   };
 
-  // Sin backend todavía para persistir esto (DATABASE_ARCHITECTURE.md §4.B) --
-  // se actualiza la sesión local real (mismo AuthProvider que expone `user`) y,
-  // si cambia el username, se migra la clave del perfil extendido con él para
-  // no perder bio/mood/intereses ya guardados.
-  const handleSaveIdentity = (e) => {
+  // name/username están persistidos por el backend (PATCH /api/users/me,
+  // ADR-003) -- onUpdateUser() es AuthContext.updateProfile(), única fuente
+  // de escritura para esos campos. bio sigue siendo local (DATABASE_ARCHITECTURE.md
+  // §4.B, sin columna ratificada) y solo se guarda si el PATCH tuvo éxito; si
+  // cambia el username, se migra la clave del perfil extendido con él para no
+  // perder bio/mood/intereses ya guardados.
+  const handleSaveIdentity = async (e) => {
     e.preventDefault();
     const name = nameDraft.trim();
     const username = usernameDraft.trim();
-    if (!name || !username) return;
+    if (!name || !username || isSavingIdentity) return;
 
     const usernameChanged = username !== currentUser.username;
-    onUpdateUser({ name, username });
+    setIsSavingIdentity(true);
 
-    const bio = bioDraft.trim();
-    setProfile((prev) => {
-      const next = { ...prev, bio };
-      if (usernameChanged) {
-        localStorage.removeItem(`thers_profile_${currentUser.username}`);
-      }
-      saveProfile(username, next);
-      return next;
-    });
+    try {
+      await onUpdateUser({ name, username });
 
-    setEditingIdentity(false);
+      const bio = bioDraft.trim();
+      setProfile((prev) => {
+        const next = { ...prev, bio };
+        if (usernameChanged) {
+          localStorage.removeItem(`thers_profile_${currentUser.username}`);
+        }
+        saveProfile(username, next);
+        return next;
+      });
+
+      setEditingIdentity(false);
+    } catch (error) {
+      toast.error(getErrorMessage(error, t));
+    } finally {
+      setIsSavingIdentity(false);
+    }
   };
 
   const ownCapsules = useMemo(() => capsules.filter((c) => c.own), [capsules]);
@@ -185,16 +201,17 @@ export default function Profile() {
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  disabled={!nameDraft.trim() || !usernameDraft.trim()}
+                  disabled={!nameDraft.trim() || !usernameDraft.trim() || isSavingIdentity}
                   className="text-xs font-semibold px-3 py-1.5 rounded-full text-white disabled:opacity-50"
                   style={{ backgroundColor: profile.accent }}
                 >
-                  Guardar cambios
+                  {isSavingIdentity ? "Guardando..." : "Guardar cambios"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditingIdentity(false)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-full border border-line dark:border-line-dark text-muted"
+                  disabled={isSavingIdentity}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-full border border-line dark:border-line-dark text-muted disabled:opacity-50"
                 >
                   Cancelar
                 </button>

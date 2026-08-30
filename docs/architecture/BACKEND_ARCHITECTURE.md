@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/BACKEND_ARCHITECTURE.md` |
-| Versión | 0.11 (Propuesta) |
+| Versión | 0.12 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `HB-001` (Manual de Organización), `REPOSITORY_STRUCTURE.md` §6, `CLAUDE.md` §4/§14, código real de `backend/` |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -23,6 +23,8 @@
 > **v0.8 — auditoría documental integral de THERS, parte 1 (sincronización de §4, sin cambios de código):** corregido §4 ("Flujo de una petición"), que seguía describiendo el flujo pre-persistencia (`validate_user()` contra credenciales hardcodeadas, capas de Repository/PostgreSQL marcadas "NO IMPLEMENTADO") — desactualizado respecto al resto del documento desde v0.6. Verificado con ejecución real: `pytest` (52/52 tests) corrido contra PostgreSQL 16 real en el contenedor `thers_postgres_dev` (puerto local mapeado a 5433) — confirma que la suite completa (`test_auth.py`, `test_users_me.py`, `test_update_profile.py`, `test_username_policy.py`) pasa.
 >
 > **v0.9 — auditoría documental integral de THERS, parte 2 (documentar `PATCH /api/users/me`, hueco real, sin cambios de código):** este documento nunca se actualizó cuando se implementó `PATCH /api/users/me` (`ADR-003-profile-update-contract.md`, commit `ff9c899`) — a diferencia de `API_CONTRACT.md` (v0.5) y `DATABASE_ARCHITECTURE.md` (v0.6/v0.7), que sí lo documentaron el mismo día (`HB-001` §15.1). Se agregan aquí: `domain/auth/username_policy.py` (`can_change_username()`, regla pura de cooldown de 30 días), `domain/auth/repositories.py` gana el método abstracto `update()`, `infrastructure/persistence/repositories/user_repository.py` gana `SQLAlchemyUserRepository.update()` (mismo patrón de traducción de `IntegrityError` que `create()`), `application/auth/update_profile_use_case.py` (nuevo, orquesta la lógica de no-op/cooldown de `username`), `interfaces/routes/user_routes.py` gana `PATCH /users/me` sobre el blueprint `users_bp` existente, migración `b2f4a19c3d7e_add_username_changed_at_to_users.py`. Reflejado en §6, §7, §8, §14, §15, §18, §19.
+>
+> **v0.12 — primera entidad social real: `posts` (`ADR-004-posts-minimal-model.md`):** primera entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B) en pasar a implementada, más allá de `users`. Nuevas capas, mismo patrón ya validado por `auth`/`users`: `domain/posts/validators.py` (`is_valid_content`, máximo 2000 caracteres), `domain/posts/repositories.py` (puerto `PostRepository`), `infrastructure/persistence/models.py` gana `Post` (FK `author_id → users.id`, `ON DELETE CASCADE`), `infrastructure/persistence/repositories/post_repository.py` (`SQLAlchemyPostRepository`), `application/posts/` (`create_post_use_case.py`, `list_posts_use_case.py`, `post_presenter.py`), `interfaces/routes/post_routes.py` (nuevo blueprint `posts_bp`): `POST /api/posts` (crear, whitelist explícita de `content`) y `GET /api/posts` (feed **global** sin filtrar por `follows` — esa relación no existe todavía, límite fijo de 50, sin paginación real). Migración `f3a8c1d9e274_create_posts_table.py`, verificada con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real. `conftest.py` actualizado (`_clean_tables`, antes `_clean_users_table`): con la FK nueva, truncar solo `users` ya no alcanza. 12 pruebas nuevas (`test_posts.py`); suite completa 71/71, ejecutada contra PostgreSQL 16 real. Deliberadamente **no** incluye reacciones, comentarios, hashtags, medios, mood, ubicación, edición/borrado ni paginación real — cada uno queda para su propio ADR (`ADR-004` §Decisiones pendientes). Reflejado en §2, §6, §7, §8, §14, §15, §18, §19.
 >
 > **v0.11 — validación de formato de `email` y longitud mínima de `password` en `POST /api/register` (cierra el pendiente de §9/§19 y `API_CONTRACT.md` §9 ítem 2 — no confundir con §20 ítem 4, "DTOs/schemas", que sigue abierto y es un asunto distinto):** `domain/auth/validators.py` gana `is_valid_email()` (regex básica, sin verificar dominio real) e `is_valid_password()` (`MIN_PASSWORD_LENGTH = 8`) — mismo patrón que los validadores ya existentes, sin librería declarativa nueva. Ambos umbrales son placeholders de producto explícitos y revisables (mismo criterio que `MIN_AGE_YEARS`, `ADR-002` §3), decididos como cambio técnico de bajo impacto (`HB-001` §11) — no alteran arquitectura, esquema, ni ningún endpoint más allá de `register`. 3 pruebas nuevas; suite completa 59/59, ejecutada contra PostgreSQL 16 real. Reflejado en §9, §10, §16, §20.
 >
@@ -137,6 +139,7 @@ El flujo real termina en PostgreSQL, no en `domain/`: cada route (composition ro
 - **Orquestación:** los casos de uso no conocen Flask ni HTTP — reciben primitivos y un objeto `UserRepository` (interfaz de dominio, no la implementación concreta), y devuelven un `dict` o lanzan una excepción de dominio (`EmailAlreadyExistsError`, `UsernameAlreadyExistsError`, `InvalidCredentialsError`, `UserNotFoundError` — ver §7). Esto es coherente con el principio de que `application/` no debería depender del framework de entrada ni de infraestructura concreta.
 - **`user_presenter.py` — nuevo, v0.7:** `application/auth/user_presenter.py` centraliza `to_public_user(user)`, la forma pública compartida del objeto `user` (`id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date`) que devuelven `register`/`login`/`me` — evita duplicar esa construcción en los tres casos de uso.
 - **DTOs / Schemas:** **siguen sin estar definidos** como estrategia general — `user_presenter.py` (arriba) resuelve la duplicación puntual del objeto `user`, no es un framework de DTOs/schemas. Definir una estrategia general (Marshmallow/Pydantic) queda como `PENDIENTE DE APROBACIÓN`.
+- **`posts/` — nuevo, v0.12 (`ADR-004-posts-minimal-model.md`):** primer dominio funcional distinto de `auth`/`users` dentro de `application/`. `create_post(author_id, content, post_repository)` y `list_posts(post_repository, limit=DEFAULT_LIMIT)` (`application/posts/create_post_use_case.py`, `list_posts_use_case.py`) — mismo patrón de inyección de repositorio que `login_user`/`register_user`. `application/posts/post_presenter.py` centraliza `to_public_post(post)` (forma reducida del autor: `id`/`username`/`name`, nunca `email`/`phone`), mismo criterio que `user_presenter.py`.
 
 ---
 
@@ -149,6 +152,7 @@ El flujo real termina en PostgreSQL, no en `domain/`: cada route (composition ro
 - **Username policy — nuevo, v0.9:** `domain/auth/username_policy.py` (`can_change_username(last_changed_at, today=None)`, funciones puras, solo `datetime` de la librería estándar) implementa el cooldown de 30 días entre cambios de `username` ratificado por `ADR-003-profile-update-contract.md` §Evolución futura. `today` es inyectable para tests deterministas sin depender del reloj del sistema.
 - **Lógica actualmente ubicada en domain:** `auth_service.py`, `exceptions.py`, `repositories.py`, `validators.py` y `username_policy.py` (v0.9). Ninguno depende de nada externo (ni Flask, ni SQLAlchemy, ni una base de datos real) — verificado explícitamente en esta auditoría (ningún archivo de `domain/` importa `sqlalchemy` ni `flask`).
 - **Qué NO debe depender del framework:** por diseño de Clean Architecture (la misma que `REPOSITORY_STRUCTURE.md` §6 propone), `domain/` no debe importar Flask, `flask_jwt_extended`, ni ningún detalle de infraestructura (ORM, HTTP, PostgreSQL). El código actual **cumple** esto, incluso tras la integración de persistencia — verificado explícitamente en esta tarea (ningún archivo de `domain/` importa `sqlalchemy` ni `flask`). Mantener esta regla hacia adelante es un requisito de este documento, no una preferencia personal.
+- **`domain/posts/` — nuevo, v0.12 (`ADR-004-posts-minimal-model.md`):** primer dominio funcional de `domain/` distinto de `auth`. `validators.py` (`is_valid_content`, `MAX_CONTENT_LENGTH = 2000`, funciones puras) y `repositories.py` (puerto `PostRepository`, `abc.ABC`, con `create(author_id, content)` y `list_recent(limit)`) — mismo patrón exacto que `domain/auth/`, sin excepciones de dominio propias todavía (no hay ningún caso de error específico de `posts` más allá de validación de formato, que ya vive en la route como el resto de endpoints).
 
 ---
 
@@ -156,7 +160,8 @@ El flujo real termina en PostgreSQL, no en `domain/`: cada route (composition ro
 
 - **Repositories — v0.9:** `app/infrastructure/persistence/repositories/user_repository.py` define `SQLAlchemyUserRepository`, que implementa el puerto `UserRepository` (`domain/auth/repositories.py`, ver §7): `create()` inserta un `User` (con los campos de perfil, `ADR-002`) y traduce `sqlalchemy.exc.IntegrityError` a `EmailAlreadyExistsError` o `UsernameAlreadyExistsError` de dominio, distinguiendo por `constraint_name` del error de PostgreSQL (`ix_users_email` vs `uq_users_username`) en vez de adivinar por texto; `find_by_email()` hace `SELECT` por `email` (case-insensitive, vía `CITEXT`); `find_by_id()` (v0.7) hace `db.session.get(User, user_id)`, usado por `GET /api/users/me`; `update()` (nuevo, v0.9, usado por `PATCH /api/users/me`) hace `setattr` columna por columna solo sobre las claves de `fields` (nunca `**data`/mass assignment — la whitelist ya llega filtrada desde la route), un único `commit()`, mismo patrón de traducción de `IntegrityError` → `UsernameAlreadyExistsError` que `create()`, y `db.session.refresh(user)` antes de devolver el registro actualizado. Es el único módulo del backend que importa `sqlalchemy` para acceso a datos de `users`. Instanciado en `interfaces/routes/auth_routes.py` **y** en `interfaces/routes/user_routes.py` (cada blueprint compone su propio repositorio, ver §14) e inyectado en los casos de uso; `domain/`/`application/` solo conocen el puerto abstracto.
 - **Acceso a PostgreSQL — v0.5, implementado y verificado localmente:** driver instalado (`psycopg[binary]==3.3.4`), `SQLALCHEMY_DATABASE_URI` leída desde `DATABASE_URL` en `config.py`, modelo `User` definido (`app/infrastructure/persistence/models.py`: `id` **UUID** con `DEFAULT gen_random_uuid()` generado **en PostgreSQL** (no en Python), `name` `VARCHAR(120)`, `email` **`CITEXT`** único+indexado (case-insensitive, extensión `citext`), `password_hash` **`TEXT`**, `created_at`/`updated_at` `TIMESTAMPTZ` con `DEFAULT now()` — `updated_at` mantenida por un trigger de PostgreSQL, no por SQLAlchemy). La migración (`a1b2c3d4e5f6_create_users_table.py`, escrita a mano, no autogenerada) crea la extensión `citext`, la tabla y el trigger `trg_users_updated_at`. El flujo modelo→migración→`flask db upgrade` se verificó contra PostgreSQL 16 real vía Docker Compose (`docker-compose.yml`, imagen `postgres:16-alpine`, base `thers_dev`), confirmando el esquema resultante, el comportamiento del trigger y la unicidad case-insensitive de `email` con `psql` — incluyendo un downgrade + upgrade completo y una reconstrucción desde un volumen Docker vacío (`docker compose down -v && docker compose up -d && flask db upgrade`). **Sigue sin haber una base compartida por el equipo o de producción** — esto es una base de desarrollo local reproducible, no un despliegue real.
-- **Migraciones — v0.9:** `backend/migrations/` (Flask-Migrate/Alembic), con tres migraciones: `a1b2c3d4e5f6_create_users_table` (inicial, `email` único), `a1edcbff74d8_add_profile_fields_to_users` (v0.7, `ADR-002`) que agrega `username`/`phone`/`country_code`/`birth_date` con `uq_users_username`, y `b2f4a19c3d7e_add_username_changed_at_to_users` (nuevo, v0.9, `ADR-003`) que agrega `username_changed_at` (`TIMESTAMPTZ`, nullable) — migración aditiva sin backfill, soporta el cooldown de `PATCH /api/users/me`. Las tres verificadas con `flask db upgrade`/`downgrade` — la última, con ejecución real en esta auditoría (`alembic_version` en `thers_test` confirmado en `b2f4a19c3d7e`, cabeza de la cadena).
+- **Migraciones — v0.12:** `backend/migrations/` (Flask-Migrate/Alembic), con cuatro migraciones: `a1b2c3d4e5f6_create_users_table` (inicial, `email` único), `a1edcbff74d8_add_profile_fields_to_users` (v0.7, `ADR-002`), `b2f4a19c3d7e_add_username_changed_at_to_users` (v0.9, `ADR-003`), y `f3a8c1d9e274_create_posts_table` (nueva, v0.12, `ADR-004`) — crea `posts` (FK `author_id → users.id`, `ON DELETE CASCADE`; índice `ix_posts_created_at`, justificado por `GET /api/posts` ordenando por fecha; trigger `trg_posts_updated_at`, reutiliza la función `set_updated_at()` ya creada por la migración inicial, sin duplicarla). Las cuatro verificadas con `flask db upgrade`/`downgrade` — la última, con ejecución real en esta tarea (`alembic_version` en `thers_test` confirmado en `f3a8c1d9e274`, cabeza de la cadena, tras un ciclo completo de downgrade a `b2f4a19c3d7e` y upgrade de vuelta).
+- **`SQLAlchemyPostRepository` — nuevo, v0.12:** `infrastructure/persistence/repositories/post_repository.py`, implementa el puerto `PostRepository` (`domain/posts/repositories.py`, ver §7). `create()` inserta un `Post`, hace `commit()` + `refresh()` para traer `id`/`created_at` generados por PostgreSQL, y resuelve `post.author` antes de que la sesión se cierre. `list_recent(limit)` hace `SELECT ... ORDER BY created_at DESC LIMIT :limit`. El modelo `Post` (`infrastructure/persistence/models.py`) usa `author = db.relationship("User", lazy="joined")` para resolver el autor en el mismo `SELECT` que la lista de posts, evitando N+1.
 - **Separación negocio/persistencia:** `domain/`/`application/` siguen sin conocer SQLAlchemy (regla de dependencia respetada y verificada — ver §7, §17). El repositorio que conecta ambos lados ya está implementado (arriba) siguiendo el patrón Repository con puerto en `domain/` e implementación en `infrastructure/`.
 - **Estado real de los datos hoy — v0.6:** `POST /api/register` y `POST /api/login` ya operan contra `users` real en PostgreSQL — la credencial hardcodeada se eliminó por completo (§7, §9). Verificado con una suite de pruebas de integración contra PostgreSQL 16 real (`backend/tests/test_auth.py`, ver §15) y manualmente vía `psql`.
 
@@ -240,8 +245,8 @@ Estado actual, capa por capa:
 
 Principios generales de diseño de endpoints, basados en lo que los dos endpoints existentes (`POST /api/login`, `POST /api/register`) ya establecen como patrón de facto — **no se define aquí el catálogo completo de endpoints ni su contrato detallado** (eso es `API_CONTRACT.md`), según el alcance explícito de esta tarea:
 
-- **Patrón actualmente observado:** `register`/`login` están en el blueprint `auth_bp` (`interfaces/routes/auth_routes.py`); `GET /api/users/me` (v0.7) y `PATCH /api/users/me` (nuevo, v0.9, `ADR-003`) comparten un blueprint separado, `users_bp` (`interfaces/routes/user_routes.py`) — ambos blueprints montados con prefijo `/api` desde `create_app()`. La separación se hizo porque `/me` no es un endpoint de autenticación en sí (no emite ni valida credenciales, es el primer endpoint protegido) — es el primer caso real de "más de un blueprint", y sugiere organizar por recurso/dominio (`auth` vs `users`), no todo bajo un único blueprint. `PATCH /users/me` confirma el patrón: mismo blueprint que el `GET` del mismo recurso, whitelist explícita de campos extraídos uno por uno con `data.get(...)` (nunca `**data`), reutilizando `domain/auth/validators.py` sin reglas de formato nuevas.
-- **Organización futura:** con dos blueprints ya observados (`auth_bp`, `users_bp`), convertir "un blueprint por dominio funcional" en regla general para futuros endpoints sigue `PENDIENTE DE APROBACIÓN` formal, aunque el patrón de facto ya apunta en esa dirección.
+- **Patrón actualmente observado:** `register`/`login` están en el blueprint `auth_bp` (`interfaces/routes/auth_routes.py`); `GET`/`PATCH /api/users/me` (v0.7/v0.9, `ADR-002`/`ADR-003`) comparten `users_bp` (`interfaces/routes/user_routes.py`); `POST`/`GET /api/posts` (nuevo, v0.12, `ADR-004`) comparten `posts_bp` (`interfaces/routes/post_routes.py`) — los tres blueprints montados con prefijo `/api` desde `create_app()`. Un blueprint por recurso/dominio (`auth`, `users`, `posts`) ya es el patrón de facto con tres casos reales, no solo dos.
+- **Organización futura:** con tres blueprints ya observados (`auth_bp`, `users_bp`, `posts_bp`), "un blueprint por dominio funcional" sigue sin ratificarse formalmente como regla general, aunque el patrón de facto ya apunta claramente en esa dirección — `posts_bp` lo confirma en vez de introducir una variante nueva.
 - Los métodos HTTP se declaran explícitamente por ruta (`methods=["POST"]`), no hay convención documentada todavía sobre verbos para operaciones futuras (GET de colección, PUT/PATCH de actualización, DELETE).
 - Los cuerpos de petición y respuesta son JSON (`request.get_json()` / `jsonify(...)`), sin excepción observada.
 - No existe especificación formal de API (OpenAPI/Swagger) en `/docs` — `CLAUDE.md` §9 y §14 ya lo confirman. `HB-001` §15.1 exige documentar cada endpoint nuevo el mismo día del PR — esa documentación de endpoints, cuando exista, es un artefacto distinto de este documento de arquitectura.
@@ -250,7 +255,8 @@ Principios generales de diseño de endpoints, basados en lo que los dos endpoint
 
 ## 15. Testing
 
-- **Estructura — v0.10:** `backend/tests/` (`conftest.py`, `test_auth.py`, `test_users_me.py`, `test_update_profile.py`, `test_username_policy.py` y `test_error_handlers.py` — este último nuevo, v0.10). **56 pruebas** (52 de v0.9 + 4 nuevas de v0.10) para `POST /api/register`, `POST /api/login`, `GET /api/users/me`, `PATCH /api/users/me` y el manejador global de errores, corridas contra PostgreSQL 16 real en Docker (base `thers_test`, separada de `thers_dev`), no contra mocks — **ejecutadas y verificadas en esta auditoría** (`pytest -v`, 56 passed, 0 failed, 0 skipped, 0 warnings). `test_error_handlers.py` (v0.10) cubre: `404` en una URL sin ruta, `405` en un verbo no permitido, `400` ante un body no-JSON (hallazgo real: `request.get_json()` sin `silent=True` en `auth_routes.py`), y `500` ante una excepción forzada con `monkeypatch` sobre `SQLAlchemyUserRepository.find_by_id` en un flujo real (`GET /api/users/me` con JWT válido, sin agregar ninguna ruta insegura solo para el test) — verificando que la respuesta nunca exponga traceback, el tipo/mensaje real de la excepción, ni datos sensibles. `test_auth.py` cubre además (v0.7): duplicidad de `username`, validación de formato de `username`/`phone`/`country_code`/`birth_date`, edad mínima, y `confirm_password` no coincidente. `test_users_me.py` cubre: token válido (200), sin token (401), token inválido (401), token expirado (401), usuario inexistente (404), forma de la respuesta pública, y no exposición de campos sensibles. `test_update_profile.py` (v0.9) cubre: actualización parcial de cada campo editable, whitelist (campos no reconocidos ignorados), `phone`/`country_code` como par atómico, `404`/`409`/cooldown de `username` (`400`), body vacío (`400`), sin token (`401`), no exposición de campos sensibles. `test_username_policy.py` (v0.9) cubre `can_change_username()` de forma puramente unitaria (sin base de datos): `None` permite el cambio, dentro/fuera de la ventana de 30 días.
+- **Estructura — v0.12:** `backend/tests/` (`conftest.py`, `test_auth.py`, `test_users_me.py`, `test_update_profile.py`, `test_username_policy.py`, `test_error_handlers.py` y `test_posts.py` — este último nuevo, v0.12). **71 pruebas** (59 de v0.11 + 12 nuevas de v0.12), **ejecutadas y verificadas en esta tarea** (`pytest -v`, 71 passed, 0 failed). `test_posts.py` cubre: creación (autor público correcto, sin token → 401, body vacío/contenido vacío/exceso de 2000 caracteres → 400, contenido de exactamente 2000 caracteres aceptado, `trim()` de espacios, campos no whitelisted ignorados — `author_id`/`id` del body nunca se usan) y listado (sin token → 401, orden por fecha descendente, posts de todos los autores visibles — feed global, lista vacía si no hay posts). `conftest.py` actualizado: la fixture de limpieza (renombrada `_clean_tables`, antes `_clean_users_table`) ahora trunca `posts` junto con `users` en la misma sentencia — con la FK nueva, truncar solo `users` falla si hay posts dependientes.
+- **Estructura — v0.10 (histórico):** `backend/tests/` (`conftest.py`, `test_auth.py`, `test_users_me.py`, `test_update_profile.py`, `test_username_policy.py` y `test_error_handlers.py` — este último nuevo, v0.10). **56 pruebas** (52 de v0.9 + 4 nuevas de v0.10) para `POST /api/register`, `POST /api/login`, `GET /api/users/me`, `PATCH /api/users/me` y el manejador global de errores, corridas contra PostgreSQL 16 real en Docker (base `thers_test`, separada de `thers_dev`), no contra mocks — **ejecutadas y verificadas en esta auditoría** (`pytest -v`, 56 passed, 0 failed, 0 skipped, 0 warnings). `test_error_handlers.py` (v0.10) cubre: `404` en una URL sin ruta, `405` en un verbo no permitido, `400` ante un body no-JSON (hallazgo real: `request.get_json()` sin `silent=True` en `auth_routes.py`), y `500` ante una excepción forzada con `monkeypatch` sobre `SQLAlchemyUserRepository.find_by_id` en un flujo real (`GET /api/users/me` con JWT válido, sin agregar ninguna ruta insegura solo para el test) — verificando que la respuesta nunca exponga traceback, el tipo/mensaje real de la excepción, ni datos sensibles. `test_auth.py` cubre además (v0.7): duplicidad de `username`, validación de formato de `username`/`phone`/`country_code`/`birth_date`, edad mínima, y `confirm_password` no coincidente. `test_users_me.py` cubre: token válido (200), sin token (401), token inválido (401), token expirado (401), usuario inexistente (404), forma de la respuesta pública, y no exposición de campos sensibles. `test_update_profile.py` (v0.9) cubre: actualización parcial de cada campo editable, whitelist (campos no reconocidos ignorados), `phone`/`country_code` como par atómico, `404`/`409`/cooldown de `username` (`400`), body vacío (`400`), sin token (`401`), no exposición de campos sensibles. `test_username_policy.py` (v0.9) cubre `can_change_username()` de forma puramente unitaria (sin base de datos): `None` permite el cambio, dentro/fuera de la ventana de 30 días.
 - **Framework — elegido pragmáticamente en esta tarea, sin ratificación formal:** `pytest==8.3.4`, en `backend/requirements-dev.txt` (separado de `requirements.txt`, que sigue listando solo dependencias de producción). **`PENDIENTE DE APROBACIÓN`** (sección 20): esta elección resuelve la necesidad inmediata de probar `register`/`login`, pero el Comité Técnico no la ratificó formalmente como el framework oficial del proyecto — es el estándar de facto para Flask, no una decisión inventada, pero tampoco un ADR.
 - **Unit tests / Integration tests / API tests:** las 13 pruebas actuales son de integración (HTTP + base de datos real vía `Flask.test_client()`), no hay pruebas unitarias puras de `domain/` todavía (serían triviales dado que `hash_password`/`verify_password` son envoltorios directos de `werkzeug.security`). Ampliar la estrategia a otras capas/flujos sigue `PENDIENTE DE APROBACIÓN`.
 
@@ -307,44 +313,56 @@ backend/
 │   │   └── routes/
 │   │       ├── __init__.py          # (corregido — ver hallazgo sección 3)
 │   │       ├── auth_routes.py        # register + login, composition root (ver sección 17)
-│   │       └── user_routes.py        # IMPLEMENTADO — v0.7/v0.9: GET/PATCH /api/users/me, blueprint users_bp
+│   │       ├── user_routes.py        # IMPLEMENTADO — v0.7/v0.9: GET/PATCH /api/users/me, blueprint users_bp
+│   │       └── post_routes.py        # IMPLEMENTADO — v0.12: POST/GET /api/posts, blueprint posts_bp (ADR-004)
 │   ├── application/
-│   │   └── auth/
+│   │   ├── auth/
+│   │   │   ├── __init__.py
+│   │   │   ├── login_use_case.py
+│   │   │   ├── register_use_case.py  # IMPLEMENTADO — v0.7 (firma ampliada, ADR-002)
+│   │   │   ├── get_current_user_use_case.py  # IMPLEMENTADO — v0.7
+│   │   │   ├── update_profile_use_case.py    # IMPLEMENTADO — v0.9 (ADR-003)
+│   │   │   ├── user_presenter.py     # IMPLEMENTADO — v0.7 (to_public_user, compartido)
+│   │   │   └── dtos.py               # PROPUESTA — no existe hoy
+│   │   └── posts/                    # IMPLEMENTADO — v0.12 (ADR-004)
 │   │       ├── __init__.py
-│   │       ├── login_use_case.py
-│   │       ├── register_use_case.py  # IMPLEMENTADO — v0.7 (firma ampliada, ADR-002)
-│   │       ├── get_current_user_use_case.py  # IMPLEMENTADO — v0.7
-│   │       ├── update_profile_use_case.py    # IMPLEMENTADO — v0.9 (ADR-003)
-│   │       ├── user_presenter.py     # IMPLEMENTADO — v0.7 (to_public_user, compartido)
-│   │       └── dtos.py               # PROPUESTA — no existe hoy
+│   │       ├── create_post_use_case.py
+│   │       ├── list_posts_use_case.py
+│   │       └── post_presenter.py     # to_public_post, mismo patrón que user_presenter.py
 │   ├── domain/
-│   │   └── auth/
+│   │   ├── auth/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth_service.py       # hash_password / verify_password — v0.6
+│   │   │   ├── exceptions.py         # IMPLEMENTADO — v0.9 (+ UsernameChangeNotAllowedError)
+│   │   │   ├── repositories.py       # IMPLEMENTADO — v0.9 (puerto UserRepository, + update())
+│   │   │   ├── validators.py         # IMPLEMENTADO — v0.7 (ADR-002)
+│   │   │   ├── username_policy.py    # IMPLEMENTADO — v0.9 (can_change_username, ADR-003)
+│   │   │   └── entities.py           # PROPUESTA — no existe hoy
+│   │   └── posts/                    # IMPLEMENTADO — v0.12 (ADR-004)
 │   │       ├── __init__.py
-│   │       ├── auth_service.py       # hash_password / verify_password — v0.6
-│   │       ├── exceptions.py         # IMPLEMENTADO — v0.9 (+ UsernameChangeNotAllowedError)
-│   │       ├── repositories.py       # IMPLEMENTADO — v0.9 (puerto UserRepository, + update())
-│   │       ├── validators.py         # IMPLEMENTADO — v0.7 (ADR-002)
-│   │       ├── username_policy.py    # IMPLEMENTADO — v0.9 (can_change_username, ADR-003)
-│   │       └── entities.py           # PROPUESTA — no existe hoy
+│   │       ├── validators.py         # is_valid_content, MAX_CONTENT_LENGTH
+│   │       └── repositories.py       # puerto PostRepository
 │   ├── infrastructure/
 │   │   └── persistence/
 │   │       ├── __init__.py
-│   │       ├── models.py             # IMPLEMENTADO — v0.9 (+ username_changed_at, ADR-003)
+│   │       ├── models.py             # IMPLEMENTADO — v0.12 (+ modelo Post, ADR-004)
 │   │       └── repositories/
 │   │           ├── __init__.py       # IMPLEMENTADO — v0.6
-│   │           └── user_repository.py  # IMPLEMENTADO — v0.9 (SQLAlchemyUserRepository, + update())
+│   │           ├── user_repository.py  # IMPLEMENTADO — v0.9 (SQLAlchemyUserRepository, + update())
+│   │           └── post_repository.py  # IMPLEMENTADO — v0.12 (SQLAlchemyPostRepository, ADR-004)
 │   ├── config.py
 │   ├── extensions.py                  # v0.7: + callbacks de error JWT (ver sección 9)
 │   └── __init__.py
-├── tests/                             # IMPLEMENTADO — v0.9 (ver sección 15)
+├── tests/                             # IMPLEMENTADO — v0.12 (ver sección 15)
 │   ├── __init__.py
 │   ├── conftest.py
 │   ├── test_auth.py
 │   ├── test_users_me.py               # IMPLEMENTADO — v0.7
 │   ├── test_update_profile.py         # IMPLEMENTADO — v0.9
 │   ├── test_username_policy.py        # IMPLEMENTADO — v0.9
-│   └── test_error_handlers.py         # IMPLEMENTADO — v0.10
-├── migrations/                        # IMPLEMENTADO — v0.9 (ver sección 8, 3 migraciones)
+│   ├── test_error_handlers.py         # IMPLEMENTADO — v0.10
+│   └── test_posts.py                  # IMPLEMENTADO — v0.12 (ADR-004)
+├── migrations/                        # IMPLEMENTADO — v0.12 (ver sección 8, 4 migraciones)
 ├── run.py
 ├── requirements.txt                   # IMPLEMENTADO — ver sección 2 y 19
 ├── requirements-dev.txt               # IMPLEMENTADO — v0.6 (pytest, ver sección 15)
@@ -358,6 +376,7 @@ Todo lo marcado `PROPUESTA` (`dtos.py`, `entities.py`) es una sugerencia de evol
 ## 19. Estado actual
 
 ### IMPLEMENTADO
+- **v0.12 — primera entidad social real, `posts` (`ADR-004-posts-minimal-model.md`):** `POST`/`GET /api/posts` (`interfaces/routes/post_routes.py`, blueprint `posts_bp`) — crear un post de solo texto y listar el feed global (todos los autores, sin `follows`, límite fijo de 50, sin paginación real). Capas `domain/posts/`, `application/posts/`, `infrastructure/persistence/repositories/post_repository.py` siguiendo exactamente el mismo patrón que `auth`/`users`. Migración `f3a8c1d9e274` (FK `author_id → users.id` `ON DELETE CASCADE`). Deliberadamente sin reacciones, comentarios, hashtags, medios, mood, ubicación, edición/borrado (`ADR-004` §No objetivos, cada uno queda para su propio ADR). 12 pruebas nuevas; suite completa 71/71, **ejecutada y verificada en esta tarea** contra PostgreSQL 16 real, incluido un ciclo `flask db upgrade`/`downgrade`. Documentado el mismo día en `API_CONTRACT.md` §4.3 v0.8 (`HB-001` §15.1). El Frontend (`Home.jsx`) todavía no consume este contrato — sigue mostrando `mockCapsules`; conectarlo es una tarea de Frontend aparte.
 - Application factory (`create_app()`) con Flask 3.1.3.
 - Arquitectura por capas mínima: `interfaces/routes/` → `application/` → `domain/`, con un único flujo end-to-end (`login`).
 - CORS habilitado globalmente.

@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.6 |
+| Versión | 0.7 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -19,6 +19,8 @@
 > **v0.5 — columnas de perfil ratificadas por ADR (THERS Backend Fase 2.1).** `username`, `phone`, `country_code` y `birth_date` pasan de **OBJETIVO** (§4.B) a **IMPLEMENTADAS** en `users`, ratificado por `ADR-002-user-profile-fields.md` — el ADR que esta misma sección (v0.2–v0.4) ya pedía antes de tocar el esquema. Migración `a1edcbff74d8_add_profile_fields_to_users.py`, verificada con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real (`thers_dev`, Docker) y con 27 pruebas de integración (`backend/tests/`). `username` es único (`uq_users_username`) pero **no** usa `CITEXT` (a diferencia de `email`) — decisión explícita en `ADR-002` §3, no una omisión. `avatar_url`/`bio` (§4.B) siguen sin ratificar. Reflejado en §4.A, §4.B y §5.
 >
 > **v0.6 — soporte de cooldown para `PATCH /api/users/me` (THERS Backend, `ADR-003-profile-update-contract.md`).** `users` gana `username_changed_at` (`TIMESTAMPTZ`, nullable), migración aditiva `b2f4a19c3d7e_add_username_changed_at_to_users.py`, verificada con `flask db upgrade`/`downgrade` repetidos contra PostgreSQL 16 real (`thers_dev`, Docker) y con la suite completa de pruebas (`backend/tests/`, 52 pruebas). `NULL` significa "nunca cambió su username" — sin backfill, ningún usuario existente pudo cambiar su username antes de esta tarea. `ADR-003` decidió explícitamente **no** crear ninguna columna nueva más allá de esta (`bio`/`avatar_url` siguen sin ratificar, `email`/`password` quedan fuera del contrato de `PATCH`). Reflejado en §5.
+>
+> **v0.7 — auditoría documental integral de THERS (corrección de un hallazgo obsoleto, sin cambios de esquema).** §11 y §14 seguían advirtiendo `JWT_SECRET_KEY = "super-secret-key"` **hardcodeado** en `backend/app/config.py` como hallazgo de seguridad abierto — ya corregido desde `BACKEND_ARCHITECTURE.md` v0.2 (lee `os.environ.get("JWT_SECRET_KEY")`, con un fallback de desarrollo explícitamente inseguro advertido por `stderr`, nunca un literal hardcodeado). El propio `ADR-003-profile-update-contract.md` (§Estado actual) ya había señalado esta desincronización entre documentos hermanos sin corregirla, por estar fuera de su alcance. Verificado en esta auditoría releyendo `backend/app/config.py` línea por línea. Ningún esquema, entidad ni columna cambió — solo se sincronizaron §11 y §14 con el código real.
 
 ---
 
@@ -319,7 +321,7 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 - **Acceso.** El backend accede a la base con un usuario de base de datos de privilegios acotados. La política concreta de roles/privilegios de PostgreSQL es **PENDIENTE** (depende de DevOps, no especificado).
 - **Datos sensibles.** Hoy el único dato sensible identificado es la credencial de acceso del usuario (`password` → `password_hash`). Cualquier dato personal adicional que introduzcan futuras features (y su relación con las políticas de `Privacy`/`Cookies` del Frontend) deberá evaluarse cuando esas features existan → **PENDIENTE**.
 
-> ⚠️ **Hallazgo de seguridad en el código actual (fuera del esquema, pero relevante a esta sección).** `backend/app/config.py` define `JWT_SECRET_KEY = "super-secret-key"` **hardcodeado en el repositorio**, lo que contradice `HB-001` §19.1/§20 (no subir secretos). No es un asunto de base de datos y **no se corrige en este documento**, pero se reporta porque toca directamente el principio de seguridad de secretos que este documento hereda. Corrección recomendada en una tarea de backend propia.
+> ✅ **Hallazgo de seguridad resuelto — corregido en v0.7 de este documento.** Versiones anteriores de esta sección advertían `backend/app/config.py` con `JWT_SECRET_KEY = "super-secret-key"` **hardcodeado en el repositorio**. Verificado directamente contra el código real en esta auditoría: `config.py` ya no tiene ningún literal hardcodeado — lee `JWT_SECRET_KEY` de `os.environ.get(...)`, con un valor de desarrollo explícitamente marcado como inseguro (`dev-only-insecure-key-CHANGE-ME`) como único fallback si la variable no está definida, y una advertencia impresa en `stderr` cuando eso ocurre (mismo mecanismo que `BACKEND_ARCHITECTURE.md` §12/§16/§19 ya documentaba como resuelto desde su v0.2). Esta sección quedó desincronizada con esa corrección — ya señalado, sin corregirse, en `ADR-003-profile-update-contract.md` §Estado actual. Sigue **pendiente**, sin cambios: la gestión de secretos para un entorno desplegado (vault, CI/CD) — ver §14.
 
 ---
 
@@ -376,8 +378,8 @@ La lista completa de estructuras candidatas del producto objetivo (con su **form
 - **Ubicación exacta de la capa de repositorios** dentro de la estructura de backend — el modelo ya vive en `backend/app/infrastructure/persistence/models.py`, pero el repositorio que lo conecte con `application/`/`domain/` todavía no existe.
 
 ### Contradicciones / hallazgos reportados (no resueltos aquí)
-- **README raíz dice MySQL** vs. PostgreSQL oficial (§2). Gana `/docs`; corregir el README en tarea aparte.
-- **`JWT_SECRET_KEY` hardcodeado** en `config.py` (§11), contra `HB-001` §19.1/§20. Corregir en tarea de backend aparte.
+- **README raíz dice MySQL** vs. PostgreSQL oficial (§2). Gana `/docs`; corregir el README en tarea aparte. *(Nota v0.7: `CLAUDE.md` §15 ya registra el `README.md` raíz como corregido en una tarea posterior — este documento no verificó esa corrección directamente, se deja la entrada por si el README volviera a divergir.)*
+- ~~`JWT_SECRET_KEY` hardcodeado en `config.py`~~ — **corregido en v0.7 de este documento** (era un hallazgo obsoleto: el código ya lee `JWT_SECRET_KEY` de `os.environ` desde `BACKEND_ARCHITECTURE.md` v0.2; ver §11).
 - ~~`username`/`phone`/`country_code`/`birth_date` en `users`~~ — **resuelto en v0.5** por `ADR-002-user-profile-fields.md` (ver §5). `avatar_url`/`bio` (§4.B › Perfil) **siguen** pendientes de ADR — no cubiertas por `ADR-002`.
 
 ---

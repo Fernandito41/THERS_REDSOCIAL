@@ -4,12 +4,14 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD_OBJETIVO.md` |
 | Identificador propuesto | `DB-003` (acompaña a `DB-001`/`DATABASE_ARCHITECTURE.md` y `DB-002`/`DATABASE_ERD.md`) — **pendiente de ratificación** |
-| Versión | 0.2 |
+| Versión | 0.3 |
 | Estado | **Borrador — PROPUESTA CANDIDATA, no ratificada** |
 | Depende de | `DATABASE_ARCHITECTURE.md` §4.B (fuente directa), `HB-001` §11–12 (ADR) |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
 >  **Esto NO es el esquema de PostgreSQL ni un modelo ratificado.** Es la **visualización de las estructuras candidatas** de la *arquitectura objetivo del producto* (`DATABASE_ARCHITECTURE.md` §4.B). Cada entidad, columna, PK, FK y cardinalidad que aparece aquí es una **hipótesis a ratificar por ADR** (`HB-001` §11–12), no una decisión tomada. No se implementa nada a partir de este documento.
+>
+> **v0.3 — auditoría documental integral de THERS (sincronización, sin cambios de esquema).** `username` en `USERS` seguía marcado `"OBJETIVO"` en el diagrama (§5) pese a que `ADR-002-user-profile-fields.md` ya lo ratificó e implementó (`DATABASE_ARCHITECTURE.md` v0.5, `DATABASE_ERD.md` v0.3) — quedó como candidato en este documento por no haberse sincronizado tras esa ratificación. Se corrige §5/§7 para reflejar que `username` (junto con `phone`/`country_code`/`birth_date`, no representados aquí por ser candidatos desde el inicio, ver `DATABASE_ERD.md`) ya migró de este ERD candidato al ratificado. `avatar_url` sigue como única columna de perfil realmente candidata en este documento.
 
 ---
 
@@ -57,7 +59,7 @@ erDiagram
     USERS {
         identifier id PK
         string email UK
-        string username UK "OBJETIVO"
+        string username UK "RATIFICADA (ADR-002) — ver DATABASE_ERD.md, no candidata"
         string name
         string avatar_url "FORMA PENDIENTE: columna vs entidad media"
         string password_hash
@@ -245,7 +247,7 @@ erDiagram
 
 | Entidad | Estado en §4.B | Propósito | Colapsa (regla "1 feature ≠ 1 tabla") |
 |---|---|---|---|
-| `users` | **RATIFICADA + columnas OBJETIVO** | Cuenta y perfil | username/bio/avatar como columnas objetivo |
+| `users` | **RATIFICADA + columnas OBJETIVO** | Cuenta y perfil | `username`/`phone`/`country_code`/`birth_date` ya ratificadas (`ADR-002`, ver `DATABASE_ERD.md`); `bio`/`avatar_url` siguen como columnas objetivo |
 | `oauth_accounts` | **[FORMA PENDIENTE]** | Login con Google | — |
 | `sessions` / `devices` | OBJETIVO | Sesiones y dispositivos | Auth + Configuración + Seguridad → mismas 2 entidades |
 | `security_events` | **[FORMA PENDIENTE]** | Auditoría condicional | — |

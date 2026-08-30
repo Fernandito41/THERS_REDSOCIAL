@@ -4,12 +4,14 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD.md` |
 | Identificador propuesto | `DB-002` (acompaña a `DB-001` / `DATABASE_ARCHITECTURE.md`) — **pendiente de ratificación** |
-| Versión | 0.2 |
+| Versión | 0.3 |
 | Estado | **Borrador — representa solo el modelo conceptual ratificado hasta hoy** |
 | Depende de | `DATABASE_ARCHITECTURE.md` (fuente de verdad directa), `HB-001`, `REPOSITORY_STRUCTURE.md` |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
->  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado. Al escribirlo, el backend **no tiene base de datos, ni ORM, ni modelos**: la única entidad ratificada es `users` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias.
+>  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). La única entidad ratificada es `users` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>
+> **v0.3 — auditoría documental integral de THERS (sincronización, sin cambios de esquema).** Este ERD seguía dibujando solo las 5 columnas de la migración inicial (`id`, `name`, `email`, `password_hash`, `created_at`/`updated_at`), sin `username`/`phone`/`country_code`/`birth_date` (ratificadas por `ADR-002-user-profile-fields.md`, `DATABASE_ARCHITECTURE.md` v0.5) ni `username_changed_at` (ratificada por `ADR-003-profile-update-contract.md`, `DATABASE_ARCHITECTURE.md` v0.6) — quedó desactualizado dos ratificaciones por detrás de su propia fuente de verdad (§2 de este documento). La "contradicción detectada" que §8 registraba (username/teléfono confirmados en el alcance funcional pero no dibujados) ya no aplica: `username`/`phone`/`country_code`/`birth_date` migraron de candidatos a ratificados: se corrige el diagrama (§3) y §7/§8 más abajo. `avatar_url`/`bio` siguen sin ratificar y **no** se agregan aquí.
 
 ---
 
@@ -40,8 +42,13 @@ erDiagram
     USERS {
         uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
         varchar_120 name "NOT NULL"
+        varchar_30 username UK "NOT NULL — case-sensitive (ADR-002)"
         citext email UK "NOT NULL — case-insensitive, identificador de login"
+        varchar_20 phone "NOT NULL — junto con country_code (ADR-002)"
+        varchar_6 country_code "NOT NULL (ADR-002)"
+        date birth_date "NOT NULL — edad mínima 13 años (ADR-002)"
         text password_hash "NOT NULL — nunca en claro"
+        timestamptz username_changed_at "NULLABLE — soporta cooldown de 30 días (ADR-003), nunca expuesta en la API"
         timestamptz created_at "NOT NULL, DEFAULT now()"
         timestamptz updated_at "NOT NULL, DEFAULT now(), mantenida por trigger"
     }
@@ -49,7 +56,11 @@ erDiagram
 
 > **Nota sobre el tipo de `id`:** UUID con `DEFAULT gen_random_uuid()` a nivel de PostgreSQL (función nativa desde PostgreSQL 13, sin extensión adicional), implementado en `backend/app/infrastructure/persistence/models.py` y en la migración `a1b2c3d4e5f6_create_users_table.py` (`DATABASE_ARCHITECTURE.md` §5). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend.
 >
+> **Nota sobre `username`/`phone`/`country_code`/`birth_date` (v0.3, `ADR-002-user-profile-fields.md`):** `username` es **case-sensitive** (a diferencia de `email`) — decisión explícita, ningún flujo hoy requiere comparación case-insensitive. `phone`/`country_code` representan un único dato lógico (teléfono internacional) y no llevan constraint de unicidad. `birth_date` se valida con edad mínima de 13 años en el backend (`domain/auth/validators.py`).
+>
 > **Nota sobre `email`:** tipo `CITEXT` (extensión `citext` de PostgreSQL, creada por la propia migración) — el `UNIQUE` es case-insensitive a nivel de motor.
+>
+> **Nota sobre `username_changed_at` (v0.3, `ADR-003-profile-update-contract.md`):** sostiene el cooldown de 30 días entre cambios de `username` vía `PATCH /api/users/me` (`domain/auth/username_policy.py`). `NULL` significa "nunca cambió su username". Es un dato **interno** — nunca cruza la frontera HTTP (`API_CONTRACT.md` §5), por eso no se expone junto a las demás columnas en ningún endpoint público.
 >
 > **Nota sobre `updated_at`:** actualizada por un trigger de PostgreSQL (`set_updated_at`/`trg_users_updated_at`), no por la capa de aplicación — se mantiene correcta incluso ante `UPDATE`s hechos por SQL directo.
 
@@ -80,12 +91,14 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 
 | Entidad | Estado | Justificación | Atributos (según `DATABASE_ARCHITECTURE.md` §5) |
 |---|---|---|---|
-| `users` |  Ratificada | Registro recolecta `name`/`email`/`password`; login autentica por `email`; el backend ya devuelve `{ email, name }` | `id` UUID (PK), `name` VARCHAR(120), `email` CITEXT (UK), `password_hash` TEXT, `created_at`/`updated_at` TIMESTAMPTZ |
+| `users` |  Ratificada | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`; login autentica por `email`; `GET`/`PATCH /api/users/me` leen y actualizan el mismo registro | `id` UUID (PK), `name` VARCHAR(120), `username` VARCHAR(30) (UK), `email` CITEXT (UK), `phone` VARCHAR(20), `country_code` VARCHAR(6), `birth_date` DATE, `password_hash` TEXT, `username_changed_at` TIMESTAMPTZ (nullable, interna), `created_at`/`updated_at` TIMESTAMPTZ |
 
 **Constraints relevantes de `users`:**
-- `email`: **UNIQUE** (case-insensitive, vía `CITEXT`) + **NOT NULL** (login por email; genera el único índice justificado, `DATABASE_ARCHITECTURE.md` §8).
-- `name`: **NOT NULL** (el formulario de registro lo exige).
+- `email`: **UNIQUE** (case-insensitive, vía `CITEXT`) + **NOT NULL** (login por email; genera un índice justificado, `DATABASE_ARCHITECTURE.md` §8).
+- `username`: **UNIQUE** (`uq_users_username`, case-sensitive) + **NOT NULL** (`ADR-002`; genera el otro índice justificado, `DATABASE_ARCHITECTURE.md` §8).
+- `name`, `phone`, `country_code`, `birth_date`: **NOT NULL** (el formulario de registro los exige; formato validado en el backend).
 - `password_hash`: **NOT NULL** (nunca se almacena la contraseña en claro).
+- `username_changed_at`: nullable — soporta el cooldown de 30 días de `PATCH /api/users/me` (`ADR-003`), no forma parte del contrato HTTP público.
 
 No se añaden columnas adicionales solo para "completar" el diagrama (regla explícita de esta tarea).
 
@@ -103,7 +116,7 @@ Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHI
 
 - El diagrama contiene **exactamente** las entidades y columnas que `DATABASE_ARCHITECTURE.md` ratifica — ni una más.
 - No se modeló ninguna entidad "por ser común en redes sociales" (regla 1).
-- No se añadieron `username`, `avatar`, `bio`, `phone` a `users` pese a estar en el alcance funcional confirmado, porque `DATABASE_ARCHITECTURE.md` §5 los mantiene PENDIENTES y prohíbe añadirlos por inferencia. Ver contradicción en §8.
+- `username`, `phone`, `country_code`, `birth_date` (v0.3, `ADR-002-user-profile-fields.md`) y `username_changed_at` (v0.3, `ADR-003-profile-update-contract.md`) **sí** se dibujan ahora — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia (misma regla que antes). Ver §8 (contradicción ya cerrada).
 
 ---
 
@@ -111,15 +124,15 @@ Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHI
 
 El alcance funcional confirmado por el equipo se traduce aquí a **entidades candidatas** que **aún no se modelan** en el diagrama. Cada grupo requiere ratificación como ADR (`HB-001` §11–12) y su incorporación previa a `DATABASE_ARCHITECTURE.md` antes de dibujarse. La lista **no** es un esquema aprobado: es el mapa de lo que falta decidir.
 
-###  Contradicción detectada — no resuelta aquí
-El equipo **confirma** un alcance funcional amplio (incluida la sección **PERFIL**: `username`, foto de perfil, biografía). Sin embargo, la fuente de verdad de esta tarea (`DATABASE_ARCHITECTURE.md`) **solo ratifica `users`** con `name/email/password_hash/timestamps`, y su §5 marca `username`/teléfono como **PENDIENTES, a no añadir por inferencia**. Por la jerarquía de fuentes, el ERD **no** los añade y reporta el desajuste. **Acción requerida:** actualizar `DATABASE_ARCHITECTURE.md` vía ADR para incorporar los campos/entidades del alcance confirmado; recién entonces este ERD podrá crecer. **PENDIENTE DE APROBACIÓN.**
+### Contradicción histórica — cerrada en v0.3
+Versiones anteriores de este documento (hasta v0.2) registraban aquí una contradicción: el alcance funcional confirmaba `username`/teléfono en **PERFIL**, pero `DATABASE_ARCHITECTURE.md` solo ratificaba `name/email/password_hash/timestamps` y marcaba esas columnas como pendientes de ADR. `ADR-002-user-profile-fields.md` (`username`/`phone`/`country_code`/`birth_date`) y `ADR-003-profile-update-contract.md` (`username_changed_at`) resolvieron exactamente esa pendiente — el diagrama (§3) ya las incorpora. `avatar_url`/`bio` (mismo bloque **PERFIL**) siguen sin su propio ADR y **no** se dibujan todavía.
 
 ### Entidades candidatas por dominio (no modeladas)
 
 | Dominio funcional confirmado | Entidades candidatas (a ratificar) | Nota |
 |---|---|---|
 | **Autenticación y cuenta** | `oauth_accounts` (login con Google), `email_verifications`, `password_resets`, `account_status`/desactivación | El registro persistente aún no existe en backend |
-| **Perfil** | Columnas en `users`: `username` (UK), `avatar_url`, `bio` | ⚠️ Contradice `DATABASE_ARCHITECTURE.md` §5 (ver arriba) |
+| **Perfil** | Columnas en `users`: `avatar_url`, `bio` (`username`/`phone`/`country_code`/`birth_date` ya ratificadas, ver §3/§5) | Pendiente de ADR propio — no cubiertas por `ADR-002` ni `ADR-003` |
 | **Configuración** | `user_settings` (privacidad, seguridad, preferencias), `notification_preferences`, `blocked_users`, gestión de datos | — |
 | **Contenido** | `posts`, `media` (fotos/videos/reels), reglas de `visibility` | La ruta `/feed` es hoy un stub de UI sin entidad |
 | **Interacciones** | `reactions`/`likes`, `comments` (auto-referencia para respuestas), `saves`, `mentions`, `hashtags`, `post_hashtags` (puente) | Relaciones N:N requieren tablas puente |

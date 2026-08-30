@@ -28,7 +28,7 @@ export default function AppShell() {
   // ProtectedRoute (app/router/ProtectedRoute.jsx), que envuelve esta rama de
   // rutas y solo renderiza AppShell cuando isAuthenticated es true. Acá solo
   // se consume el usuario ya resuelto por AuthProvider.
-  const { user: currentUser, updateStoredUser, logout } = useAuth();
+  const { user: currentUser, updateProfile, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { t } = useLanguage();
 
@@ -59,12 +59,6 @@ export default function AppShell() {
 
   const handleMarkAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
-
-  // updateStoredUser ya actualiza el estado de AuthProvider internamente --
-  // no hace falta duplicar ese estado acá.
-  const handleUpdateUser = (patch) => {
-    updateStoredUser(patch);
   };
 
   const handleLogout = () => {
@@ -225,7 +219,7 @@ export default function AppShell() {
               onToggleFollow: handleToggleFollow,
               onMarkRead: handleMarkRead,
               onMarkAllRead: handleMarkAllRead,
-              onUpdateUser: handleUpdateUser,
+              onUpdateUser: updateProfile,
               onOpenComposer: () => setComposerOpen(true),
             }}
           />

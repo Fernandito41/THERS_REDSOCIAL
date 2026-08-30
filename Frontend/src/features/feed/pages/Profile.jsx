@@ -110,7 +110,12 @@ export default function Profile() {
     }
   };
 
-  const ownCapsules = useMemo(() => capsules.filter((c) => c.own), [capsules]);
+  // `capsules` ahora son posts reales (GET /api/posts, ADR-004-posts-minimal-model.md)
+  // -- ya no traen `own`, el autor se identifica por `author.id` contra el usuario actual.
+  const ownCapsules = useMemo(
+    () => capsules.filter((c) => c.author.id === currentUser.id),
+    [capsules, currentUser.id]
+  );
   const featured = ownCapsules[0] || null;
 
   const addInterest = (e) => {
@@ -332,7 +337,7 @@ export default function Profile() {
           Cápsula destacada
         </h2>
         {featured ? (
-          <CapsuleCard capsule={featured} currentUser={currentUser} />
+          <CapsuleCard capsule={featured} />
         ) : (
           <div className="bg-surface dark:bg-surface-dark border border-dashed border-line dark:border-line-dark rounded-[24px] p-8 text-center text-muted text-sm">
             Crea tu primera Cápsula para destacarla en tu perfil.

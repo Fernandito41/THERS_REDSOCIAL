@@ -9,7 +9,10 @@ from app.domain.auth.exceptions import (
     UsernameAlreadyExistsError,
 )
 from app.domain.auth.validators import (
+    MIN_PASSWORD_LENGTH,
     is_valid_country_code,
+    is_valid_email,
+    is_valid_password,
     is_valid_phone,
     is_valid_username,
     meets_minimum_age,
@@ -66,8 +69,16 @@ def register():
                    "nacimiento, contraseña y confirmación de contraseña son obligatorios"
         }), 400
 
+    if not is_valid_email(email):
+        return jsonify({"msg": "El email no es válido"}), 400
+
     if password != confirm_password:
         return jsonify({"msg": "Las contraseñas no coinciden"}), 400
+
+    if not is_valid_password(password):
+        return jsonify(
+            {"msg": f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres"}
+        ), 400
 
     if not is_valid_username(username):
         return jsonify({"msg": "El username debe tener 3 a 20 caracteres alfanuméricos o guion bajo"}), 400

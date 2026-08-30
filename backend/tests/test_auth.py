@@ -105,6 +105,11 @@ class TestRegister:
         assert "password" not in body
         assert "confirm_password" not in body
 
+    def test_register_invalid_email_returns_400(self, client):
+        response = _register(client, email="no-es-un-email")
+
+        assert response.status_code == 400
+
     def test_register_invalid_username_returns_400(self, client):
         response = _register(client, username="a?")  # muy corto e inválido
 
@@ -134,6 +139,17 @@ class TestRegister:
         response = _register(client, confirm_password="otra-contraseña")
 
         assert response.status_code == 400
+
+    def test_register_password_too_short_returns_400(self, client):
+        response = _register(client, password="short7", confirm_password="short7")  # 6 caracteres
+
+        assert response.status_code == 400
+
+    def test_register_password_at_minimum_length_is_accepted(self, client):
+        eight_chars = "a1234567"
+        response = _register(client, password=eight_chars, confirm_password=eight_chars)
+
+        assert response.status_code == 201
 
 
 class TestLogin:

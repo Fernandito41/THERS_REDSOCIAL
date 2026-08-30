@@ -16,6 +16,9 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
+    from app.interfaces.error_handlers import register_error_handlers
+    register_error_handlers(app)
+
     # Registra los modelos en el metadata de SQLAlchemy para que Flask-Migrate
     # los detecte al autogenerar migraciones (flask db migrate).
     from app.infrastructure.persistence import models  # noqa: F401

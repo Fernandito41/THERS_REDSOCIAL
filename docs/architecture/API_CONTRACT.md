@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.5 (Propuesta) |
+| Versión | 0.7 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -21,6 +21,10 @@
 > **v0.4 — integración real del Frontend (THERS Frontend Fase 2.1):** `Register.jsx` ya envía el payload completo (`name`, `username`, `email`, `phone`, `country_code`, `birth_date`, `password`, `confirm_password`) — el comentario `TODO BACKEND` mencionado arriba fue removido. `AuthContext.jsx` reemplazó su restauración de sesión simulada (leer el último `user` guardado en `localStorage`) por una llamada real a `GET /api/users/me` con el JWT guardado, tanto al montar la aplicación como para toda lectura de la identidad actual; un `401`/`404` limpia la sesión local. Verificado end-to-end contra el backend real (`register` → `login` → `GET /api/users/me`, incluidos los casos sin token y con token inválido) — ver informe de la tarea para el detalle. No cambia ningún contrato de este documento, solo actualiza el estado de la integración del lado del Frontend.
 >
 > **v0.5 — actualización de perfil (THERS Backend, `ADR-003-profile-update-contract.md`):** se agrega `PATCH /api/users/me` (§4.2), primer endpoint de escritura protegido del backend. Permite actualizar `name`, `username`, `phone`+`country_code` y `birth_date` sobre `users` (mismas columnas que `GET /api/users/me` ya expone) — `email`/`password` quedan fuera por decisión explícita de `ADR-003`. `username` está sujeto a un cooldown de 30 días entre cambios (`users.username_changed_at`, migración `b2f4a19c3d7e`). El Frontend (`Profile.jsx`) todavía no consume este endpoint — sigue editando `bio`/`mood`/`interests`/`favoriteTrack` en `localStorage` y `name`/`username` con `updateStoredUser()`; conectar `Profile.jsx` a este contrato queda fuera de alcance de esta tarea, que fue exclusivamente de backend.
+>
+> **v0.6 — manejador global de errores (cierra §9 ítem 1):** `app/interfaces/error_handlers.py` (nuevo, `BACKEND_ARCHITECTURE.md` §11/§18/§19 v0.10) traduce cualquier `404`, `405`, otro `HTTPException` de Werkzeug (incluido un body no-JSON en `POST /api/register`/`POST /api/login`, que antes producía HTML) y cualquier excepción no controlada (`500`) al mismo formato `{"msg": "..."}` que ya usaban los 4 endpoints — **se mantiene ese formato sin cambios**, no se introduce `{"error": {...}}`, así que ningún endpoint existente cambia de contrato. Reflejado en §2 y §3. Verificado con 4 pruebas nuevas + la suite completa (56/56, ejecutada contra PostgreSQL 16 real).
+>
+> **v0.7 — validación de formato de `email` y longitud mínima de `password` en `POST /api/register` (cierra §9 ítem 2):** `domain/auth/validators.py` gana `is_valid_email()` (regex básica, sin verificar dominio real) e `is_valid_password()` (mínimo 8 caracteres, `MIN_PASSWORD_LENGTH`) — mismo patrón que los validadores ya existentes de `username`/`phone`/`country_code`/`birth_date`. Ambos umbrales son placeholders de producto explícitos y revisables (mismo criterio que `MIN_AGE_YEARS`, `ADR-002` §3), decididos como cambio técnico de bajo impacto (`HB-001` §11) por no alterar arquitectura, esquema ni ningún endpoint más allá de `register`. `POST /api/login` y `PATCH /api/users/me` **no cambian** — ninguno de los dos valida formato de credenciales (login no reformatea lo que ya existe; `PATCH` no permite editar `email`/`password`, `ADR-003`). Reflejado en §4.1 y §9. Verificado con 3 pruebas nuevas + la suite completa (59/59, ejecutada contra PostgreSQL 16 real).
 
 ---
 
@@ -50,22 +54,23 @@
 | Versionado de API | **No existe.** No hay prefijo de versión (`/api/v1`) ni ningún mecanismo de versionado — `PENDIENTE DE APROBACIÓN` (§9) |
 | Paginación | **No existe.** Ningún endpoint actual devuelve una colección — `PENDIENTE DE APROBACIÓN` (§9) |
 | CORS | Habilitado globalmente sin restricción de origen (`CORS(app)`, `BACKEND_ARCHITECTURE.md` §13) — responsabilidad del backend, el Frontend no la controla |
+| Manejo global de errores | **v0.6 — implementado.** `app/interfaces/error_handlers.py` (`BACKEND_ARCHITECTURE.md` §11/§18/§19) captura cualquier error no anticipado por una route específica (`404`, `405`, otros `HTTPException`, `500`) y responde con el mismo formato que el resto de la API — ver §3 |
 
 ---
 
 ## 3. Formato de error
 
-**Estado actual observado (no un estándar diseñado, es lo que el único endpoint existente ya produce):**
+**v0.6 — ya aplicado de forma uniforme a toda la API, no solo observado en un endpoint:**
 
 ```json
 { "msg": "<texto del error>" }
 ```
 
-- Usado para validación fallida (`400`) y credenciales inválidas (`401`).
-- No hay campo de código de error machine-readable, ni estructura anidada (`{"error": {"code": ..., "message": ...}}`).
-- No hay manejador global de excepciones (`@app.errorhandler`) registrado en `create_app()` — un `500` o `404` no manejado hoy cae en el comportamiento HTML por defecto de Flask, no en JSON (`BACKEND_ARCHITECTURE.md` §11).
+- Usado para validación fallida (`400`), credenciales inválidas (`401`), recurso no encontrado (`404`), conflicto de unicidad (`409`) — construidos explícitamente por cada route — **y ahora también** para cualquier error no anticipado por ninguna route: `404`/`405` genéricos, cualquier otro `HTTPException` de Werkzeug (p. ej. un body no-JSON en `POST /api/register`/`POST /api/login`, que antes de v0.6 producía HTML en vez de este formato) y `500` (excepción no controlada) — `app/interfaces/error_handlers.py`, `BACKEND_ARCHITECTURE.md` §11.
+- No hay campo de código de error machine-readable, ni estructura anidada (`{"error": {"code": ..., "message": ...}}`) — decisión deliberada de v0.6: mantener el contrato existente en vez de introducir uno nuevo sin necesidad demostrada.
+- **v0.6 — resuelto.** Ya existe un manejador global de excepciones (`@app.errorhandler`, vía `register_error_handlers()`) registrado en `create_app()` — un `500` o `404` no manejado responde `{"msg": "..."}`, nunca el comportamiento HTML por defecto de Flask. El `500` nunca expone traceback, tipo de excepción, ni datos sensibles (`DATABASE_URL`, `JWT_SECRET_KEY`) — verificado por prueba (`backend/tests/test_error_handlers.py`).
 
-**`PENDIENTE DE APROBACIÓN`** (§9): definir un formato de error único para toda la API antes de que existan más endpoints que cada uno improvise el suyo. Este documento no fija ese estándar por iniciativa propia — depende de una decisión de backend (`BACKEND_ARCHITECTURE.md` §20, ítem 5) que este contrato debe reflejar cuando se ratifique, no anticipar.
+Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si el equipo quiere evolucionar `{"msg": "..."}` hacia un formato con código de error machine-readable — no hay ninguna necesidad actual que lo justifique, este documento no lo propone por iniciativa propia.
 
 ---
 
@@ -114,7 +119,7 @@
 
 | Código | Causa | Body |
 |---|---|---|
-| `400` | Body vacío; alguno de `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`/`confirm_password` ausente; `password` ≠ `confirm_password`; `username`/`phone`/`country_code`/`birth_date` con formato inválido; edad menor a 13 años | `{"msg": "..."}` |
+| `400` | Body vacío; alguno de `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`/`confirm_password` ausente; `email` con formato inválido; `password` ≠ `confirm_password`; `password` con menos de 8 caracteres; `username`/`phone`/`country_code`/`birth_date` con formato inválido; edad menor a 13 años | `{"msg": "..."}` |
 | `409` | Ya existe un usuario con ese email (comparación case-insensitive, `CITEXT`) **o** con ese username | `{"msg": "..."}` |
 
 **Notas de implementación:**
@@ -122,7 +127,7 @@
 - `id` lo genera PostgreSQL (`gen_random_uuid()`), nunca Python (`DATABASE_ARCHITECTURE.md` §5).
 - `confirm_password` se valida (debe coincidir con `password`) y **nunca se persiste** — no existe como columna de `users`.
 - Formato validado en el backend (`domain/auth/validators.py`, ver `ADR-002` §3): `username` (`^[a-zA-Z0-9_]{3,20}$`), `phone` (7–15 dígitos), `country_code` (`^\+[1-9]\d{0,3}$`), `birth_date` (ISO válida + edad mínima 13 años).
-- **`PENDIENTE DE APROBACIÓN`** (no decidido en esta tarea, deliberadamente): longitud mínima de contraseña y formato de email válido — sin cambios respecto a v0.2 (§9, ítem 2).
+- **v0.7 — resuelto:** `email` (regex básica `^[^\s@]+@[^\s@]+\.[^\s@]+$`, sin verificar dominio real) y `password` (mínimo `MIN_PASSWORD_LENGTH = 8` caracteres, sin exigir mayúscula/número/símbolo) — ambos placeholders de producto explícitos, revisables (mismo criterio que `MIN_AGE_YEARS`).
 
 #### `POST /api/login`
 
@@ -299,7 +304,7 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 
 ## 8. Qué NO cambia con este documento
 
-- No se ratifica un formato de error nuevo — se documenta el actual (`{"msg": "..."}`) y se señala como pendiente de estandarizar.
+- No se ratifica un formato de error nuevo — el actual (`{"msg": "..."}`) ya se aplica de forma uniforme a toda la API desde v0.6 (§3), sin agregar campos nuevos (código machine-readable) que nadie necesita hoy.
 - No se adopta OpenAPI/Swagger en esta versión.
 - No se define el contrato de ningún endpoint futuro más allá de `/register` y `/login` (ya implementados) — se señala su ausencia, no se inventa su forma.
 
@@ -309,8 +314,8 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 
 Decisiones que este documento **no toma** porque no están respaldadas por código ni por documentación oficial ratificada. Cada una debe resolverse como ADR (`HB-001` §11–12) antes de implementarse:
 
-1. **Formato estándar de error** para toda la API (heredado de `BACKEND_ARCHITECTURE.md` §20, ítem 5 — este documento debe reflejarlo, no decidirlo).
-2. ~~Contrato de `POST /api/register`~~ — **resuelto e implementado**, incluidos los campos de perfil (§4.1, `ADR-002`). Sigue `PENDIENTE`: longitud mínima de contraseña y validación de formato de email (la unicidad de email/username ya está resuelta, la impone el esquema vía `CITEXT UNIQUE`/`uq_users_username`).
+1. ~~Formato estándar de error para toda la API~~ — **avanzado en v0.6** (heredado de `BACKEND_ARCHITECTURE.md` §20, ítem 5): `{"msg": "..."}` ya es el formato aplicado uniformemente, incluidos los casos antes no cubiertos (`404`/`405`/`500` genéricos, §3). Sigue pendiente únicamente si el equipo quiere agregar un código de error machine-readable — no decidido, no necesario hoy.
+2. ~~Contrato de `POST /api/register`~~ — **resuelto e implementado**, incluidos los campos de perfil (§4.1, `ADR-002`). ~~Longitud mínima de contraseña y validación de formato de email~~ — **resuelto en v0.7** (§4.1: `is_valid_email`/`is_valid_password`, `domain/auth/validators.py`) — la unicidad de email/username ya estaba resuelta, la impone el esquema vía `CITEXT UNIQUE`/`uq_users_username`.
 3. **Convención de verbos HTTP** para operaciones futuras (colecciones, borrado). Parcialmente resuelto: `PATCH` es ya el verbo real usado para actualización parcial (`PATCH /api/users/me`, §4.2, `ADR-003`) — sigue sin ratificarse como convención formal para futuros endpoints de escritura.
 4. **Versionado de API** (`/api/v1` u otro mecanismo) — o la decisión explícita de no versionar todavía.
 5. **Paginación** — formato (offset/limit, cursor) para cuando exista el primer endpoint de colección (p. ej. feed).

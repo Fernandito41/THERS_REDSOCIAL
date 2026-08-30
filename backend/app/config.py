@@ -3,6 +3,17 @@ import sys
 
 _DEV_FALLBACK_JWT_SECRET_KEY = "dev-only-insecure-key-CHANGE-ME"
 
+# Antes de que existiera un despliegue real (Render, ver `_normalize_database_url`
+# abajo), que este valor cayera al fallback inseguro solo importaba en un
+# entorno local. Con un despliegue real ya en marcha, un `JWT_SECRET_KEY` sin
+# definir en ese entorno firmaría JWTs con una clave pública (este mismo
+# archivo, en el repositorio) -- cualquiera podría forjar un token válido para
+# cualquier `user_id` y tomar cualquier cuenta. Por eso el fallback dejó de ser
+# automático: hace falta pedirlo explícitamente con esta variable, pensada
+# exclusivamente para desarrollo local -- nunca debe definirse en Render ni en
+# ningún entorno accesible desde internet.
+_ALLOW_INSECURE_JWT_FALLBACK_VAR = "ALLOW_INSECURE_JWT_DEV_FALLBACK"
+
 
 def _normalize_database_url(url):
     # Render (y otros proveedores de PostgreSQL gestionado) entregan la
@@ -25,13 +36,31 @@ class Config:
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 
     if not JWT_SECRET_KEY:
-        JWT_SECRET_KEY = _DEV_FALLBACK_JWT_SECRET_KEY
-        print(
-            "[config] JWT_SECRET_KEY no está definida como variable de entorno; "
-            "usando un valor de desarrollo inseguro. Definir JWT_SECRET_KEY antes de "
-            "cualquier uso fuera de desarrollo local (HB-001 §19.1/§20).",
-            file=sys.stderr,
-        )
+        if os.environ.get(_ALLOW_INSECURE_JWT_FALLBACK_VAR) == "1":
+            JWT_SECRET_KEY = _DEV_FALLBACK_JWT_SECRET_KEY
+            print(
+                "[config] JWT_SECRET_KEY no está definida; usando el valor de "
+                f"desarrollo inseguro porque {_ALLOW_INSECURE_JWT_FALLBACK_VAR}=1 "
+                "lo pidió explícitamente. Nunca definir esa variable fuera de "
+                "desarrollo local (HB-001 §19.1/§20).",
+                file=sys.stderr,
+            )
+        else:
+            # Falla al arrancar la app, no en el primer login -- un secreto
+            # ausente en un entorno desplegado es un hueco de seguridad, no
+            # una advertencia. `backend/.env.example` ya trae
+            # ALLOW_INSECURE_JWT_DEV_FALLBACK=1 para que el flujo de
+            # desarrollo local (`cp .env.example .env`) siga funcionando sin
+            # pasos extra; un despliegue real (Render u otro) nunca debe
+            # copiar ese archivo ni definir esa variable.
+            raise RuntimeError(
+                "JWT_SECRET_KEY no está definida como variable de entorno. "
+                "Esta aplicación ya no arranca con un secreto inseguro por "
+                "defecto (HB-001 §19.1/§20). Para desarrollo local sin una "
+                "clave real, definir explícitamente "
+                f"{_ALLOW_INSECURE_JWT_FALLBACK_VAR}=1 (ver "
+                "backend/.env.example) -- nunca en un entorno desplegado."
+            )
 
     # Conexión a PostgreSQL (ver docs/architecture/DATABASE_ARCHITECTURE.md).
     # No existe un valor de desarrollo "seguro" para sustituir esta variable como

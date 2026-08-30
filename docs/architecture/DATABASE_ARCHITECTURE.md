@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.5 |
+| Versión | 0.6 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -17,6 +17,8 @@
 > **v0.4 — integración de autenticación con persistencia real.** `users` pasó de "modelo implementado pero no conectado" a **en uso real**: `POST /api/register` y `POST /api/login` (`BACKEND_ARCHITECTURE.md` §8/§9, v0.6) ya crean/consultan filas reales, y la credencial hardcodeada (`test@test.com`/`123456`) se eliminó del código por completo. Reflejado en §4 y §5. No se agregó ninguna entidad, columna ni índice nuevo — sigue siendo únicamente `users`, sin cambios de esquema.
 >
 > **v0.5 — columnas de perfil ratificadas por ADR (THERS Backend Fase 2.1).** `username`, `phone`, `country_code` y `birth_date` pasan de **OBJETIVO** (§4.B) a **IMPLEMENTADAS** en `users`, ratificado por `ADR-002-user-profile-fields.md` — el ADR que esta misma sección (v0.2–v0.4) ya pedía antes de tocar el esquema. Migración `a1edcbff74d8_add_profile_fields_to_users.py`, verificada con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real (`thers_dev`, Docker) y con 27 pruebas de integración (`backend/tests/`). `username` es único (`uq_users_username`) pero **no** usa `CITEXT` (a diferencia de `email`) — decisión explícita en `ADR-002` §3, no una omisión. `avatar_url`/`bio` (§4.B) siguen sin ratificar. Reflejado en §4.A, §4.B y §5.
+>
+> **v0.6 — soporte de cooldown para `PATCH /api/users/me` (THERS Backend, `ADR-003-profile-update-contract.md`).** `users` gana `username_changed_at` (`TIMESTAMPTZ`, nullable), migración aditiva `b2f4a19c3d7e_add_username_changed_at_to_users.py`, verificada con `flask db upgrade`/`downgrade` repetidos contra PostgreSQL 16 real (`thers_dev`, Docker) y con la suite completa de pruebas (`backend/tests/`, 52 pruebas). `NULL` significa "nunca cambió su username" — sin backfill, ningún usuario existente pudo cambiar su username antes de esta tarea. `ADR-003` decidió explícitamente **no** crear ninguna columna nueva más allá de esta (`bio`/`avatar_url` siguen sin ratificar, `email`/`password` quedan fuera del contrato de `PATCH`). Reflejado en §5.
 
 ---
 
@@ -97,7 +99,7 @@ Se distingue entre:
 
 | Entidad | Estado | Justificación |
 |---|---|---|
-| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`/`GET /api/users/me`) | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password_hash` reales (columnas de perfil ratificadas por `ADR-002`, v0.5); login autentica consultando `users` por `email`; el backend devuelve el objeto público completo (§5) con datos reales |
+| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`/`GET /api/users/me`/`PATCH /api/users/me`) | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password_hash` reales (columnas de perfil ratificadas por `ADR-002`, v0.5); login autentica consultando `users` por `email`; `PATCH /api/users/me` (`ADR-003`, v0.6) actualiza `name`/`username`/`phone`/`country_code`/`birth_date`, con `username_changed_at` sosteniendo el cooldown de `username`; el backend devuelve el objeto público completo (§5) con datos reales |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -133,7 +135,7 @@ Estados usados en esta capa:
 | Fecha de nacimiento | Columna `users.birth_date` | **IMPLEMENTADA** (v0.5, `ADR-002`) | — |
 | Foto de perfil | Columna `avatar_url` en `users` **o** referencia a entidad `media` | PENDIENTE DE DECISIÓN | URL simple vs entidad de medios, no decidido |
 | Biografía | Columna `bio` en `users` | OBJETIVO | Longitud/tipo a decidir; no añade PK/FK |
-| Edición del perfil | Comportamiento (UPDATE sobre `users`) | OBJETIVO | No añade estructura |
+| Edición del perfil | Comportamiento (UPDATE sobre `users`, `PATCH /api/users/me`) | **IMPLEMENTADA** (v0.6, `ADR-003`) — solo `name`/`username`/`phone`/`country_code`/`birth_date`; `email`/`password` excluidos por decisión explícita del ADR | — |
 
 > ⚠️ **Contradicción registrada en v0.1–v0.4, cerrada en v0.5.** La v0.1 (§5) excluía `username` por no recolectarse en el registro; v0.2–v0.4 la registraron como **columna objetivo**, pendiente de ADR. `ADR-002-user-profile-fields.md` (THERS Backend Fase 2.1) resuelve esa pendiente: `username`, `phone`, `country_code` y `birth_date` pasan a **IMPLEMENTADA** (ver §5). `avatar_url`/`bio` **siguen** como objetivo/pendiente — este ADR no las toca.
 
@@ -221,6 +223,7 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 | `country_code` | `VARCHAR(6)` | No | **v0.5 (`ADR-002`).** Campo `countryCode` recolectado en `Register.jsx` (`PhoneField`, p. ej. `+503`); formato `^\+[1-9]\d{0,3}$` |
 | `birth_date` | `DATE` | No | **v0.5 (`ADR-002`).** Campo `birthDate` recolectado en `Register.jsx` (`BirthDateField`, ISO `yyyy-mm-dd`); edad mínima 13 años validada en el backend (mismo placeholder que ya usaba el Frontend, `dateUtils.js` `MIN_AGE_YEARS`) |
 | `password_hash` | `TEXT` | No | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11) |
+| `username_changed_at` | `TIMESTAMPTZ` | **Sí** | **v0.6 (`ADR-003`).** Marca de tiempo del último cambio de `username` vía `PATCH /api/users/me`; `NULL` significa "nunca cambió su username". Sostiene la regla de cooldown de 30 días (`domain/auth/username_policy.py`) — no se reutiliza `updated_at` porque esa cambia con cualquier campo, no solo con `username`. Nunca se expone en la API pública (`API_CONTRACT.md` §5) |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Convención de auditoría (§7); estándar para toda entidad |
 | `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7). Un trigger de PostgreSQL (`set_updated_at`/`trg_users_updated_at`, ver migración) la actualiza en cada `UPDATE` — funciona igual vía ORM o SQL directo, no depende de que el código de aplicación la toque |
 
@@ -237,9 +240,9 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 **`confirm_password`** se valida en la route (`interfaces/routes/auth_routes.py`, debe coincidir con `password`) y **nunca se persiste** — no existe como columna de `users`, ni siquiera transitoriamente.
 
-**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9). **Ya resueltos:** tipo de PK (UUID, `gen_random_uuid()`), tipo de `email` (`CITEXT`), longitud de `name` (`VARCHAR(120)`), tipo de `password_hash` (`TEXT`), estrategia de `updated_at` (trigger), y desde v0.5 también `username`/`phone`/`country_code`/`birth_date` (`ADR-002`) — ver tabla arriba.
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14): algoritmo de hashing definitivo (sigue usándose `werkzeug.security`/scrypt, ya en uso para la credencial de prueba — ver `BACKEND_ARCHITECTURE.md` §9). **Ya resueltos:** tipo de PK (UUID, `gen_random_uuid()`), tipo de `email` (`CITEXT`), longitud de `name` (`VARCHAR(120)`), tipo de `password_hash` (`TEXT`), estrategia de `updated_at` (trigger), desde v0.5 también `username`/`phone`/`country_code`/`birth_date` (`ADR-002`), y desde v0.6 `username_changed_at` (`ADR-003`) — ver tabla arriba.
 
-> **Actualización v0.2 — reconciliación con el alcance objetivo.** El alcance funcional confirmado por el equipo incorporó `username`, `avatar_url` y `bio` como **columnas OBJETIVO** de `users` (§4.B › Perfil), pendientes de ADR. **Actualización v0.5:** `username` (junto con `phone`/`country_code`/`birth_date`, no anticipadas en v0.2) ya se ratificaron e implementaron por `ADR-002-user-profile-fields.md` — ver tabla arriba. `avatar_url`/`bio` siguen como columnas OBJETIVO, sin ADR propio todavía.
+> **Actualización v0.2 — reconciliación con el alcance objetivo.** El alcance funcional confirmado por el equipo incorporó `username`, `avatar_url` y `bio` como **columnas OBJETIVO** de `users` (§4.B › Perfil), pendientes de ADR. **Actualización v0.5:** `username` (junto con `phone`/`country_code`/`birth_date`, no anticipadas en v0.2) ya se ratificaron e implementaron por `ADR-002-user-profile-fields.md` — ver tabla arriba. **Actualización v0.6:** `username_changed_at` se ratificó e implementó por `ADR-003-profile-update-contract.md`, exclusivamente como soporte de la regla de cooldown de `PATCH /api/users/me` — no era una columna candidata previa en §4.B. `avatar_url`/`bio` siguen como columnas OBJETIVO, sin ADR propio todavía.
 
 ---
 

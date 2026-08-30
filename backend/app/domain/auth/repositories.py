@@ -28,3 +28,17 @@ class UserRepository(ABC):
         """Devuelve el registro de usuario cuyo `id` (UUID) coincide, o
         `None` si no existe. Usado por GET /api/users/me a partir de
         get_jwt_identity() (ADR-002 §3)."""
+
+    @abstractmethod
+    def update(self, user_id, fields):
+        """Actualiza únicamente las columnas presentes en `fields` (dict
+        `{columna: valor}`) para el usuario `user_id`, persiste el cambio
+        (un único commit) y devuelve el registro ya refrescado. Devuelve
+        `None` si el usuario no existe.
+
+        Esta capa NO decide qué campos puede editar el usuario -- la
+        whitelist de campos editables pertenece al contrato/API/caso de uso
+        (ADR-003 §Seguridad — docs/architecture/ADR-003-profile-update-contract.md).
+        Debe lanzar `UsernameAlreadyExistsError` si `fields` incluye
+        `username` y la actualización viola `uq_users_username` (mismo
+        patrón que `create()`)."""

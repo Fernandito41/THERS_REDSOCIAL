@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.4 (Propuesta) |
+| Versión | 0.5 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -19,6 +19,8 @@
 > **v0.3 — perfil completo de registro + primer endpoint protegido (THERS Backend Fase 2.1, `ADR-002`):** `POST /api/register` ahora requiere también `username`, `phone`, `country_code`, `birth_date` y `confirm_password` (ratificado por `ADR-002-user-profile-fields.md`, que cierra la contradicción que `DATABASE_ARCHITECTURE.md` §4.B/§14 tenía registrada sobre estas columnas). `POST /api/login` expone los mismos campos nuevos en su respuesta. Se agrega `GET /api/users/me` — primer endpoint protegido del backend (`@jwt_required()`), documentado en §4.2. El Frontend (`Register.jsx`) ya recolecta estos campos pero todavía no los envía (comentario `TODO BACKEND` en el propio archivo) — esa integración sigue fuera de alcance, exclusivamente de backend igual que v0.2.
 >
 > **v0.4 — integración real del Frontend (THERS Frontend Fase 2.1):** `Register.jsx` ya envía el payload completo (`name`, `username`, `email`, `phone`, `country_code`, `birth_date`, `password`, `confirm_password`) — el comentario `TODO BACKEND` mencionado arriba fue removido. `AuthContext.jsx` reemplazó su restauración de sesión simulada (leer el último `user` guardado en `localStorage`) por una llamada real a `GET /api/users/me` con el JWT guardado, tanto al montar la aplicación como para toda lectura de la identidad actual; un `401`/`404` limpia la sesión local. Verificado end-to-end contra el backend real (`register` → `login` → `GET /api/users/me`, incluidos los casos sin token y con token inválido) — ver informe de la tarea para el detalle. No cambia ningún contrato de este documento, solo actualiza el estado de la integración del lado del Frontend.
+>
+> **v0.5 — actualización de perfil (THERS Backend, `ADR-003-profile-update-contract.md`):** se agrega `PATCH /api/users/me` (§4.2), primer endpoint de escritura protegido del backend. Permite actualizar `name`, `username`, `phone`+`country_code` y `birth_date` sobre `users` (mismas columnas que `GET /api/users/me` ya expone) — `email`/`password` quedan fuera por decisión explícita de `ADR-003`. `username` está sujeto a un cooldown de 30 días entre cambios (`users.username_changed_at`, migración `b2f4a19c3d7e`). El Frontend (`Profile.jsx`) todavía no consume este endpoint — sigue editando `bio`/`mood`/`interests`/`favoriteTrack` en `localStorage` y `name`/`username` con `updateStoredUser()`; conectar `Profile.jsx` a este contrato queda fuera de alcance de esta tarea, que fue exclusivamente de backend.
 
 ---
 
@@ -206,6 +208,65 @@
 - `flask_jwt_extended` distingue por defecto entre `401` (token ausente/expirado) y `422` (token malformado); se homogenizaron los tres casos a `401` con callbacks en `app/extensions.py` (`unauthorized_loader`/`invalid_token_loader`/`expired_token_loader`), para que cualquier endpoint protegido futuro herede el mismo comportamiento sin repetirlo.
 - Nunca expone `password`, `password_hash`, `confirm_password`, `token` ni `secret` en la respuesta.
 
+#### `PATCH /api/users/me`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (THERS Backend, `ADR-003-profile-update-contract.md`) |
+| Blueprint | `users_bp` (`backend/app/interfaces/routes/user_routes.py`), mismo blueprint que `GET /api/users/me` |
+| Auth requerida | **Sí** — `Bearer <jwt>` en el header `Authorization`. Identidad obtenida exclusivamente de `get_jwt_identity()` (`@jwt_required()`) — nunca de query string, body ni headers personalizados. El `user_id` del JWT es siempre el sujeto de la operación, no hay forma de editar el perfil de otro usuario |
+
+**Semántica.** Actualización parcial real (PATCH, no un PUT disfrazado): solo los campos presentes en el body se modifican, los omitidos no se tocan. Un único `db.session.commit()` por request — si varios campos vienen en el mismo `PATCH`, se persisten todos o ninguno. Campos no reconocidos en el body se ignoran silenciosamente — nunca se leen ni se pasan al modelo (whitelist explícita en la route, sin `**data`, sin mass assignment).
+
+**Request body** — todos los campos son opcionales, pero debe llegar al menos uno de la whitelist:
+```json
+{
+  "name": "string (opcional)",
+  "username": "string (opcional, máx. 1 cambio cada 30 días)",
+  "phone": "string (opcional, requiere country_code en el mismo body)",
+  "country_code": "string (opcional, requiere phone en el mismo body)",
+  "birth_date": "string ISO yyyy-mm-dd (opcional)"
+}
+```
+
+Ejemplo mínimo válido — cambiar solo el nombre:
+```json
+{ "name": "Fernando" }
+```
+
+**Campos NO editables por este endpoint** (ADR-003 §Campos editables): `id`, `email`, `password`/`password_hash`, `created_at`, `updated_at` — nunca se leen del body, bajo ninguna circunstancia. `bio`/`avatar_url` no existen todavía como columnas (`DATABASE_ARCHITECTURE.md` §4.B) — no forman parte de este contrato.
+
+**Response — éxito (200)** — mismo objeto público que `GET /api/users/me`, `register` y `login`:
+```json
+{
+  "user": {
+    "id": "string (UUID)",
+    "username": "string",
+    "email": "string",
+    "name": "string",
+    "phone": "string",
+    "country_code": "string",
+    "birth_date": "string (ISO yyyy-mm-dd)"
+  }
+}
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Body vacío o sin ningún campo whitelisted; valor vacío/`null`/formato inválido en `name`/`username`/`phone`/`country_code`/`birth_date`; `phone` sin `country_code` o viceversa; edad resultante < 13 años; `username` cambiado antes de que se cumplan 30 días desde el último cambio (`ADR-003` dejaba el código exacto "a definir en la implementación" entre `400`/`429` — se usa `400` para mantenerse dentro del catálogo de códigos ya documentado en este contrato, sin introducir `429`) | `{"msg": "..."}` |
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró — mismos callbacks homogenizados que `GET /api/users/me` | `{"msg": "..."}` |
+| `404` | El `id` del JWT no corresponde a ningún usuario real | `{"msg": "..."}` |
+| `409` | Conflicto de unicidad de `username` (constraint `uq_users_username`) — mismo patrón de `IntegrityError` → excepción de dominio que `POST /api/register` ya usa | `{"msg": "..."}` |
+
+**Notas de implementación:**
+- Un `username` igual al actual **no** se trata como un cambio real: no actualiza `username_changed_at` ni consume la ventana de 30 días (`ADR-003` §5).
+- `phone`/`country_code` se tratan como un único dato lógico — deben enviarse juntos en el mismo body si se quiere modificar cualquiera de los dos.
+- Reutiliza los mismos validadores de formato que `POST /api/register` (`domain/auth/validators.py`) — sin reglas nuevas de formato, solo se aplican también aquí.
+- Nunca expone `password`, `password_hash`, `confirm_password`, `token` ni `secret` en la respuesta (reutiliza `to_public_user()`, la misma función que `register`/`login`/`me`).
+- `username_changed_at` no forma parte de la respuesta pública — es un dato interno que solo sostiene la regla de cooldown (`DATABASE_ARCHITECTURE.md` §5).
+
 ---
 
 ## 5. Modelo de datos expuesto por la API
@@ -214,7 +275,7 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 
 | Objeto | Campos expuestos hoy | Fuente |
 |---|---|---|
-| `user` (en response de register, login y `GET /api/users/me`) | `id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date` | `ADR-002-user-profile-fields.md`; coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — nunca debe exponerse) |
+| `user` (en response de register, login, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date` | `ADR-002-user-profile-fields.md`; coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — nunca debe exponerse). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 
@@ -250,7 +311,7 @@ Decisiones que este documento **no toma** porque no están respaldadas por códi
 
 1. **Formato estándar de error** para toda la API (heredado de `BACKEND_ARCHITECTURE.md` §20, ítem 5 — este documento debe reflejarlo, no decidirlo).
 2. ~~Contrato de `POST /api/register`~~ — **resuelto e implementado**, incluidos los campos de perfil (§4.1, `ADR-002`). Sigue `PENDIENTE`: longitud mínima de contraseña y validación de formato de email (la unicidad de email/username ya está resuelta, la impone el esquema vía `CITEXT UNIQUE`/`uq_users_username`).
-3. **Convención de verbos HTTP** para operaciones futuras (colecciones, actualización parcial, borrado).
+3. **Convención de verbos HTTP** para operaciones futuras (colecciones, borrado). Parcialmente resuelto: `PATCH` es ya el verbo real usado para actualización parcial (`PATCH /api/users/me`, §4.2, `ADR-003`) — sigue sin ratificarse como convención formal para futuros endpoints de escritura.
 4. **Versionado de API** (`/api/v1` u otro mecanismo) — o la decisión explícita de no versionar todavía.
 5. **Paginación** — formato (offset/limit, cursor) para cuando exista el primer endpoint de colección (p. ej. feed).
 6. ~~Convención de endpoints protegidos~~ — **resuelto: primer caso real implementado** (`GET /api/users/me`, §4.2, `ADR-002`), incluida la homogenización de errores JWT a `401` (`app/extensions.py`).
@@ -274,6 +335,7 @@ Si el catálogo de endpoints crece lo suficiente para que un Markdown plano deje
 - `docs/architecture/FRONTEND_ARCHITECTURE.md` — consumidor del contrato (§9, §10, §12, §16).
 - `docs/architecture/organization/01_Manual_Organizacion/Source/HB-001-manual-organizacion.md.md` — §15.1 (documentar endpoints el mismo día del PR), §11–12 (proceso de ADR).
 - `docs/architecture/ADR-002-user-profile-fields.md` — decisión que ratifica `username`/`phone`/`country_code`/`birth_date` en `users` y `GET /api/users/me`.
+- `docs/architecture/ADR-003-profile-update-contract.md` — decisión que ratifica el contrato de `PATCH /api/users/me` (§4.2): campos editables, unicidad, cooldown de `username`, semántica PATCH, errores.
 - Código fuente: `backend/app/interfaces/routes/auth_routes.py`, `backend/app/interfaces/routes/user_routes.py`, `backend/app/application/auth/*.py`, `backend/app/domain/auth/*.py`, `backend/app/extensions.py`, `backend/app/__init__.py`; `Frontend/src/features/auth/pages/Register.jsx`, `Frontend/src/features/auth/lib/validators.js`.
 
 ---

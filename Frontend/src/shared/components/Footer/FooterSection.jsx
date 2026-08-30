@@ -1,48 +1,27 @@
-import { IoChevronDown } from "react-icons/io5";
 import FooterLink from "./FooterLink";
-import FooterExpandableItem from "./FooterExpandableItem";
 
-// Un link normal navega directo (FooterLink). Un link con `children` (hoy
-// solo "Información") se expande in-place en vez de navegar
-// (FooterExpandableItem) -- el resto de los ítems del footer no se ve
-// afectado, no tienen `children`.
-function FooterItem({ link }) {
-  if (link.children) {
-    return <FooterExpandableItem label={link.label} items={link.children} />;
-  }
-  return <FooterLink to={link.to}>{link.label}</FooterLink>;
-}
+// Una columna de grupo del footer: label en versalita + lista de enlaces
+// planos. Siempre visible en todos los anchos (sin <details>): son listas
+// cortas y verlas completas es mas claro que un acordeon. La jerarquia
+// label vs enlace la da el tamano/versalita/tracking, no el color.
+export default function FooterSection({ title, links, tone = "dark" }) {
+  const labelColor =
+    tone === "light" ? "text-footer-link-soft dark:text-footer-link" : "text-footer-link";
 
-// Desktop/tablet: columna estática siempre abierta.
-// Mobile: <details>/<summary> nativo -- accordion accesible (teclado, lector
-// de pantalla) sin necesidad de estado ni JS propio.
-export default function FooterSection({ title, links }) {
   return (
     <div>
-      <div className="hidden sm:block">
-        <h3 className="text-sm font-semibold text-ink dark:text-ink-dark mb-3">{title}</h3>
-        <ul className="space-y-2.5">
-          {links.map((link) => (
-            <li key={link.label}>
-              <FooterItem link={link} />
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <details className="group sm:hidden border-b border-line dark:border-line-dark">
-        <summary className="flex items-center justify-between py-3.5 text-sm font-semibold text-ink dark:text-ink-dark cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-          {title}
-          <IoChevronDown size={16} className="text-muted transition-transform group-open:rotate-180" aria-hidden="true" />
-        </summary>
-        <ul className="space-y-2.5 pb-4">
-          {links.map((link) => (
-            <li key={link.label}>
-              <FooterItem link={link} />
-            </li>
-          ))}
-        </ul>
-      </details>
+      <h3 className={`text-xs font-medium uppercase tracking-[0.08em] ${labelColor}`}>
+        {title}
+      </h3>
+      <ul className="mt-4 space-y-3">
+        {links.map((link) => (
+          <li key={link.to}>
+            <FooterLink to={link.to} tone={tone}>
+              {link.label}
+            </FooterLink>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -1,60 +1,34 @@
-// Fuente única de los grupos del Footer -- la usan tanto el layout desktop
-// (columnas) como el mobile (accordion), para que no puedan desincronizarse.
+// Fuente unica de los grupos del Footer. Enlaces planos, una sola forma
+// `{ label, to }` -- ya no hay ítems con hijos ni panel desplegable dentro del
+// footer (un footer es navegacion, no disclosure). Los 13 destinos existentes
+// se conservan, reagrupados para una IA mas clara.
 export const FOOTER_GROUPS = [
   {
-    id: "thers",
-    title: "THERS",
+    id: "product",
+    title: "Producto",
     links: [
-      {
-        label: "Información",
-        // Sin `to`: este ítem se expande en vez de navegar directo (ver
-        // FooterExpandableItem). Sus hijos no repiten nada que ya exista en
-        // otro grupo del footer (Ayuda ya está como "Centro de ayuda" aquí
-        // mismo, Privacidad/Términos ya están en el grupo Legal).
-        children: [
-          {
-            label: "Sobre THERS",
-            description: "Qué es THERS y por qué existe",
-            to: "/information",
-            icon: "info",
-          },
-          {
-            label: "Cómo funciona",
-            description: "Un recorrido rápido por el producto",
-            to: "/information/how-it-works",
-            icon: "how-it-works",
-          },
-          {
-            label: "Comunidad",
-            description: "Quiénes forman parte de THERS",
-            to: "/information/community",
-            icon: "community",
-          },
-          {
-            label: "Seguridad",
-            description: "Cómo protegemos tu cuenta",
-            to: "/information/security",
-            icon: "security",
-          },
-          {
-            label: "Preguntas frecuentes",
-            description: "Respuestas rápidas a lo más común",
-            to: "/information/faq",
-            icon: "faq",
-          },
-        ],
-      },
-      { label: "Blog", to: "/blog" },
-      { label: "Centro de ayuda", to: "/help" },
+      { label: "Cómo funciona", to: "/information/how-it-works" },
+      { label: "Seguridad", to: "/information/security" },
+      { label: "Preguntas frecuentes", to: "/information/faq" },
     ],
   },
   {
-    id: "discover",
-    title: "Descubre",
+    id: "community",
+    title: "Comunidad",
     links: [
+      { label: "Comunidad", to: "/information/community" },
       { label: "Popular", to: "/popular" },
       { label: "Ubicaciones", to: "/locations" },
       { label: "Importar contactos", to: "/contacts/import" },
+    ],
+  },
+  {
+    id: "resources",
+    title: "Recursos",
+    links: [
+      { label: "Sobre THERS", to: "/information" },
+      { label: "Blog", to: "/blog" },
+      { label: "Centro de ayuda", to: "/help" },
     ],
   },
   {
@@ -67,3 +41,6 @@ export const FOOTER_GROUPS = [
     ],
   },
 ];
+
+// La variante `compact` (AuthPage) solo muestra los enlaces legales en linea.
+export const LEGAL_LINKS = FOOTER_GROUPS.find((g) => g.id === "legal").links;

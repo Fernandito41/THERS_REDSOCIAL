@@ -130,7 +130,7 @@ export default function AuthPage() {
         </div>
       </div>
 
-      <Footer />
+      <Footer variant="compact" />
     </div>
   );
 }

@@ -68,6 +68,21 @@ export default {
           600: "#d97706",
           700: "#b45309",
         },
+        // Paleta dedicada del Footer (superficie piloto de la nueva direccion
+        // visual -- ver propuesta). No es gris neutro plano: negro con leve
+        // croma frio, hairline solido y un violeta refinado como unico acento.
+        // Alcance acotado: solo la usa el Footer; el resto de la app no cambia.
+        footer: {
+          DEFAULT: "#0A0B0D", // zocalo -- mas profundo que canvas-dark, es "el suelo"
+          line: "#21252C", // hairline solido (reemplaza al white/10 turbio)
+          heading: "#F5F6F8", // wordmark -- blanco calido, no #fff puro
+          link: "#9BA1AC", // enlaces / labels / copyright en reposo (>7:1 sobre DEFAULT)
+          "link-hover": "#E8EAED",
+          accent: "#A78BFA", // violeta refinado -- subrayado de hover (foco = regla global)
+          "line-soft": "#E7E8EB", // variante compact (superficie clara)
+          "link-soft": "#5B616B", // variante compact
+          "link-soft-hover": "#111317",
+        },
       },
       boxShadow: {
         soft: "0 1px 2px rgba(0,0,0,0.06), 0 12px 28px -14px rgba(0,0,0,0.18)",
@@ -103,6 +118,11 @@ export default {
         "pop-like": "popLike 0.35s ease-in-out",
         "mood-glow": "moodGlow 2.6s ease-in-out infinite",
         "float-in": "floatIn 0.2s ease-out both",
+      },
+      transitionTimingFunction: {
+        // Misma curva "ease-out fuerte" que `capsule-in` -- se reutiliza en
+        // microinteracciones (footer/disclosure) para un ritmo de motion unico.
+        strong: "cubic-bezier(0.16, 1, 0.3, 1)",
       },
     },
   },

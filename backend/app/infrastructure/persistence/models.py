@@ -70,3 +70,46 @@ class User(db.Model):
 
     def __repr__(self):
         return f"<User id={self.id} email={self.email!r}>"
+
+
+class Post(db.Model):
+    __tablename__ = "posts"
+
+    # Primera entidad del alcance objetivo del producto en pasar a
+    # ratificada (ADR-004-posts-minimal-model.md) -- modelo deliberadamente
+    # mínimo: solo texto, sin mood/imagen/hashtags/ubicación/likes/comentarios
+    # (cada uno queda para su propio ADR, ver DATABASE_ARCHITECTURE.md §4.B).
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    # ON DELETE CASCADE: placeholder razonable dado que borrado de cuenta
+    # tampoco existe todavía como funcionalidad (ADR-004 §Riesgos) -- revisar
+    # cuando esa funcionalidad se ratifique.
+    author_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Sin límite de longitud a nivel de esquema -- la validación de negocio
+    # (MAX_CONTENT_LENGTH) vive en domain/posts/validators.py, no aquí.
+    content = db.Column(db.Text, nullable=False)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    # lazy="joined": listar posts siempre necesita el autor (to_public_post),
+    # un JOIN evita el N+1 que tendría cada post resolviendo su autor por
+    # separado.
+    author = db.relationship("User", lazy="joined")
+
+    def __repr__(self):
+        return f"<Post id={self.id} author_id={self.author_id}>"

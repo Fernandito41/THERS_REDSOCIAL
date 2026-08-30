@@ -4,12 +4,14 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD_OBJETIVO.md` |
 | Identificador propuesto | `DB-003` (acompaña a `DB-001`/`DATABASE_ARCHITECTURE.md` y `DB-002`/`DATABASE_ERD.md`) — **pendiente de ratificación** |
-| Versión | 0.3 |
+| Versión | 0.4 |
 | Estado | **Borrador — PROPUESTA CANDIDATA, no ratificada** |
 | Depende de | `DATABASE_ARCHITECTURE.md` §4.B (fuente directa), `HB-001` §11–12 (ADR) |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
 >  **Esto NO es el esquema de PostgreSQL ni un modelo ratificado.** Es la **visualización de las estructuras candidatas** de la *arquitectura objetivo del producto* (`DATABASE_ARCHITECTURE.md` §4.B). Cada entidad, columna, PK, FK y cardinalidad que aparece aquí es una **hipótesis a ratificar por ADR** (`HB-001` §11–12), no una decisión tomada. No se implementa nada a partir de este documento.
+>
+> **v0.4 — `posts` (mínimo) ya no es candidata, es ratificada (`ADR-004-posts-minimal-model.md`).** `id`/`author_id`/`content`/timestamps de `POSTS` migraron a `DATABASE_ERD.md` — se dejan anotados aquí, no eliminados, porque el nodo sigue siendo el punto de referencia de otras entidades todavía candidatas (`MEDIA`, `REACTIONS`, `COMMENTS`, `SAVES`, `MENTIONS`, `POST_HASHTAGS`). `visibility` (única columna de `POSTS` en este diagrama) sigue siendo candidata — la tabla real no la tiene todavía.
 >
 > **v0.3 — auditoría documental integral de THERS (sincronización, sin cambios de esquema).** `username` en `USERS` seguía marcado `"OBJETIVO"` en el diagrama (§5) pese a que `ADR-002-user-profile-fields.md` ya lo ratificó e implementó (`DATABASE_ARCHITECTURE.md` v0.5, `DATABASE_ERD.md` v0.3) — quedó como candidato en este documento por no haberse sincronizado tras esa ratificación. Se corrige §5/§7 para reflejar que `username` (junto con `phone`/`country_code`/`birth_date`, no representados aquí por ser candidatos desde el inicio, ver `DATABASE_ERD.md`) ya migró de este ERD candidato al ratificado. `avatar_url` sigue como única columna de perfil realmente candidata en este documento.
 
@@ -99,9 +101,9 @@ erDiagram
     }
 
     POSTS {
-        identifier id PK
-        identifier author_id FK
-        enum visibility "OBJETIVO"
+        identifier id PK "RATIFICADA (ADR-004) — ver DATABASE_ERD.md, no candidata; id/author_id/content ya son UUID/UUID/TEXT reales"
+        identifier author_id FK "RATIFICADA (ADR-004)"
+        enum visibility "OBJETIVO — sigue sin ratificar, `posts` real no tiene esta columna todavía"
     }
 
     MEDIA {
@@ -253,7 +255,7 @@ erDiagram
 | `security_events` | **[FORMA PENDIENTE]** | Auditoría condicional | — |
 | `password_changes` | **[FORMA PENDIENTE]** | Historial de contraseña | — |
 | `user_settings` | **[FORMA PENDIENTE]** | Configuración | Cuenta/Privacidad/Seguridad/Notif./Preferencias → 1 estructura (o columnas/JSON) |
-| `posts` | OBJETIVO | Publicaciones | Editar/eliminar/visibilidad = columnas+comportamiento |
+| `posts` | **RATIFICADA (solo `id`/`author_id`/`content`/timestamps) — v0.3, `ADR-004`, ver `DATABASE_ERD.md`** | Publicaciones de texto | Editar/eliminar/`visibility`/medios/reacciones/comentarios/hashtags — todo lo demás sigue como candidata, cada uno su propio ADR |
 | `media` | **[FORMA PENDIENTE]** | Fotos/videos/reels | 3 tipos de contenido → 1 entidad con `type` |
 | `reactions` | OBJETIVO | Likes/reacciones | Like + reacción → 1 entidad con `type` |
 | `comments` | OBJETIVO | Comentarios y respuestas | Comentario + respuesta → 1 entidad auto-referencial |

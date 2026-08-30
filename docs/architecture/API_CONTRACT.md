@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.7 (Propuesta) |
+| Versión | 0.8 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -23,6 +23,8 @@
 > **v0.5 — actualización de perfil (THERS Backend, `ADR-003-profile-update-contract.md`):** se agrega `PATCH /api/users/me` (§4.2), primer endpoint de escritura protegido del backend. Permite actualizar `name`, `username`, `phone`+`country_code` y `birth_date` sobre `users` (mismas columnas que `GET /api/users/me` ya expone) — `email`/`password` quedan fuera por decisión explícita de `ADR-003`. `username` está sujeto a un cooldown de 30 días entre cambios (`users.username_changed_at`, migración `b2f4a19c3d7e`). El Frontend (`Profile.jsx`) todavía no consume este endpoint — sigue editando `bio`/`mood`/`interests`/`favoriteTrack` en `localStorage` y `name`/`username` con `updateStoredUser()`; conectar `Profile.jsx` a este contrato queda fuera de alcance de esta tarea, que fue exclusivamente de backend.
 >
 > **v0.6 — manejador global de errores (cierra §9 ítem 1):** `app/interfaces/error_handlers.py` (nuevo, `BACKEND_ARCHITECTURE.md` §11/§18/§19 v0.10) traduce cualquier `404`, `405`, otro `HTTPException` de Werkzeug (incluido un body no-JSON en `POST /api/register`/`POST /api/login`, que antes producía HTML) y cualquier excepción no controlada (`500`) al mismo formato `{"msg": "..."}` que ya usaban los 4 endpoints — **se mantiene ese formato sin cambios**, no se introduce `{"error": {...}}`, así que ningún endpoint existente cambia de contrato. Reflejado en §2 y §3. Verificado con 4 pruebas nuevas + la suite completa (56/56, ejecutada contra PostgreSQL 16 real).
+>
+> **v0.8 — primer endpoint de una entidad social real (`ADR-004-posts-minimal-model.md`):** se agrega `POST`/`GET /api/posts` (§4.3) — primera entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B) en pasar a implementada, más allá de `users`. Modelo deliberadamente mínimo: solo texto, sin mood/imagen/hashtags/ubicación/reacciones/comentarios (cada uno queda para su propio ADR). Feed **global** — `GET /api/posts` devuelve posts de todos los autores, sin filtrar por `follows` (esa relación no existe todavía). El Frontend (`Home.jsx`, `CreateCapsuleFlow.jsx`) todavía no consume este contrato — sigue mostrando `mockCapsules`; conectar el Frontend queda fuera de alcance de esta tarea, que fue exclusivamente de backend. Verificado con 12 pruebas nuevas + la suite completa (71/71, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade`/`downgrade`).
 >
 > **v0.7 — validación de formato de `email` y longitud mínima de `password` en `POST /api/register` (cierra §9 ítem 2):** `domain/auth/validators.py` gana `is_valid_email()` (regex básica, sin verificar dominio real) e `is_valid_password()` (mínimo 8 caracteres, `MIN_PASSWORD_LENGTH`) — mismo patrón que los validadores ya existentes de `username`/`phone`/`country_code`/`birth_date`. Ambos umbrales son placeholders de producto explícitos y revisables (mismo criterio que `MIN_AGE_YEARS`, `ADR-002` §3), decididos como cambio técnico de bajo impacto (`HB-001` §11) por no alterar arquitectura, esquema ni ningún endpoint más allá de `register`. `POST /api/login` y `PATCH /api/users/me` **no cambian** — ninguno de los dos valida formato de credenciales (login no reformatea lo que ya existe; `PATCH` no permite editar `email`/`password`, `ADR-003`). Reflejado en §4.1 y §9. Verificado con 3 pruebas nuevas + la suite completa (59/59, ejecutada contra PostgreSQL 16 real).
 
@@ -274,6 +276,72 @@ Ejemplo mínimo válido — cambiar solo el nombre:
 
 ---
 
+### 4.3 Contenido
+
+#### `POST /api/posts`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-004-posts-minimal-model.md`) |
+| Blueprint | `posts_bp` (`backend/app/interfaces/routes/post_routes.py`) |
+| Auth requerida | **Sí** — `Bearer <jwt>` en el header `Authorization`. `author_id` se obtiene exclusivamente de `get_jwt_identity()` — nunca del body |
+
+**Semántica.** Crea un post de **solo texto** — primer endpoint de una entidad social real del producto, deliberadamente mínimo (`ADR-004` §No objetivos): sin mood, imagen, hashtags, ubicación, reacciones ni comentarios en esta versión.
+
+**Request body**
+```json
+{ "content": "string (1–2000 caracteres tras trim)" }
+```
+
+**Response — éxito (201)**
+```json
+{
+  "post": {
+    "id": "string (UUID)",
+    "author": { "id": "string (UUID)", "username": "string", "name": "string" },
+    "content": "string",
+    "created_at": "string (ISO 8601)"
+  }
+}
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Body vacío; `content` ausente, vacío tras `trim()`, o mayor a 2000 caracteres | `{"msg": "..."}` |
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró — mismos callbacks homogenizados que el resto de endpoints protegidos | `{"msg": "..."}` |
+
+**Notas de implementación:**
+- Whitelist explícita: solo `content` se lee del body — nunca `author_id`/`id`/`created_at` (mismo principio anti mass-assignment que `PATCH /api/users/me`, `ADR-003` §Seguridad; verificado por prueba).
+- El objeto `author` reutiliza una forma reducida del mismo `to_public_user`-style presenter — nunca expone `email`, `phone`, `password_hash` ni otros campos privados del autor.
+
+#### `GET /api/posts`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-004-posts-minimal-model.md`) |
+| Blueprint | `posts_bp`, mismo blueprint que `POST /api/posts` |
+| Auth requerida | **Sí** — mismo criterio que el resto del feed hoy: solo alcanzable desde rutas protegidas del Frontend (`ProtectedRoute`, `FRONTEND_ARCHITECTURE.md` §7) |
+
+**Semántica.** Feed **global**: devuelve los posts de **todos** los autores, no solo de quienes el usuario sigue — `follows` no existe todavía (`ADR-004` §Opciones consideradas). Sin paginación real: límite fijo de **50** posts más recientes.
+
+**Request:** sin body. Header `Authorization: Bearer <token>` obligatorio.
+
+**Response — éxito (200)**
+```json
+{ "posts": [ { "id", "author": {...}, "content", "created_at" }, ... ] }
+```
+Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts.
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+
+---
+
 ## 5. Modelo de datos expuesto por la API
 
 Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) pero sí documenta **qué forma tiene el dato tal como cruza la frontera HTTP**, que puede no coincidir 1:1 con el modelo de persistencia:
@@ -281,6 +349,7 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | Objeto | Campos expuestos hoy | Fuente |
 |---|---|---|
 | `user` (en response de register, login, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date` | `ADR-002-user-profile-fields.md`; coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — nunca debe exponerse). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
+| `post` (en response de `POST`/`GET /api/posts`) | `id`, `author` (`id`/`username`/`name`, forma reducida de `user`), `content`, `created_at` | `ADR-004-posts-minimal-model.md`; coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` en la respuesta — no hay edición todavía (`ADR-004` §No objetivos), así que exponerlo no aporta nada hoy |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 

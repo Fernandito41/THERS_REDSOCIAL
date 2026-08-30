@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.7 |
+| Versión | 0.8 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -21,6 +21,8 @@
 > **v0.6 — soporte de cooldown para `PATCH /api/users/me` (THERS Backend, `ADR-003-profile-update-contract.md`).** `users` gana `username_changed_at` (`TIMESTAMPTZ`, nullable), migración aditiva `b2f4a19c3d7e_add_username_changed_at_to_users.py`, verificada con `flask db upgrade`/`downgrade` repetidos contra PostgreSQL 16 real (`thers_dev`, Docker) y con la suite completa de pruebas (`backend/tests/`, 52 pruebas). `NULL` significa "nunca cambió su username" — sin backfill, ningún usuario existente pudo cambiar su username antes de esta tarea. `ADR-003` decidió explícitamente **no** crear ninguna columna nueva más allá de esta (`bio`/`avatar_url` siguen sin ratificar, `email`/`password` quedan fuera del contrato de `PATCH`). Reflejado en §5.
 >
 > **v0.7 — auditoría documental integral de THERS (corrección de un hallazgo obsoleto, sin cambios de esquema).** §11 y §14 seguían advirtiendo `JWT_SECRET_KEY = "super-secret-key"` **hardcodeado** en `backend/app/config.py` como hallazgo de seguridad abierto — ya corregido desde `BACKEND_ARCHITECTURE.md` v0.2 (lee `os.environ.get("JWT_SECRET_KEY")`, con un fallback de desarrollo explícitamente inseguro advertido por `stderr`, nunca un literal hardcodeado). El propio `ADR-003-profile-update-contract.md` (§Estado actual) ya había señalado esta desincronización entre documentos hermanos sin corregirla, por estar fuera de su alcance. Verificado en esta auditoría releyendo `backend/app/config.py` línea por línea. Ningún esquema, entidad ni columna cambió — solo se sincronizaron §11 y §14 con el código real.
+>
+> **v0.8 — primera entidad social real, `posts` (`ADR-004-posts-minimal-model.md`):** `posts` pasa de candidata objetivo (§4.B › Contenido) a **implementada** (§4.A, §5.2) — deliberadamente mínima: solo `author_id` (FK a `users`, `ON DELETE CASCADE`) y `content` (texto, máximo 2000 caracteres). Primera relación real entre entidades (§6). Nuevo índice `ix_posts_created_at` (§8), justificado por `GET /api/posts` (§9 se actualiza con la cuarta migración). `visibility`, medios, reacciones, comentarios, hashtags, mood, ubicación, edición/borrado — todo lo demás que §4.B seguía listando junto a "Posts" — sigue sin ratificar, cada uno queda para su propio ADR (`ADR-004` §Decisiones pendientes). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 71 pruebas).
 
 ---
 
@@ -102,6 +104,7 @@ Se distingue entre:
 | Entidad | Estado | Justificación |
 |---|---|---|
 | `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`/`GET /api/users/me`/`PATCH /api/users/me`) | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password_hash` reales (columnas de perfil ratificadas por `ADR-002`, v0.5); login autentica consultando `users` por `email`; `PATCH /api/users/me` (`ADR-003`, v0.6) actualiza `name`/`username`/`phone`/`country_code`/`birth_date`, con `username_changed_at` sosteniendo el cooldown de `username`; el backend devuelve el objeto público completo (§5) con datos reales |
+| `posts` | **IMPLEMENTADA — v0.8** (ratificada por `ADR-004-posts-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts`) | Primera entidad de la capa objetivo (§4.B, "Contenido") en pasar a implementada. Modelo deliberadamente mínimo: `author_id` (FK a `users`) y `content` (texto, máximo 2000 caracteres) — sin `visibility`, sin medios, sin ningún otro campo que §4.B seguía listando para "Contenido" |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -152,7 +155,7 @@ Estados usados en esta capa:
 #### Contenido
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
 |---|---|---|---|
-| Posts | Entidad `posts` (referenciará a `users` como autor, ver §6) | OBJETIVO | Modelado (PK/FK/tipos) sin decidir |
+| Posts (solo texto) | Entidad `posts` (`author_id` → `users`, ver §6) | **IMPLEMENTADA — v0.8** (`ADR-004`, §4.A/§5) | — |
 | Fotos, Videos, Reels | Entidad `media` ligada a `posts` (con tipo) **o** tablas separadas | PENDIENTE DE DECISIÓN | Tabla de medios con discriminador vs tablas por tipo; "reel" ¿es tipo de video o entidad propia? |
 | Editar / Eliminar publicaciones | Comportamientos + columnas (`updated_at`, borrado lógico) sobre `posts` | PENDIENTE DE DECISIÓN | Política de borrado lógico vs físico |
 | Compartir publicaciones | Entidad de *repost* **vs** evento **vs** compartir externo | PENDIENTE DE DECISIÓN | La semántica de "compartir" (interno/externo) no está definida |
@@ -208,9 +211,11 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 ---
 
-## 5. Entidad propuesta: `users`
+## 5. Entidades ratificadas
 
-> Única entidad con definición formal en esta versión (capa 4.A). El resto está en §4.B (objetivo) y §14 (pendientes).
+> **v0.8 — `posts` se suma a `users`** como segunda entidad con definición formal (capa 4.A, `ADR-004-posts-minimal-model.md`). El resto sigue en §4.B (objetivo) y §14 (pendientes).
+
+### 5.1 `users`
 
 **Propósito.** Representar a una persona registrada en THERS y ser la fuente de verdad para autenticación — rol que ya cumple en producción de código desde v0.3 (`register`/`login` reales, `BACKEND_ARCHITECTURE.md` §8/§9).
 
@@ -233,7 +238,7 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 **Claves foráneas (FK).** Ninguna en esta versión — `users` no depende de otra entidad todavía.
 
-**Relaciones.** Ninguna definida hoy. Cuando existan entidades sociales (posts, follows), serán ellas quienes referencien a `users` mediante FK, no al revés (ver §6 y §4.B).
+**Relaciones.** `posts.author_id → users.id` (v0.7, ver §5.2/§6) — `users` es la entidad referenciada, nunca al revés. Cuando existan más entidades sociales (`follows`, etc.), seguirán el mismo patrón.
 
 **Constraints relevantes**
 - `email` **UNIQUE** (case-insensitive, vía `CITEXT`) y **NOT NULL** — el login identifica al usuario por email; dos cuentas no pueden compartirlo, ni siquiera con distinto casing. (Justifica también el índice de §8.)
@@ -248,12 +253,42 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 ---
 
+### 5.2 `posts`
+
+> Segunda entidad con definición formal (capa 4.A), ratificada por `ADR-004-posts-minimal-model.md` — deliberadamente mínima: solo lo indispensable para que el feed deje de ser mock. Reacciones, comentarios, hashtags, medios, mood, ubicación, edición/borrado, visibilidad **no** están en esta entidad — cada uno es su propia candidata en §4.B, a resolver en un ADR futuro y acotado (mismo patrón que este).
+
+**Propósito.** Un post de texto publicado por un usuario autenticado — primera pieza real de contenido del producto, más allá de la cuenta/perfil.
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` en PostgreSQL — mismo patrón que `users.id` |
+| `author_id` | **UUID**, FK → `users.id` | No | Autor del post. Siempre resuelto desde `get_jwt_identity()` en el backend, nunca aceptado del body (`ADR-004` §Contrato, mismo principio anti mass-assignment que `PATCH /api/users/me`) |
+| `content` | `TEXT` | No | Sin límite de longitud a nivel de esquema — la validación de negocio (máximo 2000 caracteres, placeholder revisable) vive en `domain/posts/validators.py`, no en el tipo de columna |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Define el orden del feed (`GET /api/posts`, `ORDER BY created_at DESC`) |
+| `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7), mismo trigger `set_updated_at()` reutilizado de `users` — sin uso funcional todavía porque no hay edición de posts (`ADR-004` §No objetivos) |
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `author_id → users.id`, `ON DELETE CASCADE` — placeholder razonable dado que borrado de cuenta tampoco existe todavía como funcionalidad (§4.B, "Gestión/desactivación/eliminación de cuenta", `PENDIENTE DE DECISIÓN`); revisar esta política cuando esa funcionalidad se ratifique (`ADR-004` §Riesgos).
+
+**Relaciones.** `users (1) ←→ (N) posts` — un usuario puede tener muchos posts; cada post tiene exactamente un autor.
+
+**Constraints relevantes**
+- `author_id` **NOT NULL** — todo post tiene autor, sin excepción.
+- `content` **NOT NULL** — la validación de "no vacío tras trim()" vive en la capa de aplicación (`domain/posts/validators.py`), no como `CHECK` de PostgreSQL en esta versión.
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-004` §Decisiones pendientes): índice compuesto por `author_id` (si en el futuro se necesita filtrar por autor — hoy `GET /api/posts` no filtra), `CHECK` de longitud máxima a nivel de esquema (hoy solo aplicación), política `ON DELETE` definitiva (depende de la decisión de borrado de cuenta).
+
+---
+
 ## 6. Relaciones entre entidades
 
-En esta versión **no existen relaciones implementadas**, porque solo hay una entidad ratificada (`users`, capa 4.A).
+**v0.8 — primera relación implementada:** `posts.author_id → users.id` (`ADR-004-posts-minimal-model.md`, ver §5.2) — `ON DELETE CASCADE`. Es la única relación real hoy; todo lo demás sigue siendo candidato (§4.B).
 
 Regla de diseño para cuando existan más entidades (para evitar decisiones improvisadas durante la implementación):
-- Las entidades dependientes referencian a `users` con una FK (p. ej. un futuro `posts.author_id → users.id`).
+- Las entidades dependientes referencian a `users` (o a `posts`, cuando corresponda — p. ej. un futuro `reactions.post_id`) con una FK.
 - La cardinalidad, la política `ON DELETE` y las tablas puente (p. ej. relaciones N:N de "follows") se definirán **cuando esas entidades se ratifiquen**, cada una como ADR (`HB-001` §12). Las relaciones candidatas del producto objetivo se listan en §4.B, pero **no** se dibujan ni modelan aquí.
 
 ---
@@ -283,8 +318,9 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 |---|---|---|
 | Índice único de email | `users(email)` — `UNIQUE` | El login busca al usuario **por email** en cada intento de autenticación (`Login.jsx` envía `email`; el backend deberá hacer `SELECT ... WHERE email = ?`). La restricción `UNIQUE` de §5 crea este índice automáticamente y sirve tanto para integridad como para el lookup de login. |
 | Índice único de username (`uq_users_username`) | `users(username)` — `UNIQUE` | **v0.5 (`ADR-002`).** `POST /api/register` valida unicidad de `username` en cada registro; la constraint `UNIQUE` de §5 crea este índice automáticamente. Ningún flujo consulta hoy por `username` fuera de esa validación de unicidad (login sigue siendo por email) — no se justifica un índice adicional de búsqueda. |
+| `ix_posts_created_at` | `posts(created_at)` | **v0.8 (`ADR-004`).** `GET /api/posts` ordena por `created_at DESC` en cada consulta del feed — primer índice justificado por una consulta de una entidad distinta de `users`. |
 
-**No se añaden más índices en esta versión.** La PK (`id`) ya está indexada por definición. Cualquier índice adicional (p. ej. sobre columnas de futuras tablas de feed) se justificará **cuando exista la consulta que lo pague**, no antes.
+**No se añaden más índices en esta versión.** La PK (`id`) de cada entidad ya está indexada por definición. Cualquier índice adicional (p. ej. `posts(author_id)`, si en el futuro se filtra el feed por autor) se justificará **cuando exista la consulta que lo pague**, no antes.
 
 ---
 
@@ -367,7 +403,7 @@ Decisiones que este documento **no toma** porque no están respaldadas por la do
 - **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo) — no aplica a `users` todavía, sigue pendiente para entidades futuras.
 
 ### Entidades candidatas del modelo objetivo
-La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. Entre las candidatas confirmadas por el alcance funcional: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`username`/`avatar_url`/`bio`), `posts`, `media`, `reactions`, `comments`, `saves`, `mentions`, `hashtags` (+`post_hashtags`), `follows`, `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.
+La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). Entre las candidatas que siguen sin ratificar: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions`, `comments`, `saves`, `mentions`, `hashtags` (+`post_hashtags`), `follows`, `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.
 
 ### Operación
 - ~~Herramienta de migraciones~~ — **resuelto en código: Flask-Migrate/Alembic**, scaffolding en `backend/migrations/` (ver `BACKEND_ARCHITECTURE.md` §8); ratificación formal pendiente de confirmar. **Ubicación de la carpeta `database/`** sigue sin definir — las migraciones quedaron dentro de `backend/`, no en una carpeta `database/` separada.

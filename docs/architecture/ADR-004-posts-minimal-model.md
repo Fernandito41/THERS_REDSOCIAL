@@ -5,12 +5,6 @@
 | Documento | `docs/architecture/ADR-004-posts-minimal-model.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 29/08/2026 |
-| Estado | **Aceptada** — confirmada explícitamente por el usuario en la misma sesión de trabajo con IA, mismo criterio de excepción de proceso ya aplicado en `ADR-002`/`ADR-003` |
-| Alcance | `backend/` (nueva entidad `posts`, endpoints `POST`/`GET /api/posts`) — implementado en esta tarea. Impacto de contrato en `Frontend/` (`Home.jsx`, `CreateCapsuleFlow.jsx`) queda para una tarea de Frontend aparte (ver informe de la tarea) |
-| Autor | Sesión de arquitectura con IA, confirmada explícitamente por el usuario antes de implementar |
-| Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §4) |
-
-> ⚠️ **Nota de proceso.** `HB-001` §11 clasifica "cambiar el modelo de datos" como decisión de **alto impacto**, que en teoría requiere consenso del Comité Técnico completo (los 4 integrantes). Este documento sigue la misma excepción pragmática ya aplicada en `ADR-001`/`ADR-002`/`ADR-003`: se redactó en sesión de trabajo con IA, quedó como **Propuesta**, y el usuario confirmó explícitamente el alcance exacto descrito abajo (feed global sin `follows`, solo texto, sin medios/reacciones/comentarios) antes de que se implementara ningún código — recién ahí pasó a **Aceptada**.
 >
 > **Regla de alcance, explícita.** Este ADR decide deliberadamente **lo mínimo indispensable** para que el feed deje de ser 100% mock: una sola entidad, dos endpoints, un solo campo de contenido. Todo lo que la UI mock ya muestra (mood, imagen, hashtags, ubicación, likes, comentarios) queda **fuera de alcance a propósito** — cada uno es su propia entidad candidata en `DATABASE_ARCHITECTURE.md` §4.B, y modelarlos todos juntos en un solo ADR repetiría exactamente el error que ese documento ya previene ("una funcionalidad no equivale a una tabla", §3: normalización).
 
@@ -155,4 +149,4 @@ Lo que Frontend haría **después** de que este ADR se ratifique (no en este doc
 
 ## Cierre
 
-Este documento define el contrato mínimo de `posts` necesario para que el feed deje de ser 100% mock, dejando explícitamente fuera — y listado — todo lo que la UI mock ya sugiere pero que corresponde a decisiones de modelado separadas. **Aceptada e implementada en esta misma tarea** (backend: migración, capas `domain`/`application`/`infrastructure`/`interfaces`, tests de integración) tras la confirmación explícita del usuario — el impacto en `Frontend/` (§Impacto en Frontend) queda para una tarea de Frontend aparte, no incluida aquí.
+

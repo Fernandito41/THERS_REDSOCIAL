@@ -1,0 +1,64 @@
+# CI del backend — primera propuesta, sin ratificación formal del Comité
+# Técnico (CLAUDE.md §5/§9 "DevOps": sin documentación oficial, territorio no
+# especificado; agregado por pedido explícito de la tarea "THERS Backend
+# Fase 2.1", no por iniciativa propia de DevOps). Corre exactamente lo mismo
+# que un integrante corre en local (flask db upgrade + pytest) contra un
+# PostgreSQL 16 real en un contenedor de servicio de Actions — no contra
+# mocks ni SQLite, mismo principio que backend/tests/conftest.py ya aplica.
+name: backend-tests
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+  push:
+    branches: [main, develop]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: thers
+          POSTGRES_PASSWORD: changeme
+          POSTGRES_DB: thers_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U thers -d thers_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      FLASK_APP: run.py
+      JWT_SECRET_KEY: ci-only-secret-not-for-prod
+      DATABASE_URL: postgresql+psycopg://thers:changeme@localhost:5432/thers_test
+      TEST_DATABASE_URL: postgresql+psycopg://thers:changeme@localhost:5432/thers_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Aplicar migraciones (flask db upgrade)
+        run: python -m flask db upgrade
+
+      - name: Ejecutar pytest
+        run: python -m pytest -v

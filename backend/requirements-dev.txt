@@ -1,0 +1,7 @@
+# Dependencias solo de desarrollo/test — nunca se instalan en producción.
+# pytest: framework de testing elegido pragmáticamente para esta tarea (no
+# existía ninguno configurado — BACKEND_ARCHITECTURE.md §20 ítem 12 lo marca
+# como PENDIENTE DE APROBACIÓN formal por el equipo; se documenta el hueco,
+# no se oculta la decisión).
+-r requirements.txt
+pytest==8.3.4

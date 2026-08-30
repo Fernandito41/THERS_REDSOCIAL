@@ -1,0 +1,128 @@
+---
+code: "ENG-001"
+title: "Convenciones de React"
+status: "estable"
+version: "1.0"
+author: "Fernando Escalante"
+description: "Guía de convenciones para componentes React en el frontend THERS: estructura, naming, patrones y reglas de estilo."
+---
+
+import Callout from '@ui/Callout'
+import Alert from '@ui/Alert'
+
+## Principios generales
+
+El frontend THERS usa **React 19** con **Vite** como bundler. Todos los componentes siguen la especificación de arquitectura FAS-001 y el Design System DS-001.
+
+<Callout variant="nota" title="Fuente de verdad">
+  En caso de conflicto entre este documento y FAS-001 o DS-001, prevalece la especificación oficial correspondiente. Este documento traduce esas reglas a ejemplos concretos.
+</Callout>
+
+## Estructura de archivos
+
+Cada componente vive en su propio archivo con el mismo nombre en PascalCase:
+
+```
+src/components/ui/Button.jsx
+src/components/navigation/Sidebar.jsx
+src/components/layout/MainContent.jsx
+```
+
+- Un componente por archivo.
+- El nombre del archivo coincide exactamente con el nombre del componente exportado.
+- Los archivos de prueba se ubican junto al componente: `Button.test.jsx`.
+
+## Naming
+
+| Elemento | Convención | Ejemplo |
+|---|---|---|
+| Componentes | PascalCase | `CategoryCard`, `ThemeToggle` |
+| Props | camelCase | `isActive`, `onClose` |
+| Eventos | `on` + PascalCase | `onClick`, `onMouseEnter` |
+| Archivos de componente | PascalCase | `Badge.jsx` |
+| Archivos utilitarios | camelCase | `formatDate.js` |
+| CSS custom properties | kebab-case con prefijo `color-` | `--color-primary` |
+
+## Componentes funcionales
+
+Todos los componentes son **funcionales**. No se usan class components.
+
+```jsx
+// ✅ Correcto
+function Button({ variant = 'primary', children }) {
+  return <button className={...}>{children}</button>
+}
+
+// ❌ Incorrecto
+class Button extends React.Component { ... }
+```
+
+## Props
+
+- Las props obligatorias no tienen valor por defecto.
+- Las props opcionales sí tienen valor por defecto en la firma de la función.
+- Usa desestructuración en la firma, no dentro del cuerpo.
+
+```jsx
+// ✅ Correcto
+function Badge({ variant = 'draft', children }) { ... }
+
+// ❌ Incorrecto
+function Badge(props) {
+  const { variant = 'draft', children } = props
+  ...
+}
+```
+
+## Colores y tokens
+
+<Alert variant="warning">
+  Ningún componente puede usar valores de color directos (hex, rgb, hsl). Todos los colores se consumen como CSS custom properties definidas en DS-001 §4.
+</Alert>
+
+```jsx
+// ✅ Correcto — usa tokens
+style={{ color: 'var(--color-text-primary)' }}
+
+// ❌ Incorrecto — valor directo
+style={{ color: '#1a1d23' }}
+```
+
+## Exports
+
+Todos los componentes usan `export default` al final del archivo, no exportaciones inline:
+
+```jsx
+function MyComponent() { ... }
+
+export default MyComponent
+```
+
+## Estado y efectos
+
+- `useState` para estado local del componente.
+- `useEffect` con array de dependencias explícito siempre.
+- No uses `useEffect` para derivar estado — calcula el valor directamente.
+
+```jsx
+// ✅ Correcto — dependencias explícitas
+useEffect(() => {
+  document.title = title
+}, [title])
+
+// ❌ Incorrecto — sin dependencias (ejecuta en cada render)
+useEffect(() => {
+  document.title = title
+})
+```
+
+## Accesibilidad
+
+- Todos los iconos decorativos llevan `aria-hidden="true"`.
+- Botones con solo icono requieren `aria-label`.
+- El orden del DOM debe coincidir con el orden visual.
+- El foco debe ser visible siempre (`:focus-visible` global en DS-001 §12).
+
+<Callout variant="tip" title="Regla práctica">
+  Si no puedes describir el propósito del elemento con una frase corta, el `aria-label` está incompleto.
+</Callout>

@@ -1,3 +1,26 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  :focus-visible {
+    /* pulse-500 (Frontend/tailwind.config.js) -- mismo morado que el resto
+       de los anillos de foco de la app (focus:ring-pulse-500), no un valor
+       aparte. */
+    outline: 2px solid #a855f7;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

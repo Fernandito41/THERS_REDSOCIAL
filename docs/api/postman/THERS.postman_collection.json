@@ -1,0 +1,428 @@
+{
+  "info": {
+    "_postman_id": "09ef9a5d-906a-468a-acef-c9c1a6dfec3d",
+    "name": "THERS",
+    "description": "Colección oficial de pruebas de la API de THERS.  \nDebe mantenerse alineada con docs/architecture/API_CONTRACT.md.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "56834585"
+  },
+  "item": [
+    {
+      "name": "01_AUTH",
+      "item": [
+        {
+          "name": "register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Status code is 201\", function () {\r",
+                  "    pm.response.to.have.status(201);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains user\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"user\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains expected public fields\", function () {\r",
+                  "    [\"id\", \"username\", \"email\", \"name\", \"phone\", \"country_code\", \"birth_date\"].forEach((field) => {\r",
+                  "        pm.expect(json.user).to.have.property(field);\r",
+                  "    });\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response never exposes sensitive fields\", function () {\r",
+                  "    [\"password\", \"password_hash\", \"confirm_password\"].forEach((field) => {\r",
+                  "        pm.expect(json.user).to.not.have.property(field);\r",
+                  "    });\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"THERS Test\",\r\n  \"username\": \"{{test_username}}\",\r\n  \"email\": \"{{test_email}}\",\r\n  \"phone\": \"7000-1234\",\r\n  \"country_code\": \"+503\",\r\n  \"birth_date\": \"1995-05-20\",\r\n  \"password\": \"{{test_password}}\",\r\n  \"confirm_password\": \"{{test_password}}\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Status code is 200\", function () {\r",
+                  "    pm.response.to.have.status(200);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains token\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"token\");\r",
+                  "    pm.expect(json.token).to.be.a(\"string\").and.not.empty;\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains user\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"user\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains id\", function () {\r",
+                  "    pm.expect(json.user).to.have.property(\"id\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains email\", function () {\r",
+                  "    pm.expect(json.user).to.have.property(\"email\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains name\", function () {\r",
+                  "    pm.expect(json.user).to.have.property(\"name\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.environment.set(\"jwt_token\", json.token);\r",
+                  "pm.environment.set(\"user_id\", json.user.id);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"{{test_email}}\",\r\n  \"password\": \"{{test_password}}\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02_USERS",
+      "item": [
+        {
+          "name": "get current user (me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Status code is 200\", function () {\r",
+                  "    pm.response.to.have.status(200);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains user\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"user\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User matches the logged-in user_id\", function () {\r",
+                  "    pm.expect(json.user.id).to.eql(pm.environment.get(\"user_id\"));\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response never exposes sensitive fields\", function () {\r",
+                  "    [\"password\", \"password_hash\", \"confirm_password\", \"token\", \"secret\"].forEach((field) => {\r",
+                  "        pm.expect(json.user).to.not.have.property(field);\r",
+                  "    });\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get current user (me) - sin token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\r",
+                  "    pm.response.to.have.status(401);\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/users/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "update current user (me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"Status code is 200\", function () {\r",
+                  "    pm.response.to.have.status(200);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains user\", function () {\r",
+                  "    pm.expect(json).to.have.property(\"user\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"User contains expected public fields\", function () {\r",
+                  "    [\"id\", \"username\", \"email\", \"name\", \"phone\", \"country_code\", \"birth_date\"].forEach((field) => {\r",
+                  "        pm.expect(json.user).to.have.property(field);\r",
+                  "    });\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Updated field was applied\", function () {\r",
+                  "    pm.expect(json.user.name).to.eql(\"THERS Test Actualizado\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response never exposes sensitive fields\", function () {\r",
+                  "    [\"password\", \"password_hash\", \"confirm_password\", \"token\", \"secret\"].forEach((field) => {\r",
+                  "        pm.expect(json.user).to.not.have.property(field);\r",
+                  "        pm.expect(json).to.not.have.property(field);\r",
+                  "    });\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"THERS Test Actualizado\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "update current user (me) - body vacio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {\r",
+                  "    pm.response.to.have.status(400);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"Response contains msg\", function () {\r",
+                  "    pm.expect(pm.response.json()).to.have.property(\"msg\");\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{jwt_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "update current user (me) - sin token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401\", function () {\r",
+                  "    pm.response.to.have.status(401);\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"name\": \"No deberia aplicarse\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

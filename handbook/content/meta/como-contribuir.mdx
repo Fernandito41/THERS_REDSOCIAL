@@ -1,0 +1,94 @@
+---
+code: "META-001"
+title: "Cómo Contribuir"
+status: "estable"
+version: "1.0"
+author: "Fernando Escalante"
+description: "Guía para contribuir al Engineering Handbook: crear documentos, convenciones de formato y proceso de revisión."
+---
+
+import Callout from '@ui/Callout'
+import Alert from '@ui/Alert'
+
+## Antes de empezar
+
+<Alert variant="info">
+  Toda contribución al Handbook debe seguir DS-001 y las convenciones descritas en este documento. Un PR que no cumple el formato será solicitado a corregir antes de revisarse.
+</Alert>
+
+## Crear un documento nuevo
+
+### 1. Elige la categoría correcta
+
+El documento debe pertenecer a exactamente una categoría raíz:
+
+| Categoría | Cuándo usarla |
+|---|---|
+| Organización | Cultura, procesos de equipo, estructura |
+| Estrategia | Visión, objetivos, plan IA |
+| Arquitectura | ADRs, diagramas, decisiones técnicas |
+| Ingeniería | Guías técnicas de código (React, Flask, DB) |
+| Academy | Onboarding, tutoriales paso a paso |
+| Playbooks | Procesos operativos repetibles |
+| Roadmap | Estado actual del producto |
+| Meta | Documentación sobre la documentación |
+
+### 2. Crea el archivo MDX
+
+Ubica el archivo en `/content/{categoría}/{slug}.mdx` donde el slug es `kebab-case`.
+
+El frontmatter es obligatorio:
+
+```yaml
+---
+code: "ENG-003"        # Código único del documento
+title: "Título del documento"
+status: "draft"        # estable | draft | deprecado | beta
+version: "0.1"
+author: "Tu Nombre"
+description: "Una frase que describe el propósito del documento."
+---
+```
+
+### 3. Escribe el contenido
+
+- El H1 del documento lo genera el sistema desde el campo `title` del frontmatter. **No escribas un `#` al inicio del documento.**
+- Los H2 (`##`) son secciones principales. Los H3 (`###`) son subsecciones.
+- Usa Callouts para notas importantes, tips y advertencias.
+- Usa Alert (banner de página) solo cuando todo el documento está afectado por una advertencia.
+
+<Callout variant="tip" title="Longitud recomendada">
+  Un documento del Handbook debe poder leerse en 5–10 minutos. Si supera las 1500 palabras, considera dividirlo en dos documentos con referencias cruzadas.
+</Callout>
+
+## Componentes disponibles en MDX
+
+Puedes importar y usar cualquier componente del Design System:
+
+```mdx
+import Callout from '@ui/Callout'
+import Alert from '@ui/Alert'
+import Badge from '@ui/Badge'
+
+<Callout variant="nota">Texto de la nota</Callout>
+<Alert variant="warning">Este documento está desactualizado.</Alert>
+<Badge variant="estable" />
+```
+
+## Proceso de revisión
+
+1. Crea una rama: `docs/{categoría}/{slug}`
+2. Escribe el documento siguiendo esta guía
+3. Abre un PR a `develop` con el título: `docs: añadir {título del documento}`
+4. Asigna un revisor del equipo
+5. El documento puede mergearse con al menos 1 aprobación
+
+<Callout variant="advertencia" title="Estado del documento">
+  Todo documento nuevo debe iniciar con `status: "draft"`. Solo puede cambiar a `estable` después de que el equipo lo haya revisado y considerado completo.
+</Callout>
+
+## Actualizar un documento existente
+
+- Incrementa el campo `version` (ej: `1.0` → `1.1` para cambios menores).
+- Usa `status: "deprecado"` cuando el documento ya no aplica pero no debe eliminarse por referencia histórica.
+- Nunca borres contenido sin dejar al menos una nota sobre por qué fue removido.

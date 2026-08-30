@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Favicon pendiente: se define cuando exista un isotipo de marca aprobado (DS-001 §3.2) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>THERS Engineering Handbook</title>
+    <!-- Anti-FOUC: aplica data-theme antes de que React hidrate (DS-001 §10).
+         Sin este script, el usuario vería un flash del tema claro antes de que
+         ThemeToggle lea localStorage y aplique el tema guardado. -->
+    <script>
+      ;(function () {
+        var stored = localStorage.getItem('theme')
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        var theme = stored === 'dark' || stored === 'light' ? stored : (prefersDark ? 'dark' : 'light')
+        document.documentElement.setAttribute('data-theme', theme)
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

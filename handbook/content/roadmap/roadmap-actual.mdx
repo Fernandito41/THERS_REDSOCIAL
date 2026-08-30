@@ -1,0 +1,83 @@
+---
+code: "MAP-001"
+title: "Roadmap Actual"
+status: "estable"
+version: "1.0"
+author: "Fernando Escalante"
+description: "Estado actual y planificación próxima del proyecto THERS."
+---
+
+import Alert from '@ui/Alert'
+import Callout from '@ui/Callout'
+import Timeline from '@ui/Timeline'
+import Badge from '@ui/Badge'
+
+<Alert variant="info">
+  Este documento se actualiza al cierre de cada módulo o sprint. Verifica la fecha de la última actualización comparando el campo `version` con el historial de commits.
+</Alert>
+
+## Estado general
+
+| Área | Módulo actual | Próximo |
+|---|---|---|
+| Engineering Handbook | Módulo 10 — Release Candidate <Badge variant="estable">RC</Badge> | Mantenimiento (auditoría mensual, STD-001 §6) |
+| Frontend red social | Conectado a backend | Features sociales |
+| Backend API | Auth completa | Feed + perfiles |
+
+## Handbook — Módulos completados
+
+<Timeline>
+  <Timeline.Item status="completado" date="M1" title="Foundation: Vite + React + Tailwind v4">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M2" title="Layout System: Header, Sidebar, MainContent">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M3" title="Navigation System: Router, layouts, páginas">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M4" title="Design System Components: Badge, Button, Callout, Alert, ThemeToggle">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M5" title="Content Layer: MDX rendering, registro de contenido">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M6" title="Search + Scroll-spy TOC">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M7" title="Responsive + Sequential Navigation: Drawer mobile, PrevNext, CodeBlock">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M8" title="Footer + Accesibilidad">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M9" title="Content Components: Card unificado, Timeline, sombra de scroll en tablas">
+    Completado
+  </Timeline.Item>
+  <Timeline.Item status="completado" date="M10" title="Release Candidate: auditoría final, container-app 1440px, cierre de PV-001 Parte 10">
+    Completado
+  </Timeline.Item>
+</Timeline>
+
+## Módulo 10 — Release Candidate
+
+<Callout variant="tip" title="Cierre oficial del Handbook">
+  El Módulo 10 auditó la implementación completa contra el Checklist de Implementación de PV-001 Parte 10 §6 (20 ítems) y la matriz de accesibilidad WCAG 2.2 AA de PV-001 Parte 10 §2. No se agregó funcionalidad nueva fuera de correcciones menores de fidelidad visual.
+</Callout>
+
+**Corrección aplicada:** `container-app` de 1440px en los tres layouts (PV-001 Responsive §2, breakpoint `bp-wide`) — el App Shell no tenía límite de ancho en monitores ultrawide.
+
+**Pendientes de proceso, no de código** (PV-001 Parte 10 §7–8 — requieren decisión humana, no se resuelven en una PR):
+- Las 25 extensiones a DS-001 registradas en el Anexo de PV-001 (ADRCard, Chips, Tabs, búsquedas recientes, columna fija en tablas, entre otras) siguen sin ratificación formal del Comité Técnico — por diseño, ninguna se implementó en este módulo.
+- Validación de escalabilidad con el documento más extenso real (HB-001, 427 líneas) — `organizacion/manual-equipo.mdx` es hoy una versión condensada.
+- Flujos de UX probados con usuarios reales del equipo (PV-001 Parte 10 §6 ítem 17).
+
+## Frontend red social
+
+| Feature | Estado |
+|---|---|
+| Autenticación (login/register) | ✅ Completa |
+| Conexión frontend-backend | ✅ Completa |
+| Feed de publicaciones | 🔵 En desarrollo |
+| Perfil de usuario | 🔵 Planificado |
+| Mensajes directos | 🔵 Futuro |

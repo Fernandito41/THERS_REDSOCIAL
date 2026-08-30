@@ -1,0 +1,67 @@
+---
+code: "ENG-002"
+title: "Arquitectura Frontend"
+status: "estable"
+version: "1.0"
+author: "Fernando Escalante"
+description: "Visión de la arquitectura frontend THERS: capas, responsabilidades y flujo de dependencias según FAS-001."
+---
+
+import Callout from '@ui/Callout'
+
+## Resumen
+
+El frontend THERS está dividido en dos proyectos React independientes dentro del monorepo:
+
+- **`Frontend/`** — La red social: feeds, perfiles, mensajes, auth.
+- **`handbook/`** — Este Handbook de ingeniería.
+
+Cada proyecto es autónomo: tiene su propio `package.json`, `vite.config.js` y pipeline de build.
+
+## Capas de la arquitectura (FAS-001)
+
+La especificación FAS-001 define 8 capas con dependencias en una sola dirección (de arriba a abajo):
+
+| Capa | Directorio | Responsabilidad |
+|---|---|---|
+| Presentación | `pages/` | Páginas completas, sin lógica de negocio |
+| Layouts | `layouts/` | Estructuras de pantalla persistentes |
+| Componentes | `components/` | Elementos reutilizables del UI |
+| Contenido | `content/` | Archivos MDX y el registro de contenido |
+| Assets | `assets/` | Imágenes, fuentes estáticas |
+| Servicios | `services/` | Llamadas a API externa |
+| Utilidades | `utils/` | Funciones puras sin efectos |
+| Tipos | `types/` | TypeScript types / JSDoc |
+
+<Callout variant="advertencia" title="Regla de dependencias">
+  Una capa solo puede importar desde capas inferiores en la jerarquía. Pages importan de Components; Components nunca importan de Pages.
+</Callout>
+
+## Stack tecnológico
+
+| Tecnología | Versión | Uso |
+|---|---|---|
+| React | 19.2.x | UI framework |
+| Vite | 8.x | Bundler + dev server |
+| Tailwind CSS | 4.x | Utility-first CSS |
+| React Router | 7.x | Routing declarativo |
+| Lucide React | latest | Iconos (única biblioteca aprobada) |
+| MDX | via @mdx-js/rollup | Contenido del Handbook |
+
+## Patrones de routing
+
+El Handbook usa **nested routes** de React Router 7 para layouts persistentes:
+
+```jsx
+createBrowserRouter([
+  { path: '/', element: <HomeLayout />, children: [{ index: true, element: <HomePage /> }] },
+  { element: <CategoryLayout />, children: categoryRoutes },
+  { element: <DocumentLayout />, children: [{ path: '/:category/:doc', element: <DocumentPage /> }] },
+])
+```
+
+El `<Outlet />` en cada layout recibe la página hija resuelta por el router, permitiendo que Header y Sidebar no se re-rendericen al navegar.
+
+## Design System
+
+Todos los colores se consumen como CSS custom properties (`var(--color-*)`). El Design System DS-001 define los tokens en `src/styles/index.css`. El cambio de tema (claro/oscuro) modifica el atributo `data-theme` en `<html>`.

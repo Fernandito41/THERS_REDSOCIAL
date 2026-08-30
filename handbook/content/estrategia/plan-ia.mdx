@@ -1,0 +1,53 @@
+---
+code: "EST-001"
+title: "Plan Estratégico IA"
+status: "draft"
+version: "0.1"
+author: "Fernando Escalante"
+description: "Visión estratégica del uso de Inteligencia Artificial en el proyecto THERS."
+---
+
+import Callout from '@ui/Callout'
+
+## Visión
+
+THERS integra herramientas de IA en el flujo de desarrollo para acelerar la entrega de valor sin comprometer la calidad del código. La IA asiste al equipo — no lo reemplaza.
+
+## Principios
+
+### IA como copiloto, no como piloto
+Toda decisión técnica de impacto requiere revisión humana. La IA puede generar código, documentación y tests, pero el equipo es responsable de lo que entra al repositorio.
+
+### Transparencia en el uso
+Si un bloque de código o documentación fue generado con IA, se indica en el commit message o en el frontmatter del documento.
+
+### Calidad no negociable
+El código generado por IA debe cumplir los mismos estándares que el código humano: pasar los tests, seguir las convenciones y estar documentado.
+
+## Herramientas aprobadas
+
+| Herramienta | Uso aprobado |
+|---|---|
+| Claude Code | Desarrollo del Handbook, refactors, documentación |
+| GitHub Copilot | Autocompletado en el IDE |
+| ChatGPT / Claude | Investigación, borradores de documentación |
+
+<Callout variant="nota" title="Datos sensibles">
+  Ninguna herramienta de IA debe recibir credenciales, tokens, datos de usuarios o código que contenga información sensible del proyecto.
+</Callout>
+
+## Métricas de éxito
+
+- Tiempo promedio de entrega de features
+- Cobertura de tests mantenida ≥ 80%
+- Documentación actualizada con cada PR de feature
+- Deuda técnica medida con herramientas estáticas en cada release
+
+## Roadmap de integración IA
+
+| Fase | Descripción | Estado |
+|---|---|---|
+| Fase 1 | Uso de Claude Code para desarrollo del Handbook | ✅ En curso |
+| Fase 2 | Generación asistida de tests unitarios | 🔵 Planificado |
+| Fase 3 | Revisión de PRs asistida por IA | 🔵 Planificado |
+| Fase 4 | Generación de documentación desde código | 🔵 Futuro |

@@ -1,0 +1,57 @@
+---
+code: "HB-001"
+title: "Manual del Equipo"
+status: "estable"
+version: "1.0"
+author: "Fernando Escalante"
+description: "Principios de trabajo, valores y estructura del equipo THERS."
+---
+
+import Callout from '@ui/Callout'
+
+## Quiénes somos
+
+THERS es un equipo de ingeniería pequeño y autónomo. Construimos una red social de ingeniería con el objetivo de conectar profesionales técnicos en Latinoamérica.
+
+## Valores del equipo
+
+### Claridad sobre velocidad
+Preferimos documentar bien una decisión antes de ejecutarla rápido. Las decisiones sin contexto generan deuda técnica difícil de revertir.
+
+### Autonomía con alineación
+Cada miembro es responsable de su área. La alineación se da a través de documentación, ADRs y revisiones de código — no de microgestión.
+
+### Calidad por defecto
+El código que entra a `main` debe estar revisado, probado y documentado. No existe "lo arreglamos después" en el flujo de trabajo.
+
+## Estructura de trabajo
+
+### Ramas
+- `main` — producción, protegida
+- `develop` — integración continua
+- `feature/{nombre}` — nuevas funcionalidades
+- `fix/{nombre}` — correcciones de bugs
+- `docs/{categoría}/{slug}` — documentación nueva
+
+### Pull Requests
+- Título: `tipo: descripción corta` (feat, fix, docs, refactor, test)
+- Mínimo 1 aprobación para mergear a `develop`
+- Mínimo 2 aprobaciones para mergear a `main`
+- Los PRs deben tener descripción, lista de cambios y checklist de pruebas
+
+### Reuniones
+- **Standup diario** — 15 min, async en Slack si no hay bloqueos
+- **Planning semanal** — lunes, 1 hora
+- **Retrospectiva** — último viernes del mes
+
+<Callout variant="nota" title="Documentación primero">
+  Antes de iniciar cualquier feature de más de 2 días de trabajo, se espera un ADR o una nota técnica en el Handbook. Esto evita trabajo duplicado y alineaciones tardías.
+</Callout>
+
+## Decisiones técnicas de alto impacto
+
+Las decisiones que afectan la arquitectura del sistema, el stack tecnológico o los procesos del equipo requieren:
+
+1. Un ADR documentado en `content/arquitectura/`
+2. Revisión por al menos 2 miembros del equipo
+3. Periodo de comentarios de 48h antes de cerrar la decisión

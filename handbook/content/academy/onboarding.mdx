@@ -1,0 +1,93 @@
+---
+code: "ACA-001"
+title: "Onboarding"
+status: "estable"
+version: "1.0"
+author: "Fernando Escalante"
+description: "Guía de incorporación al equipo THERS: setup del entorno, accesos y primeros pasos."
+---
+
+import Callout from '@ui/Callout'
+import Alert from '@ui/Alert'
+
+## Bienvenido al equipo THERS
+
+Este documento guía tu primera semana de trabajo. Síguela en orden — cada sección depende de la anterior.
+
+<Alert variant="info">
+  Si algo de esta guía está desactualizado o no funciona, abre un PR corrigiéndolo. La documentación es responsabilidad de todos.
+</Alert>
+
+## Día 1 — Setup del entorno
+
+### Requisitos previos
+
+- Node.js 20 LTS o superior
+- Python 3.11 o superior
+- Git 2.40+
+- VS Code (recomendado) con las extensiones del proyecto
+
+### Clonar el repositorio
+
+```bash
+git clone https://github.com/Fernandito41/THERS_REDSOCIAL.git
+cd THERS_REDSOCIAL
+```
+
+### Levantar el backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+python run.py
+```
+
+El API estará disponible en `http://localhost:5000`.
+
+### Levantar el frontend (red social)
+
+```bash
+cd Frontend
+npm install
+npm run dev
+```
+
+### Levantar el Handbook
+
+```bash
+cd handbook
+npm install
+npm run dev
+```
+
+El Handbook estará en `http://localhost:5173`.
+
+## Día 2 — Lectura obligatoria
+
+Lee estos documentos en este orden:
+
+1. **HB-001** — Manual del equipo (valores, estructura, ramas)
+2. **ARC-001** — Visión del sistema (arquitectura general)
+3. **ENG-001** — Convenciones de React (si tu área es frontend)
+4. **META-001** — Cómo contribuir al Handbook
+
+<Callout variant="tip" title="No intentes leer todo">
+  El Handbook es una referencia, no un manual de instrucciones secuencial. Enfócate en los documentos de tu área y vuelve al resto cuando lo necesites.
+</Callout>
+
+## Día 3–5 — Primera contribución
+
+Tu primera contribución al proyecto debe ser una mejora a este documento (`ACA-001`) o a cualquier documento del Handbook que encuentres desactualizado.
+
+Esto sirve para:
+- Confirmar que tu entorno de Git está configurado correctamente
+- Familiarizarte con el proceso de PR
+- Tener tu primer merge en el repositorio
+
+### Checklist de primera semana
+
+- [ ] Entorno local funcionando (backend + frontend + handbook)
+- [ ] Acceso al repositorio de GitHub
+- [ ] Primer commit en una rama `docs/`
+- [ ] PR abierto y revisado
+- [ ] Documentos de arquitectura leídos

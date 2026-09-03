@@ -32,7 +32,7 @@ export default function MobileNav({ onOpenComposer, onOpenSearch, unreadCount = 
             key={to}
             onClick={onOpenComposer}
             aria-label={label}
-            className="flex items-center justify-center w-12 h-12 -mt-6 rounded-full bg-gradient-to-br from-pulse-500 to-pulse-700 text-white shadow-lift active:scale-95 transition-transform"
+            className="flex items-center justify-center w-12 h-12 -mt-6 rounded-full bg-ink dark:bg-ink-dark text-surface dark:text-surface-dark shadow-lift active:scale-95 transition-transform"
           >
             <Icon size={24} />
           </button>
@@ -52,7 +52,7 @@ export default function MobileNav({ onOpenComposer, onOpenSearch, unreadCount = 
             aria-label={to === "/notifications" && unreadCount > 0 ? t("nav.notificationsUnread", { count: unreadCount }) : label}
             className={({ isActive }) =>
               `relative flex items-center justify-center w-11 h-11 rounded-full transition ${
-                isActive ? "bg-pulse-50 dark:bg-pulse-900/30 text-pulse-600" : "text-muted dark:text-muted-dark"
+                isActive ? "bg-line dark:bg-line-dark text-ink dark:text-ink-dark" : "text-muted dark:text-muted-dark"
               }`
             }
           >

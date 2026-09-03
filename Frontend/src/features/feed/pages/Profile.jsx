@@ -1,349 +1,267 @@
-import { useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
-import { IoAdd, IoClose, IoMusicalNotesOutline, IoPencilOutline } from "react-icons/io5";
-import Avatar from "@shared/components/Avatar";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
+import {
+  IoBookmarkOutline,
+  IoChatbubbleOutline,
+  IoHeartOutline,
+  IoImagesOutline,
+  IoMusicalNotesOutline,
+  IoSparklesOutline,
+} from "react-icons/io5";
 import { getErrorMessage } from "@shared/lib/api";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
-import MoodBadge from "../components/MoodBadge";
 import CapsuleCard from "../components/CapsuleCard";
-import { MOODS } from "../data/mockData";
+import EditProfileModal from "../components/EditProfileModal";
+import ProfileHeader from "../components/ProfileHeader";
+import ProfileTabs, { DEFAULT_TAB, isProfileTab } from "../components/ProfileTabs";
+import ProfileTopBar from "../components/ProfileTopBar";
+import { loadProfile, moveProfile } from "../lib/profileStorage";
 
-const BANNERS = [
-  "from-pulse-500 to-pulse-300",
-  "from-pulse-800 to-pulse-400",
-  "from-pulse-700 to-pulse-400",
-  "from-pulse-900 to-pulse-600",
-];
+// Perfil de THERS con la identidad visual monocroma definida por producto
+// (Frontend/src/assets/ideas_perfil.jpeg), la estructura de secciones de una
+// red social (perfil_idea.png) y la hoja de edición de editar.png.
+//
+// Qué es real y qué no, para no mostrar datos falsos:
+//   - Publicaciones      -> posts reales (GET /api/posts, ADR-004).
+//   - Nombre / usuario   -> reales (PATCH /api/users/me, ADR-003).
+//   - Bio, ubicación, sitio web, mood, intereses, portada, acento -> locales
+//     (localStorage): no hay columnas ratificadas (DATABASE_ARCHITECTURE.md §4.B).
+//   - Seguidores         -> 0 de verdad: no existe la funcionalidad todavía.
+//   - Respuestas / Media / Guardados / Me gusta -> secciones vacías declaradas
+//     como no disponibles, nunca rellenadas con contenido inventado.
+//   - Sin insignia de verificado: no existe como funcionalidad.
 
-// Tonos verificados con contraste >= 4.5:1 sobre texto blanco (WCAG AA).
-const ACCENTS = ["#9333ea", "#7e22ce", "#a21caf", "#3b5bdb"];
-
-// Perfil editable, exclusivamente local (localStorage) -- no hay backend/columnas
-// ratificadas para bio/mood/intereses todavía (DATABASE_ARCHITECTURE.md §4.B).
-// Nunca se precarga con datos inventados: todo empieza vacío hasta que la persona
-// lo completa ella misma.
-function loadProfile(username) {
-  try {
-    const raw = localStorage.getItem(`thers_profile_${username}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+function EmptyState({ Icon, title, description }) {
+  return (
+    <div className="rounded-[28px] border border-line bg-surface px-6 py-14 text-center shadow-soft dark:border-line-dark dark:bg-surface-dark">
+      <Icon size={26} className="mx-auto text-muted dark:text-muted-dark" aria-hidden="true" />
+      <p className="mt-3 text-sm font-semibold text-ink dark:text-ink-dark">{title}</p>
+      <p className="mx-auto mt-1 max-w-sm text-sm text-muted dark:text-muted-dark">{description}</p>
+    </div>
+  );
 }
 
-function saveProfile(username, profile) {
-  localStorage.setItem(`thers_profile_${username}`, JSON.stringify(profile));
+function PostsSkeleton() {
+  return (
+    <div className="space-y-4" aria-hidden="true">
+      {[0, 1].map((key) => (
+        <div
+          key={key}
+          className="h-40 animate-pulse rounded-[28px] border border-line bg-surface motion-reduce:animate-none dark:border-line-dark dark:bg-surface-dark"
+        />
+      ))}
+    </div>
+  );
 }
 
 export default function Profile() {
-  const { currentUser, capsules, followingIds, onUpdateUser } = useOutletContext();
+  const { currentUser, capsules, capsulesLoading, followingIds, notifications, onUpdateUser } =
+    useOutletContext();
   const toast = useToast();
   const { t } = useLanguage();
+  const navigate = useNavigate();
+  const editButtonRef = useRef(null);
 
-  const [profile, setProfile] = useState(
-    () =>
-      loadProfile(currentUser.username) || {
-        bio: "",
-        mood: null,
-        interests: [],
-        favoriteTrack: "",
-        banner: BANNERS[0],
-        accent: ACCENTS[0],
-      }
+  const unreadCount = useMemo(
+    () => notifications.filter((notification) => !notification.read).length,
+    [notifications]
   );
-  const [editingIdentity, setEditingIdentity] = useState(false);
-  const [nameDraft, setNameDraft] = useState(currentUser.name);
-  const [usernameDraft, setUsernameDraft] = useState(currentUser.username);
-  const [bioDraft, setBioDraft] = useState(profile.bio);
-  const [interestDraft, setInterestDraft] = useState("");
-  const [isSavingIdentity, setIsSavingIdentity] = useState(false);
 
-  const update = (patch) => {
-    setProfile((prev) => {
-      const next = { ...prev, ...patch };
-      saveProfile(currentUser.username, next);
-      return next;
-    });
+  const [profile, setProfile] = useState(() => loadProfile(currentUser.username));
+  const [isEditing, setEditing] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // La sección activa vive en la URL para que el perfil se pueda compartir y
+  // recargar en la sección en la que estaba (?tab=saved).
+  const tabParam = searchParams.get("tab");
+  const activeTab = isProfileTab(tabParam) ? tabParam : DEFAULT_TAB;
+
+  const handleTabChange = useCallback(
+    (id) => {
+      const next = new URLSearchParams(searchParams);
+      if (id === DEFAULT_TAB) next.delete("tab");
+      else next.set("tab", id);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
+
+  // Si el username cambia (o se abre la sesión con otra cuenta), el perfil
+  // extendido que se lee es el de esa cuenta, no el que quedó en memoria.
+  useEffect(() => {
+    setProfile(loadProfile(currentUser.username));
+  }, [currentUser.username]);
+
+  // `capsules` son posts reales (ADR-004): el autor se identifica por
+  // `author.id` contra el usuario actual.
+  const ownCapsules = useMemo(
+    () => capsules.filter((capsule) => capsule.author.id === currentUser.id),
+    [capsules, currentUser.id]
+  );
+
+  const stats = {
+    posts: ownCapsules.length,
+    followers: 0,
+    following: followingIds.size,
   };
 
-  const openEditIdentity = () => {
-    setNameDraft(currentUser.name);
-    setUsernameDraft(currentUser.username);
-    setBioDraft(profile.bio);
-    setEditingIdentity(true);
+  const closeEditor = () => {
+    setEditing(false);
+    // El foco vuelve al botón que abrió la hoja, no al principio del documento.
+    requestAnimationFrame(() => editButtonRef.current?.focus());
   };
 
-  // name/username están persistidos por el backend (PATCH /api/users/me,
-  // ADR-003) -- onUpdateUser() es AuthContext.updateProfile(), única fuente
-  // de escritura para esos campos. bio sigue siendo local (DATABASE_ARCHITECTURE.md
-  // §4.B, sin columna ratificada) y solo se guarda si el PATCH tuvo éxito; si
-  // cambia el username, se migra la clave del perfil extendido con él para no
-  // perder bio/mood/intereses ya guardados.
-  const handleSaveIdentity = async (e) => {
-    e.preventDefault();
-    const name = nameDraft.trim();
-    const username = usernameDraft.trim();
-    if (!name || !username || isSavingIdentity) return;
-
-    const usernameChanged = username !== currentUser.username;
-    setIsSavingIdentity(true);
+  // name/username los persiste el backend; el resto es local y solo se guarda
+  // si el PATCH tuvo éxito, para que la pantalla nunca muestre un cambio que
+  // el servidor rechazó. Si el username cambió, el perfil extendido se muda
+  // con él (la clave de localStorage lo incluye).
+  const handleSave = async ({ name, username, profile: nextProfile }) => {
+    const previousUsername = currentUser.username;
 
     try {
       await onUpdateUser({ name, username });
-
-      const bio = bioDraft.trim();
-      setProfile((prev) => {
-        const next = { ...prev, bio };
-        if (usernameChanged) {
-          localStorage.removeItem(`thers_profile_${currentUser.username}`);
-        }
-        saveProfile(username, next);
-        return next;
-      });
-
-      setEditingIdentity(false);
     } catch (error) {
       toast.error(getErrorMessage(error, t));
-    } finally {
-      setIsSavingIdentity(false);
+      return;
+    }
+
+    moveProfile(previousUsername, username, nextProfile);
+    setProfile(nextProfile);
+    closeEditor();
+    toast.success("Perfil actualizado");
+  };
+
+  // Copia la URL de esta misma página, no un enlace público inventado: los
+  // perfiles de otras personas todavía no tienen ruta propia en THERS.
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Enlace del perfil copiado");
+    } catch {
+      toast.error("No se pudo copiar el enlace");
     }
   };
 
-  // `capsules` ahora son posts reales (GET /api/posts, ADR-004-posts-minimal-model.md)
-  // -- ya no traen `own`, el autor se identifica por `author.id` contra el usuario actual.
-  const ownCapsules = useMemo(
-    () => capsules.filter((c) => c.author.id === currentUser.id),
-    [capsules, currentUser.id]
-  );
-  const featured = ownCapsules[0] || null;
+  const hasAbout = profile.interests.length > 0 || Boolean(profile.favoriteTrack);
 
-  const addInterest = (e) => {
-    e.preventDefault();
-    const value = interestDraft.trim();
-    if (!value || profile.interests.includes(value)) return;
-    update({ interests: [...profile.interests, value] });
-    setInterestDraft("");
+  const panels = {
+    posts: capsulesLoading ? (
+      <PostsSkeleton />
+    ) : ownCapsules.length > 0 ? (
+      <div className="space-y-4">
+        {ownCapsules.map((capsule) => (
+          <CapsuleCard key={capsule.id} capsule={capsule} />
+        ))}
+      </div>
+    ) : (
+      <EmptyState
+        Icon={IoSparklesOutline}
+        title="Todavía no publicaste nada"
+        description="Tu primera Cápsula aparecerá acá y abrirá tu perfil al resto de THERS."
+      />
+    ),
+    replies: (
+      <EmptyState
+        Icon={IoChatbubbleOutline}
+        title="Respuestas"
+        description="Responder Cápsulas todavía no está disponible en THERS. Cuando lo esté, tus respuestas se verán en esta sección."
+      />
+    ),
+    media: (
+      <EmptyState
+        Icon={IoImagesOutline}
+        title="Media"
+        description="Las Cápsulas todavía son solo texto. Cuando se puedan publicar fotos y videos, aparecerán acá."
+      />
+    ),
+    saved: (
+      <EmptyState
+        Icon={IoBookmarkOutline}
+        title="Guardados"
+        description="Guardar Cápsulas todavía no está disponible. Lo que guardes se verá acá, y solo vos podés verlo."
+      />
+    ),
+    likes: (
+      <EmptyState
+        Icon={IoHeartOutline}
+        title="Me gusta"
+        description="Los Me gusta todavía no están disponibles en THERS. Cuando lo estén, los tuyos se listarán acá."
+      />
+    ),
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="rounded-[28px] overflow-hidden bg-surface dark:bg-surface-dark border border-line dark:border-line-dark shadow-soft">
-        <div className={`h-36 bg-gradient-to-tr ${profile.banner} relative`}>
-          <div className="absolute bottom-3 right-3 flex gap-1.5">
-            {BANNERS.map((banner) => (
-              <button
-                key={banner}
-                onClick={() => update({ banner })}
-                aria-label="Cambiar ambiente del perfil"
-                className={`w-6 h-6 rounded-full bg-gradient-to-tr ${banner} border-2 ${
-                  profile.banner === banner ? "border-white" : "border-white/40"
-                }`}
-              />
-            ))}
-          </div>
-        </div>
+    <div className="mx-auto max-w-3xl space-y-4">
+      {/* Todo el perfil vive en una sola caja -- barra superior, portada,
+          identidad, métricas y secciones -- y cada publicación en la suya
+          (Frontend/src/assets/ideas_perfil.jpeg). Sin `overflow-hidden` acá:
+          recortaría el menú desplegable de la barra superior. */}
+      <section className="rounded-[28px] border border-line bg-surface shadow-soft dark:border-line-dark dark:bg-surface-dark">
+        <ProfileTopBar
+          onOpenSearch={() => navigate("/discover")}
+          onCopyLink={handleShare}
+          unreadCount={unreadCount}
+        />
 
-        <div className="px-6 pb-6">
-          <div className="-mt-10 flex items-end justify-between">
-            <div className="ring-4 ring-surface dark:ring-surface-dark rounded-full">
-              <Avatar name={currentUser.name} size="w-20 h-20 text-2xl" color={profile.accent} />
-            </div>
+        <ProfileHeader
+          user={currentUser}
+          profile={profile}
+          stats={stats}
+          onEdit={() => setEditing(true)}
+          onShare={handleShare}
+          editButtonRef={editButtonRef}
+        />
 
-            <div className="flex items-center gap-2 mb-1">
-              <div className="flex gap-1.5" aria-label="Color de acento">
-                {ACCENTS.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => update({ accent: color })}
-                    aria-label={`Elegir acento ${color}`}
-                    className="w-6 h-6 rounded-full border-2"
-                    style={{ backgroundColor: color, borderColor: profile.accent === color ? profile.accent : "transparent" }}
-                  />
-                ))}
-              </div>
+        <ProfileTabs active={activeTab} onChange={handleTabChange} />
+      </section>
 
-              {!editingIdentity && (
-                <button
-                  onClick={openEditIdentity}
-                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full border border-line dark:border-line-dark text-ink dark:text-ink-dark hover:bg-canvas dark:hover:bg-canvas-dark transition"
+      {hasAbout && (
+        <section className="rounded-[28px] border border-line bg-surface p-5 shadow-soft dark:border-line-dark dark:bg-surface-dark">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted dark:text-muted-dark">
+            Acerca de
+          </h2>
+
+          {profile.interests.length > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {profile.interests.map((interest) => (
+                <li
+                  key={interest}
+                  className="rounded-full bg-canvas px-3 py-1.5 text-xs font-medium text-ink dark:bg-canvas-dark dark:text-ink-dark"
                 >
-                  <IoPencilOutline size={13} /> Editar perfil
-                </button>
-              )}
-            </div>
-          </div>
-
-          {editingIdentity ? (
-            <form onSubmit={handleSaveIdentity} className="mt-3 space-y-2 animate-float-in">
-              <input
-                autoFocus
-                type="text"
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                placeholder="Nombre"
-                aria-label="Nombre"
-                className="w-full bg-canvas dark:bg-canvas-dark border border-line dark:border-line-dark rounded-xl px-3 py-2 text-sm font-semibold text-ink dark:text-ink-dark placeholder-muted focus:outline-none focus:ring-2"
-                style={{ "--tw-ring-color": profile.accent }}
-              />
-              <input
-                type="text"
-                value={usernameDraft}
-                onChange={(e) => setUsernameDraft(e.target.value)}
-                placeholder="Nombre de usuario"
-                aria-label="Nombre de usuario"
-                className="w-full bg-canvas dark:bg-canvas-dark border border-line dark:border-line-dark rounded-xl px-3 py-2 text-sm text-ink dark:text-ink-dark placeholder-muted focus:outline-none focus:ring-2"
-                style={{ "--tw-ring-color": profile.accent }}
-              />
-              <textarea
-                value={bioDraft}
-                onChange={(e) => setBioDraft(e.target.value)}
-                placeholder="Cuenta quién eres en THERS..."
-                rows={2}
-                className="w-full bg-canvas dark:bg-canvas-dark border border-line dark:border-line-dark rounded-xl px-3 py-2 text-sm text-ink dark:text-ink-dark placeholder-muted focus:outline-none focus:ring-2"
-                style={{ "--tw-ring-color": profile.accent }}
-              />
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={!nameDraft.trim() || !usernameDraft.trim() || isSavingIdentity}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-full text-white disabled:opacity-50"
-                  style={{ backgroundColor: profile.accent }}
-                >
-                  {isSavingIdentity ? "Guardando..." : "Guardar cambios"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingIdentity(false)}
-                  disabled={isSavingIdentity}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-full border border-line dark:border-line-dark text-muted disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          ) : (
-            <>
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-extrabold text-ink dark:text-ink-dark">{currentUser.name}</h1>
-                {profile.mood && <MoodBadge mood={profile.mood} glow />}
-              </div>
-              <p className="text-muted text-sm">@{currentUser.username}</p>
-              <p className="mt-3 text-sm text-ink/80 dark:text-ink-dark/80">
-                {profile.bio || <span className="text-muted italic">Agrega una biografía para tu perfil →</span>}
-              </p>
-            </>
+                  {interest}
+                </li>
+              ))}
+            </ul>
           )}
 
-          <div className="flex gap-6 mt-5 text-sm">
-            <div>
-              <span className="font-bold text-ink dark:text-ink-dark">0</span>{" "}
-              <span className="text-muted">Seguidores</span>
-            </div>
-            <div>
-              <span className="font-bold text-ink dark:text-ink-dark">{followingIds.size}</span>{" "}
-              <span className="text-muted">Siguiendo</span>
-            </div>
-            <div>
-              <span className="font-bold text-ink dark:text-ink-dark">{ownCapsules.length}</span>{" "}
-              <span className="text-muted">Cápsulas</span>
-            </div>
-          </div>
-        </div>
+          {profile.favoriteTrack && (
+            <p className="mt-3 flex items-center gap-2 text-sm text-muted dark:text-muted-dark">
+              <IoMusicalNotesOutline size={16} className="shrink-0" aria-hidden="true" />
+              <span className="[overflow-wrap:anywhere]">{profile.favoriteTrack}</span>
+            </p>
+          )}
+        </section>
+      )}
+
+      <div
+        role="tabpanel"
+        id={`profile-panel-${activeTab}`}
+        aria-labelledby={`profile-tab-${activeTab}`}
+        tabIndex={0}
+        className="focus:outline-none"
+      >
+        {panels[activeTab]}
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="bg-surface dark:bg-surface-dark border border-line dark:border-line-dark rounded-[24px] shadow-soft p-5">
-          <h2 className="text-sm font-semibold text-ink dark:text-ink-dark mb-3">Mood actual</h2>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(MOODS).map(([id, mood]) => (
-              <button
-                key={id}
-                onClick={() => update({ mood: profile.mood === id ? null : id })}
-                className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full border transition ${
-                  profile.mood === id
-                    ? "text-white"
-                    : "border-line dark:border-line-dark text-muted hover:bg-canvas dark:hover:bg-canvas-dark"
-                }`}
-                style={profile.mood === id ? { backgroundColor: mood.color, borderColor: mood.color } : {}}
-              >
-                <span
-                  aria-hidden="true"
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: profile.mood === id ? "#fff" : mood.color }}
-                />
-                {mood.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-surface dark:bg-surface-dark border border-line dark:border-line-dark rounded-[24px] shadow-soft p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink dark:text-ink-dark mb-3">
-            <IoMusicalNotesOutline size={16} /> Música favorita
-          </h2>
-          <input
-            type="text"
-            value={profile.favoriteTrack}
-            onChange={(e) => update({ favoriteTrack: e.target.value })}
-            placeholder="Canción o artista favorito"
-            className="w-full bg-canvas dark:bg-canvas-dark border border-transparent rounded-lg px-3 py-2 text-sm text-ink dark:text-ink-dark placeholder-muted focus:outline-none focus:ring-2"
-            style={{ "--tw-ring-color": profile.accent }}
-          />
-        </div>
-      </div>
-
-      <div className="bg-surface dark:bg-surface-dark border border-line dark:border-line-dark rounded-[24px] shadow-soft p-5">
-        <h2 className="text-sm font-semibold text-ink dark:text-ink-dark mb-3">Intereses</h2>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {profile.interests.map((interest) => (
-            <span
-              key={interest}
-              className="flex items-center gap-1 text-xs font-medium pl-3 pr-2 py-1.5 rounded-full bg-canvas dark:bg-canvas-dark text-ink dark:text-ink-dark"
-            >
-              {interest}
-              <button
-                onClick={() => update({ interests: profile.interests.filter((i) => i !== interest) })}
-                aria-label={`Quitar interés ${interest}`}
-                className="hover:text-ember-500"
-              >
-                <IoClose size={13} />
-              </button>
-            </span>
-          ))}
-        </div>
-        <form onSubmit={addInterest} className="flex gap-2">
-          <input
-            type="text"
-            value={interestDraft}
-            onChange={(e) => setInterestDraft(e.target.value)}
-            placeholder="Agregar un interés (ej: fotografía)"
-            className="flex-1 bg-canvas dark:bg-canvas-dark border border-transparent rounded-lg px-3 py-2 text-sm text-ink dark:text-ink-dark placeholder-muted focus:outline-none focus:ring-2"
-            style={{ "--tw-ring-color": profile.accent }}
-          />
-          <button
-            type="submit"
-            aria-label="Agregar interés"
-            className="p-2 rounded-lg text-white"
-            style={{ backgroundColor: profile.accent }}
-          >
-            <IoAdd size={18} />
-          </button>
-        </form>
-      </div>
-
-      <div>
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted dark:text-muted-dark mb-3">
-          Cápsula destacada
-        </h2>
-        {featured ? (
-          <CapsuleCard capsule={featured} />
-        ) : (
-          <div className="bg-surface dark:bg-surface-dark border border-dashed border-line dark:border-line-dark rounded-[24px] p-8 text-center text-muted text-sm">
-            Crea tu primera Cápsula para destacarla en tu perfil.
-          </div>
-        )}
-      </div>
+      {isEditing && (
+        <EditProfileModal
+          user={currentUser}
+          profile={profile}
+          onSave={handleSave}
+          onClose={closeEditor}
+        />
+      )}
     </div>
   );
 }

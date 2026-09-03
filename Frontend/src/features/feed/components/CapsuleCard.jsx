@@ -7,12 +7,13 @@ import { formatRelativeTime } from "../lib/formatRelativeTime";
 // todavía, DATABASE_ARCHITECTURE.md §4.B): mostrar un contador en 0 sería un
 // dato falso, así que esa sección directamente no existe acá, en vez de
 // fingirla. Tipografía más grande que ocupa el espacio que dejaría una
-// imagen, sobre un degradé sutil del acento de marca (mismo tratamiento que
-// Twitter/X da a sus tweets de solo texto), usando únicamente tokens ya
-// existentes en tailwind.config.js (pulse/surface/canvas/line, sombra soft/lift).
+// imagen, sobre superficie plana: la identidad monocroma del perfil
+// (Frontend/src/assets/ideas_perfil.jpeg) deja las tarjetas sin el degradé
+// morado que tenían antes, usando solo tokens de tailwind.config.js
+// (surface/canvas/line, sombra soft/lift).
 export default function CapsuleCard({ capsule }) {
   return (
-    <article className="bg-gradient-to-br from-pulse-50 via-surface to-surface dark:from-pulse-900/15 dark:via-surface-dark dark:to-surface-dark border border-line dark:border-line-dark rounded-[28px] shadow-soft hover:shadow-lift transition-shadow overflow-hidden animate-capsule-in">
+    <article className="bg-surface dark:bg-surface-dark border border-line dark:border-line-dark rounded-[28px] shadow-soft hover:shadow-lift transition-shadow overflow-hidden animate-capsule-in motion-reduce:animate-none">
       <div className="flex items-center gap-3 px-6 pt-6">
         <Avatar name={capsule.author.name} size="w-11 h-11" />
         <div className="min-w-0">

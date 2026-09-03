@@ -44,13 +44,14 @@ Fuente de verdad de esta tabla: `docs/architecture/FRONTEND_ARCHITECTURE.md`, `d
 | Capa | Tecnología | Estado |
 |------|-----------|--------|
 | Frontend | React 19 + Vite 8 | Implementado |
-| Estilos | Tailwind CSS 3 | Implementado, sin tokens/Design System propio del producto |
-| Routing | React Router v7 | Implementado — 6 rutas planas, sin rutas protegidas |
-| Estado global | Ninguno todavía (solo `useState` local por componente) | No implementado |
+| Estilos | Tailwind CSS 3 (`darkMode: "class"`) | Implementado, sin tokens/Design System propio del producto |
+| Routing | React Router v7 | Implementado — más de 30 rutas anidadas, con rutas protegidas (`ProtectedRoute`) |
+| Estado global | React Context (`AuthContext`, `LanguageContext`, `ToastContext`) | Implementado — sin librería de estado externa (Redux/Zustand) |
 | HTTP client | Axios | Implementado — URL de API configurable vía `VITE_API_URL` |
-| Backend | Flask 3 (Python) | Implementado — un único flujo end-to-end (login); dependencias fijadas en `backend/requirements.txt` |
-| Base de datos | PostgreSQL (motor elegido; versión, driver y esquema sin fijar) | No implementado — sin persistencia real ni ORM instalado |
-| Autenticación | JWT (flask-jwt-extended) | Implementado solo para login; sin endpoints protegidos ni registro |
+| Backend | Flask 3 (Python) | Implementado — capas `domain`/`application`/`infrastructure`/`interfaces`; dependencias fijadas en `backend/requirements.txt` |
+| Base de datos | PostgreSQL 16 + SQLAlchemy + Flask-Migrate (driver `psycopg` v3) | Implementado — tablas `users` y `posts`, migraciones en `backend/migrations/`, contenedor en `docker-compose.yml` |
+| Autenticación | JWT (flask-jwt-extended) | Implementado — registro, login y endpoints protegidos con `@jwt_required()` |
+| Testing | pytest (backend) | Implementado — 75 pruebas de integración contra PostgreSQL real, no mocks |
 
 ## Estructura del proyecto
 
@@ -61,12 +62,13 @@ THERS_REDSOCIAL_2026/
 ├── Frontend/                  # Producto — la red social
 │   ├── src/
 │   │   ├── app/
-│   │   │   └── router/        # AppRouter (react-router-dom)
-│   │   ├── features/
-│   │   │   ├── auth/          # hooks/, pages/, index.js
-│   │   │   └── legal/         # pages/, index.js
+│   │   │   ├── layout/        # AppShell, PublicLayout
+│   │   │   └── router/        # router.jsx, ProtectedRoute.jsx
+│   │   ├── features/          # auth/, feed/, help/, legal/, public/
 │   │   ├── shared/
 │   │   │   ├── components/    # UI reutilizable transversal
+│   │   │   ├── hooks/
+│   │   │   ├── i18n/          # LanguageContext (es/en, ADR-001)
 │   │   │   └── lib/           # cliente HTTP (axios)
 │   │   └── assets/
 │   ├── index.html
@@ -78,82 +80,107 @@ THERS_REDSOCIAL_2026/
 │   │   ├── interfaces/routes/ # adaptadores HTTP (blueprints)
 │   │   ├── application/       # casos de uso
 │   │   ├── domain/            # reglas de negocio puras
+│   │   ├── infrastructure/    # persistencia (modelos SQLAlchemy, repositorios)
 │   │   ├── config.py
 │   │   └── extensions.py
+│   ├── migrations/            # Alembic / Flask-Migrate
+│   ├── tests/                 # pytest (integración contra PostgreSQL real)
 │   ├── run.py
 │   └── .env.example
 │
 ├── handbook/                  # THERS Engineering Handbook (docs-as-code interno)
 ├── docs/                      # Documentación oficial versionada
+├── scripts/                   # Scripts de arranque local (dev-up / dev-test / dev-down)
+├── docker/                    # Inicialización del contenedor de PostgreSQL
+├── docker-compose.yml         # PostgreSQL 16 para desarrollo
 ├── CLAUDE.md
 └── README.md
 ```
 
-No existen (todavía) las carpetas `context/`, `services/` del lado del Frontend ni `routes/`/`models/` planos del lado del backend — el backend sigue una organización por capas (interfaces/application/domain), no por tipo de recurso.
+El backend sigue una organización por capas (`interfaces`/`application`/`domain`/`infrastructure`), no por tipo de recurso: no hay carpetas `routes/` ni `models/` planas en la raíz de `app/`. Del lado del Frontend, cada feature agrupa sus propias `pages/`, `hooks/` y (donde aplica) `context/`, en vez de tener carpetas globales por tipo de archivo.
 
 ## Instalación local
 
-Estado real (no aspiracional): no hay `pyproject.toml` en `backend/` ni herramienta de migraciones instalada, y no hay persistencia de datos todavía — el login solo valida contra una credencial de prueba. Los pasos siguientes reflejan lo que hoy es reproducible; lo que no lo es se marca explícitamente.
+> **Guía completa y verificada: [`docs/LOCAL_DEV_SETUP.md`](docs/LOCAL_DEV_SETUP.md)** — instalación paso a paso, arranque diario, smoke test, tests y troubleshooting. Esta sección es solo el resumen.
 
 ### Prerrequisitos
 
-- Node.js (versión mínima no fijada oficialmente)
-- Python 3.x (versión mínima no fijada oficialmente; `BACKEND_ARCHITECTURE.md` observó 3.14.3 en un entorno local, no es un requisito documentado)
-- PostgreSQL — motor elegido (`HB-001`), sin versión, esquema ni driver fijados todavía. No es necesario para levantar el login actual, que no usa base de datos.
+- Docker Desktop (para PostgreSQL 16)
+- Python 3.14 (versión usada en CI y en local; no es un mínimo ratificado formalmente)
+- Node.js 24 + npm
 
-### 1. Clonar el repositorio
+### 1. Instalación (una sola vez)
 
 ```bash
 git clone <URL_DEL_REPOSITORIO>
 cd THERS_REDSOCIAL_2026
-```
 
-### 2. Frontend
+# Variables de entorno (ninguna se sube al repositorio)
+cp .env.example .env                   # POSTGRES_PORT (puerto del host)
+cp backend/.env.example backend/.env   # JWT_SECRET_KEY + DATABASE_URL
+cp Frontend/.env.example Frontend/.env # VITE_API_URL
 
-```bash
-cd Frontend
-npm install
-cp .env.example .env        # ajustar VITE_API_URL si el backend no corre en 127.0.0.1:5000
-npm run dev
-```
-
-Sin `VITE_API_URL` en `.env`, `Frontend/src/shared/lib/api.js` usa `http://127.0.0.1:5000/api` por defecto y lo advierte por consola.
-
-### 3. Backend
-
-```bash
+# Backend
 cd backend
 python -m venv venv
-# Windows: venv\Scripts\activate — macOS/Linux: source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env        # definir JWT_SECRET_KEY
-python run.py
+# Windows: venv\Scripts\Activate.ps1 — macOS/Linux: source venv/bin/activate
+pip install -r requirements-dev.txt
+cd ..
+
+# Frontend
+cd Frontend && npm ci && cd ..
 ```
 
-Sin `JWT_SECRET_KEY` en `.env`, `backend/app/config.py` usa un valor de desarrollo inseguro y lo advierte por consola — no usar ese valor fuera de desarrollo local.
+Editar `backend/.env` antes de seguir: `DATABASE_URL` usa el driver explícito
+`postgresql+psycopg://` y su puerto tiene que coincidir con el `POSTGRES_PORT` del
+`.env` de la raíz. Los detalles y los errores típicos están en la guía.
+
+### 2. Arranque
+
+Con scripts (Windows / PowerShell) — levanta base de datos, aplica las migraciones a
+`thers_dev` y `thers_test`, y abre backend y frontend:
+
+```powershell
+.\scripts\dev-up.ps1        # levanta todo
+.\scripts\dev-test.ps1      # pytest del backend (-Frontend agrega lint + build)
+.\scripts\dev-down.ps1      # detiene la base de datos
+```
+
+A mano, tres terminales:
+
+```bash
+docker compose up -d                                       # 1. base de datos
+cd backend && flask run                                    # 2. API en :5000 (FLASK_APP=run.py)
+cd Frontend && npm run dev                                 # 3. UI en :5173
+```
+
+`flask run` es el comando correcto: `python run.py` no lee `backend/.env` y aborta por
+`JWT_SECRET_KEY` no definida (ver la guía, sección 8).
 
 ### Variables de entorno
 
-**`backend/.env`** (ver `backend/.env.example`)
-```env
-JWT_SECRET_KEY=
-```
+| Archivo | Variables | Referencia |
+|---|---|---|
+| `.env` (raíz) | `POSTGRES_PORT` | `.env.example` |
+| `backend/.env` | `JWT_SECRET_KEY`, `ALLOW_INSECURE_JWT_DEV_FALLBACK`, `DATABASE_URL` | `backend/.env.example` |
+| `Frontend/.env` | `VITE_API_URL` | `Frontend/.env.example` |
 
-**`Frontend/.env`** (ver `Frontend/.env.example`)
-```env
-VITE_API_URL=http://127.0.0.1:5000/api
-```
-
-No existe todavía ninguna variable de conexión a base de datos (`DATABASE_URL` o equivalente) porque la persistencia no está implementada.
+Ningún `.env` se sube al repositorio (`HB-001` §20, regla innegociable). Sin
+`VITE_API_URL`, el Frontend usa `http://127.0.0.1:5000/api` y lo advierte por consola;
+sin `JWT_SECRET_KEY` ni `ALLOW_INSECURE_JWT_DEV_FALLBACK=1`, el backend no arranca.
 
 ## API — Estado real
 
-Fuente única del contrato de API: `docs/architecture/API_CONTRACT.md`. La tabla siguiente refleja únicamente lo implementado hoy; el resto de endpoints listados más abajo en este README (feed, posts, comentarios, follows, notificaciones, admin) son parte del alcance funcional del producto, **no** de la API existente — no hay código ni contrato que los respalde todavía.
+Fuente única del contrato de API: `docs/architecture/API_CONTRACT.md`. La tabla siguiente refleja únicamente lo implementado hoy; las features listadas más arriba que no aparecen acá (comentarios, likes, follows, notificaciones, admin) son parte del alcance funcional del producto, **no** de la API existente — no hay código ni contrato que las respalde todavía.
 
 | Método | Endpoint | Descripción | Auth | Estado |
 |--------|----------|-------------|------|--------|
-| POST | `/api/login` | Login → JWT (credencial de prueba, sin persistencia real) | No | Implementado |
-| POST | `/api/register` | Registro de usuario | No | No implementado — el Frontend ya tiene el formulario, el backend no expone el endpoint |
+| POST | `/api/register` | Registro de usuario | No | Implementado |
+| POST | `/api/login` | Login → JWT | No | Implementado |
+| GET | `/api/users/me` | Perfil del usuario autenticado | JWT | Implementado |
+| PATCH | `/api/users/me` | Actualización de perfil (`ADR-003`) | JWT | Implementado |
+| POST | `/api/posts` | Crear publicación (texto, `ADR-004`) | JWT | Implementado |
+| GET | `/api/posts` | Listar publicaciones del feed | JWT | Implementado |
 
 ## Flujo de ramas (Git Flow)
 

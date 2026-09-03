@@ -20,3 +20,7 @@ coverage/
 
 # Editor
 .vscode/
+
+# Obsidian (vault local para navegar docs/, no contenido del proyecto)
+docs/.obsidian/
+docs/*.canvas

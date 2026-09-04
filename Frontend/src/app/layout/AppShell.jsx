@@ -122,7 +122,6 @@ export default function AppShell() {
         <div className="max-w-7xl mx-auto flex items-center gap-3 px-4 py-3">
           <Link to="/feed" className="flex items-center gap-2 shrink-0">
             <span className="font-extrabold text-xl tracking-tight text-ink dark:text-ink-dark">THERS</span>
-            <span className="w-2 h-2 rounded-full bg-pulse-500 animate-mood-glow" aria-hidden="true" />
           </Link>
 
           <div className="flex-1 flex justify-center">

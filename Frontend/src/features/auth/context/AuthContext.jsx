@@ -6,6 +6,14 @@ const AuthContext = createContext(undefined);
 const TOKEN_KEY = "token";
 const USER_KEY = "user";
 
+// Punto único de lectura del token para cualquier feature que necesite
+// llamar a un endpoint autenticado fuera de este contexto (ej. features/feed
+// para GET/POST /api/posts) -- evita que otras features dupliquen la clave
+// de localStorage ("token") o el detalle de dónde vive.
+export function getStoredToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
 // El backend ya devuelve `username` real (ADR-002, API_CONTRACT.md §4). Este
 // fallback solo cubre sesiones guardadas en localStorage antes de ese cambio,
 // que no tienen la columna todavía -- no es la fuente principal.

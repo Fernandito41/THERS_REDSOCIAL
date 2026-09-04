@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Outlet, useNavigate, Link } from "react-router-dom";
 import {
   IoSearchOutline,
@@ -16,11 +16,17 @@ import AmbientGlow from "@shared/components/AmbientGlow";
 import LanguageSwitcher from "@shared/components/LanguageSwitcher";
 import { useTheme } from "@shared/hooks/useTheme";
 import { useLanguage } from "@shared/i18n";
-import { useAuth } from "@features/auth";
+import { useAuth, getStoredToken } from "@features/auth";
+import { api, getErrorMessage } from "@shared/lib/api";
+import { useToast } from "@shared/components/Toast";
 import NavRail from "./NavRail";
 import MobileNav from "./MobileNav";
 import CreateCapsuleFlow from "@features/feed/components/CreateCapsuleFlow";
-import { mockCapsules, mockNotifications } from "@features/feed/data/mockData";
+import { mockNotifications } from "@features/feed/data/mockData";
+
+function authHeaders() {
+  return { Authorization: `Bearer ${getStoredToken()}` };
+}
 
 export default function AppShell() {
   const navigate = useNavigate();
@@ -31,13 +37,39 @@ export default function AppShell() {
   const { user: currentUser, updateProfile, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { t } = useLanguage();
+  const toast = useToast();
 
-  const [capsules, setCapsules] = useState(mockCapsules);
+  // `capsules` = posts reales (GET/POST /api/posts, ADR-004-posts-minimal-model.md)
+  // -- "Cápsula" sigue siendo el nombre de producto para un post, ya usado en
+  // toda la UI (Home.jsx, Profile.jsx); ya no es mockCapsules.
+  const [capsules, setCapsules] = useState([]);
+  const [capsulesLoading, setCapsulesLoading] = useState(true);
   const [followingIds, setFollowingIds] = useState(() => new Set());
   const [notifications, setNotifications] = useState(mockNotifications);
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPosts() {
+      setCapsulesLoading(true);
+      try {
+        const res = await api.get("/posts", { headers: authHeaders() });
+        if (!cancelled) setCapsules(res.data.posts);
+      } catch (error) {
+        if (!cancelled) toast.error(getErrorMessage(error, t));
+      } finally {
+        if (!cancelled) setCapsulesLoading(false);
+      }
+    }
+
+    loadPosts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
@@ -66,20 +98,13 @@ export default function AppShell() {
     navigate("/login", { replace: true });
   };
 
-  const handleCreateCapsule = (draft) => {
-    setCapsules((prev) => [
-      {
-        id: prev.length ? Math.max(...prev.map((c) => c.id)) + 1 : 1,
-        own: true,
-        user: { name: currentUser.name, username: currentUser.username },
-        timestamp: "Ahora",
-        comments: [],
-        likes: 0,
-        hashtags: [],
-        ...draft,
-      },
-      ...prev,
-    ]);
+  // POST /api/posts (ADR-004-posts-minimal-model.md). Sin try/catch acá --
+  // se propaga a CreateCapsuleFlow, que ya maneja error/loading con el mismo
+  // patrón que AuthContext.updateProfile()/Profile.jsx (getErrorMessage +
+  // Toast, formulario abierto para reintentar).
+  const handleCreateCapsule = async (content) => {
+    const res = await api.post("/posts", { content }, { headers: authHeaders() });
+    setCapsules((prev) => [res.data.post, ...prev]);
     setComposerOpen(false);
   };
 
@@ -212,6 +237,7 @@ export default function AppShell() {
             context={{
               currentUser,
               capsules,
+              capsulesLoading,
               followingIds,
               notifications,
               theme,

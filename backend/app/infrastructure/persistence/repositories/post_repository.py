@@ -31,3 +31,6 @@ class SQLAlchemyPostRepository(PostRepository):
             .scalars()
             .all()
         )
+
+    def get_by_id(self, post_id):
+        return db.session.get(Post, post_id)

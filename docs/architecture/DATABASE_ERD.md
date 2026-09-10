@@ -4,12 +4,14 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD.md` |
 | Identificador propuesto | `DB-002` (acompaña a `DB-001` / `DATABASE_ARCHITECTURE.md`) — **pendiente de ratificación** |
-| Versión | 0.4 |
+| Versión | 0.5 |
 | Estado | **Borrador — representa solo el modelo conceptual ratificado hasta hoy** |
 | Depende de | `DATABASE_ARCHITECTURE.md` (fuente de verdad directa), `HB-001`, `REPOSITORY_STRUCTURE.md` |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
->  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). Las entidades ratificadas hoy son `users` y `posts` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). Las entidades ratificadas hoy son `users`, `posts` y `likes` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>
+> **v0.5 — primera tabla puente N:N del modelo (`ADR-005-likes-minimal-model.md`).** `likes` pasa de candidata objetivo (`reactions`, caso binario) a ratificada (`DATABASE_ARCHITECTURE.md` §4.A/§5.3, v0.9) — se agrega al diagrama (§3) junto con la segunda y tercera relación que este ERD dibuja (`users ||--o{ likes`, `posts ||--o{ likes`). Reflejado en §3, §4, §5, §6, §7, §8.
 >
 > **v0.4 — primera relación real del modelo (`ADR-004-posts-minimal-model.md`).** `posts` pasa de candidata objetivo a ratificada (`DATABASE_ARCHITECTURE.md` §4.A/§5.2, v0.8) — se agrega al diagrama (§3) junto con la primera relación entre entidades que este ERD dibuja (`users ||--o{ posts`). Reflejado en §3, §4, §5, §6, §7, §8.
 >
@@ -63,7 +65,16 @@ erDiagram
         timestamptz updated_at "NOT NULL, DEFAULT now(), mantenida por trigger — sin uso funcional aún (sin edición de posts)"
     }
 
+    LIKES {
+        uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
+        uuid post_id FK "NOT NULL — ON DELETE CASCADE (ADR-005)"
+        uuid user_id FK "NOT NULL — ON DELETE CASCADE (ADR-005)"
+        timestamptz created_at "NOT NULL, DEFAULT now()"
+    }
+
     USERS ||--o{ POSTS : "publica"
+    USERS ||--o{ LIKES : "da like"
+    POSTS ||--o{ LIKES : "recibe like"
 ```
 
 > **Nota sobre el tipo de `id`:** UUID con `DEFAULT gen_random_uuid()` a nivel de PostgreSQL (función nativa desde PostgreSQL 13, sin extensión adicional), implementado en `backend/app/infrastructure/persistence/models.py` y en la migración `a1b2c3d4e5f6_create_users_table.py` (`DATABASE_ARCHITECTURE.md` §5). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend.
@@ -77,6 +88,8 @@ erDiagram
 > **Nota sobre `updated_at`:** actualizada por un trigger de PostgreSQL (`set_updated_at`/`trg_users_updated_at`), no por la capa de aplicación — se mantiene correcta incluso ante `UPDATE`s hechos por SQL directo.
 >
 > **Nota sobre `POSTS` (v0.4, `ADR-004-posts-minimal-model.md`):** primera entidad y primera relación (`users ||--o{ posts`, "publica") que este ERD dibuja más allá de `users`. Deliberadamente mínima — sin `visibility`, `mood`, hashtags, medios, reacciones ni comentarios; cada uno es su propia entidad candidata (§8) a resolver en un ADR futuro y acotado. `author_id` reutiliza la función `set_updated_at()` ya creada por la migración inicial de `users` — no se duplica.
+>
+> **Nota sobre `LIKES` (v0.5, `ADR-005-likes-minimal-model.md`):** primera tabla puente N:N que este ERD dibuja (`users ||--o{ likes`, `posts ||--o{ likes`) — resuelve solo el caso binario like/no-like de la candidata `reactions` (§8); tipos de reacción siguen sin ratificar. Sin `updated_at`: un like no se edita in place. `UNIQUE (post_id, user_id)` (no representable con el marcador `UK` de Mermaid sobre una sola columna — ver `DATABASE_ARCHITECTURE.md` §5.3 para el detalle exacto de la constraint compuesta).
 
 ---
 
@@ -97,7 +110,9 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 | `FK` | Clave foránea |
 | `UK` | Clave única (unicidad a nivel de esquema) |
 
-> **v0.4 — primera relación dibujada:** `USERS ||--o{ POSTS` ("uno ↔ cero o muchos") — un usuario puede tener cero o muchos posts; cada post tiene exactamente un autor. La leyenda se mantiene para cuando el modelo siga creciendo.
+> **v0.4 — primera relación dibujada:** `USERS ||--o{ POSTS` ("uno ↔ cero o muchos") — un usuario puede tener cero o muchos posts; cada post tiene exactamente un autor.
+>
+> **v0.5 — segunda y tercera relación dibujadas:** `USERS ||--o{ LIKES` y `POSTS ||--o{ LIKES` — `likes` es la primera tabla puente N:N real de este ERD: un usuario puede dar muchos likes, un post puede recibir muchos likes, y cada like conecta exactamente un usuario con exactamente un post (la `UNIQUE (post_id, user_id)` impide que se repita el mismo par). La leyenda se mantiene para cuando el modelo siga creciendo.
 
 ---
 
@@ -107,6 +122,7 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 |---|---|---|---|
 | `users` |  Ratificada | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`; login autentica por `email`; `GET`/`PATCH /api/users/me` leen y actualizan el mismo registro | `id` UUID (PK), `name` VARCHAR(120), `username` VARCHAR(30) (UK), `email` CITEXT (UK), `phone` VARCHAR(20), `country_code` VARCHAR(6), `birth_date` DATE, `password_hash` TEXT, `username_changed_at` TIMESTAMPTZ (nullable, interna), `created_at`/`updated_at` TIMESTAMPTZ |
 | `posts` |  Ratificada — v0.4 | `POST`/`GET /api/posts` crean y listan posts de texto reales, respaldados por PostgreSQL (`ADR-004-posts-minimal-model.md`) | `id` UUID (PK), `author_id` UUID (FK → `users.id`), `content` TEXT, `created_at`/`updated_at` TIMESTAMPTZ |
+| `likes` |  Ratificada — v0.5 (caso binario) | `POST`/`DELETE /api/posts/<id>/like` registran y quitan likes reales, respaldados por PostgreSQL (`ADR-005-likes-minimal-model.md`) | `id` UUID (PK), `post_id` UUID (FK → `posts.id`), `user_id` UUID (FK → `users.id`), `created_at` TIMESTAMPTZ, `UNIQUE (post_id, user_id)` |
 
 **Constraints relevantes de `users`:**
 - `email`: **UNIQUE** (case-insensitive, vía `CITEXT`) + **NOT NULL** (login por email; genera un índice justificado, `DATABASE_ARCHITECTURE.md` §8).
@@ -123,7 +139,9 @@ No se añaden columnas adicionales solo para "completar" el diagrama (regla expl
 
 **v0.4 — primera relación real:** `users (1) ←→ (N) posts` (`posts.author_id → users.id`, `ON DELETE CASCADE`) — `ADR-004-posts-minimal-model.md`.
 
-Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHITECTURE.md` §6): las entidades dependientes referenciarán a `users` o a `posts` mediante FK (p. ej. un futuro `reactions.post_id`); las relaciones N:N (follows, participantes de conversación, likes) se modelarán con tablas puente. Nada de esto se dibuja hasta que se ratifique.
+**v0.5 — segunda y tercera relación real:** `users (1) ←→ (N) likes` y `posts (1) ←→ (N) likes` (`likes.user_id → users.id`, `likes.post_id → posts.id`, ambas `ON DELETE CASCADE`) — `ADR-005-likes-minimal-model.md`. Primera tabla puente N:N real del modelo: cada like conecta exactamente un usuario con exactamente un post.
+
+Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHITECTURE.md` §6): las entidades dependientes referenciarán a `users` y/o a `posts` mediante FK; las relaciones N:N que sigan pendientes (follows, participantes de conversación) se modelarán con tablas puente siguiendo el mismo patrón que `likes` ya estableció. Nada de esto se dibuja hasta que se ratifique.
 
 ---
 
@@ -131,7 +149,7 @@ Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHI
 
 - El diagrama contiene **exactamente** las entidades y columnas que `DATABASE_ARCHITECTURE.md` ratifica — ni una más.
 - No se modeló ninguna entidad "por ser común en redes sociales" (regla 1).
-- `username`, `phone`, `country_code`, `birth_date` (`ADR-002-user-profile-fields.md`) y `username_changed_at` (`ADR-003-profile-update-contract.md`) se dibujan desde v0.3 — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `posts` (v0.4, `ADR-004-posts-minimal-model.md`) es la primera entidad *distinta* de `users` y la primera relación real que este ERD dibuja — deliberadamente sin `visibility`/medios/reacciones/comentarios, cada uno sigue como candidata (§8). `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia.
+- `username`, `phone`, `country_code`, `birth_date` (`ADR-002-user-profile-fields.md`) y `username_changed_at` (`ADR-003-profile-update-contract.md`) se dibujan desde v0.3 — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `posts` (v0.4, `ADR-004-posts-minimal-model.md`) es la primera entidad *distinta* de `users` y la primera relación real que este ERD dibuja — deliberadamente sin `visibility`/medios/reacciones/comentarios, cada uno sigue como candidata (§8). `likes` (v0.5, `ADR-005-likes-minimal-model.md`) es la primera tabla puente N:N — resuelve solo el caso binario de la candidata `reactions`, tipos de reacción siguen como candidata (§8). `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia.
 
 ---
 
@@ -149,8 +167,8 @@ Versiones anteriores de este documento (hasta v0.2) registraban aquí una contra
 | **Autenticación y cuenta** | `oauth_accounts` (login con Google), `email_verifications`, `password_resets`, `account_status`/desactivación | El registro persistente aún no existe en backend |
 | **Perfil** | Columnas en `users`: `avatar_url`, `bio` (`username`/`phone`/`country_code`/`birth_date` ya ratificadas, ver §3/§5) | Pendiente de ADR propio — no cubiertas por `ADR-002` ni `ADR-003` |
 | **Configuración** | `user_settings` (privacidad, seguridad, preferencias), `notification_preferences`, `blocked_users`, gestión de datos | — |
-| **Contenido** | ~~`posts`~~ — **ratificada v0.4** (solo texto, ver §3/§5); `media` (fotos/videos/reels), reglas de `visibility` siguen candidatas | La ruta `/feed` en el Frontend todavía no consume `posts` real — sigue mostrando datos mock (`mockCapsules`) |
-| **Interacciones** | `reactions`/`likes`, `comments` (auto-referencia para respuestas), `saves`, `mentions`, `hashtags`, `post_hashtags` (puente) | Relaciones N:N requieren tablas puente |
+| **Contenido** | ~~`posts`~~ — **ratificada v0.4** (solo texto, ver §3/§5); `media` (fotos/videos/reels), reglas de `visibility` siguen candidatas | La ruta `/feed` en el Frontend ya consume `posts` real (`feature/frontend-feed-posts-integration`, PR #39) — nota anterior de "sigue mostrando `mockCapsules`" quedó desactualizada, corregida aquí (`API_CONTRACT.md` v0.9) |
+| **Interacciones** | ~~`reactions`/`likes` (caso binario)~~ — **ratificada v0.5** (`likes`, ver §3/§5); tipos de reacción, `comments` (auto-referencia para respuestas), `saves`, `mentions`, `hashtags`, `post_hashtags` (puente) siguen candidatas | Relaciones N:N requieren tablas puente |
 | **Relaciones sociales** | `follows` (N:N auto-referencial), `blocks`, `restrictions` | Política `ON DELETE` a decidir por relación |
 | **Mensajería** | `conversations`, `conversation_participants` (puente), `messages`, `message_media`, estado leído/no leído | — |
 | **Notificaciones** | `notifications` | Referenciaría a `users` y a la entidad origen |

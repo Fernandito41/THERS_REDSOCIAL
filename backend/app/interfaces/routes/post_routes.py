@@ -11,6 +11,9 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.application.posts.create_post_use_case import create_post
 from app.application.posts.list_posts_use_case import DEFAULT_LIMIT, list_posts
 from app.domain.posts.validators import MAX_CONTENT_LENGTH, is_valid_content
+from app.infrastructure.persistence.repositories.like_repository import (
+    SQLAlchemyLikeRepository,
+)
 from app.infrastructure.persistence.repositories.post_repository import (
     SQLAlchemyPostRepository,
 )
@@ -18,6 +21,7 @@ from app.infrastructure.persistence.repositories.post_repository import (
 posts_bp = Blueprint("posts", __name__)
 
 _post_repository = SQLAlchemyPostRepository()
+_like_repository = SQLAlchemyLikeRepository()
 
 
 @posts_bp.route("/posts", methods=["POST"])
@@ -50,5 +54,8 @@ def list_all():
     # Auth requerida por consistencia con el resto del feed hoy -- AppShell
     # (donde vive /feed en el Frontend) solo es alcanzable dentro de
     # ProtectedRoute. No existe todavía ningún concepto de "feed público".
-    posts = list_posts(_post_repository, DEFAULT_LIMIT)
+    # viewer_id (ADR-005): quién pregunta, para resolver `liked_by_me` por
+    # post -- mismo JWT que ya identifica al autor en create().
+    viewer_id = get_jwt_identity()
+    posts = list_posts(_post_repository, _like_repository, viewer_id, DEFAULT_LIMIT)
     return jsonify({"posts": posts}), 200

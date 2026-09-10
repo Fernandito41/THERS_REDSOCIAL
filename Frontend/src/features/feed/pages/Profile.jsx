@@ -56,8 +56,15 @@ function PostsSkeleton() {
 }
 
 export default function Profile() {
-  const { currentUser, capsules, capsulesLoading, followingIds, notifications, onUpdateUser } =
-    useOutletContext();
+  const {
+    currentUser,
+    capsules,
+    capsulesLoading,
+    followingIds,
+    notifications,
+    onUpdateUser,
+    onToggleLike,
+  } = useOutletContext();
   const toast = useToast();
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -151,7 +158,7 @@ export default function Profile() {
     ) : ownCapsules.length > 0 ? (
       <div className="space-y-4">
         {ownCapsules.map((capsule) => (
-          <CapsuleCard key={capsule.id} capsule={capsule} />
+          <CapsuleCard key={capsule.id} capsule={capsule} onToggleLike={onToggleLike} />
         ))}
       </div>
     ) : (

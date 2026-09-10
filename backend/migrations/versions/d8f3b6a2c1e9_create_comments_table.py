@@ -1,7 +1,7 @@
 """create comments table
 
 Revision ID: d8f3b6a2c1e9
-Revises: f3a8c1d9e274
+Revises: c7e2a9f14b6d
 Create Date: 2026-09-10 00:00:00.000000
 
 Tercera entidad del alcance objetivo del producto en pasar a ratificada
@@ -13,9 +13,12 @@ Escrita a mano (no autogenerada), mismo criterio que las migraciones
 anteriores: reutiliza la función `set_updated_at()` ya creada por la
 migración inicial (a1b2c3d4e5f6_create_users_table.py) en vez de duplicarla.
 
-Nota de ramas: parte de f3a8c1d9e274 (posts), no de la migración de `likes`
-(ADR-005, en su propia rama sin mergear todavía) -- ambas entidades son
-independientes entre sí, cada una referencia solo a `posts`/`users`.
+Nota de ramas: `comments` y `likes` (ADR-005) son entidades independientes
+entre sí -- ninguna referencia a la otra, cada una referencia solo a
+`posts`/`users`. Encadenada después de c7e2a9f14b6d (likes) porque
+`feature/backend-frontend-comments` se rebaseó sobre
+`feature/backend-frontend-likes` para que ambas ramas mergeen sin conflicto
+sin importar el orden -- no porque exista una dependencia real de datos.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -24,7 +27,7 @@ from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
 revision = 'd8f3b6a2c1e9'
-down_revision = 'f3a8c1d9e274'
+down_revision = 'c7e2a9f14b6d'
 branch_labels = None
 depends_on = None
 

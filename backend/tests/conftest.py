@@ -24,6 +24,14 @@ def app():
     app = create_app()
     app.config.update(TESTING=True)
     yield app
+    # `create_app()` crea un engine/pool de SQLAlchemy nuevo por test (una
+    # Flask app nueva por test, sin compartir el engine entre ellos) -- sin
+    # liberarlo, las conexiones se acumulan a lo largo de la suite hasta
+    # agotar `max_connections` de PostgreSQL (100 por defecto en el
+    # contenedor de desarrollo), un fallo que solo aparece con suites
+    # grandes, no test por test aislado.
+    with app.app_context():
+        db.engine.dispose()
 
 
 @pytest.fixture()

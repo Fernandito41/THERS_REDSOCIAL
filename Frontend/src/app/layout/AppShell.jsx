@@ -142,6 +142,33 @@ export default function AppShell() {
     }
   };
 
+  // GET /api/posts/<id>/comments (ADR-006-comments-minimal-model.md). A
+  // diferencia de likes_count (que viaja con cada post), los comentarios se
+  // piden bajo demanda cuando CapsuleCard abre su panel -- no tiene sentido
+  // cargar el hilo completo de cada post del feed de antemano. Sin
+  // try/catch acá -- CapsuleCard lo maneja (Toast + estado local del panel),
+  // mismo criterio que handleCreateCapsule/CreateCapsuleFlow.
+  const handleLoadComments = async (postId) => {
+    const res = await api.get(`/posts/${postId}/comments`, { headers: authHeaders() });
+    return res.data.comments;
+  };
+
+  // POST /api/posts/<id>/comments. El contador (`comments_count`) vive en
+  // `capsules` (AppShell), no en CapsuleCard -- se actualiza acá para que
+  // el número en la tarjeta quede sincronizado apenas el comentario se
+  // publica, sin depender de que CapsuleCard vuelva a pedir el post entero.
+  const handlePostComment = async (postId, content) => {
+    const res = await api.post(
+      `/posts/${postId}/comments`,
+      { content },
+      { headers: authHeaders() }
+    );
+    setCapsules((prev) =>
+      prev.map((c) => (c.id === postId ? { ...c, comments_count: c.comments_count + 1 } : c))
+    );
+    return res.data.comment;
+  };
+
   // Guard defensivo, no una decisión de ruteo: ProtectedRoute ya garantiza
   // isAuthenticated antes de montar AppShell; esto solo evita un crash en el
   // instante de re-render que sigue a logout() (currentUser pasa a null un
@@ -281,6 +308,8 @@ export default function AppShell() {
               onUpdateUser: updateProfile,
               onOpenComposer: () => setComposerOpen(true),
               onToggleLike: handleToggleLike,
+              onLoadComments: handleLoadComments,
+              onPostComment: handlePostComment,
             }}
           />
         </main>

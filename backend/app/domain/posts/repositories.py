@@ -21,5 +21,6 @@ class PostRepository(ABC):
 
     @abstractmethod
     def get_by_id(self, post_id):
-        """Devuelve el post con ese id, o None si no existe (ADR-005 --
-        usado por like/unlike para devolver 404 sobre un post inexistente)."""
+        """Devuelve el post con ese id, o None si no existe -- usado por
+        `likes` (ADR-005) y `comments` (ADR-006) para devolver 404 sobre un
+        post inexistente."""

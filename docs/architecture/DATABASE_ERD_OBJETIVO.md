@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD_OBJETIVO.md` |
 | Identificador propuesto | `DB-003` (acompaña a `DB-001`/`DATABASE_ARCHITECTURE.md` y `DB-002`/`DATABASE_ERD.md`) — **pendiente de ratificación** |
-| Versión | 0.5 |
+| Versión | 0.6 |
 | Estado | **Borrador — PROPUESTA CANDIDATA, no ratificada** |
 | Depende de | `DATABASE_ARCHITECTURE.md` §4.B (fuente directa), `HB-001` §11–12 (ADR) |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
@@ -12,6 +12,8 @@
 >  **Esto NO es el esquema de PostgreSQL ni un modelo ratificado.** Es la **visualización de las estructuras candidatas** de la *arquitectura objetivo del producto* (`DATABASE_ARCHITECTURE.md` §4.B). Cada entidad, columna, PK, FK y cardinalidad que aparece aquí es una **hipótesis a ratificar por ADR** (`HB-001` §11–12), no una decisión tomada. No se implementa nada a partir de este documento.
 >
 > **v0.5 — `REACTIONS` se resuelve parcialmente: el caso binario ya no es candidato (`ADR-005-likes-minimal-model.md`).** La versión binaria (like/no-like, sin `type`) migró a `DATABASE_ERD.md` como entidad `likes`. `REACTIONS` **sigue dibujada en este documento** porque su forma general — con la columna discriminante `type` (❤️/👍/😂/etc.) que se ve abajo — sigue sin ratificar; este ADR deliberadamente no la implementó (`ADR-005` §No objetivos). No confundir: `likes` (ratificada) y `REACTIONS` (candidata, aquí) no son la misma entidad, aunque la segunda generalice a la primera.
+>
+> **v0.6 — `COMMENTS` se resuelve parcialmente: la mitad plana ya no es candidata (`ADR-006-comments-minimal-model.md`).** `id`/`post_id`/`author_id`/`content`/timestamps de un comentario plano migraron a `DATABASE_ERD.md` como entidad `comments`. `COMMENTS` **sigue dibujada en este documento** porque la relación auto-referencial `COMMENTS ||--o{ COMMENTS : "responde"` (hilos de respuestas, ver §3 abajo) sigue sin ratificar — este ADR deliberadamente no la implementó (`ADR-006` §No objetivos). No confundir: `comments` (ratificada, plana) y la forma completa de `COMMENTS` con auto-referencia (candidata, aquí) no son el mismo alcance, aunque la segunda generalice a la primera.
 >
 > **v0.4 — `posts` (mínimo) ya no es candidata, es ratificada (`ADR-004-posts-minimal-model.md`).** `id`/`author_id`/`content`/timestamps de `POSTS` migraron a `DATABASE_ERD.md` — se dejan anotados aquí, no eliminados, porque el nodo sigue siendo el punto de referencia de otras entidades todavía candidatas (`MEDIA`, `REACTIONS`, `COMMENTS`, `SAVES`, `MENTIONS`, `POST_HASHTAGS`). `visibility` (única columna de `POSTS` en este diagrama) sigue siendo candidata — la tabla real no la tiene todavía.
 >

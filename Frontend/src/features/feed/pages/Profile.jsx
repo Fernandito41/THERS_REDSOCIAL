@@ -64,6 +64,8 @@ export default function Profile() {
     notifications,
     onUpdateUser,
     onToggleLike,
+    onLoadComments,
+    onPostComment,
   } = useOutletContext();
   const toast = useToast();
   const { t } = useLanguage();
@@ -158,7 +160,13 @@ export default function Profile() {
     ) : ownCapsules.length > 0 ? (
       <div className="space-y-4">
         {ownCapsules.map((capsule) => (
-          <CapsuleCard key={capsule.id} capsule={capsule} onToggleLike={onToggleLike} />
+          <CapsuleCard
+            key={capsule.id}
+            capsule={capsule}
+            onToggleLike={onToggleLike}
+            onLoadComments={onLoadComments}
+            onPostComment={onPostComment}
+          />
         ))}
       </div>
     ) : (

@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.10 (Propuesta) |
+| Versión | 0.11 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -30,7 +30,9 @@
 >
 > **v0.9 — corrección retroactiva de estado de integración del Frontend (este documento quedó desactualizado, no el código):** `Profile.jsx` (`feature/frontend-profile-page-redesign`, PR #43) ya consume `PATCH /api/users/me` para `name`/`username`, contradiciendo la nota de v0.5 de que "todavía no consume este endpoint" — `bio`/`mood`/`interests`/`favoriteTrack` siguen en `localStorage`, correctamente, porque esas columnas no están ratificadas (`DATABASE_ARCHITECTURE.md` §4.B). El feed (`AppShell.jsx`, `feature/frontend-feed-posts-integration`, PR #39) ya consume `GET`/`POST /api/posts` en vez de `mockCapsules`, contradiciendo la nota de v0.8. Ninguno de los dos contratos cambió — solo se corrige el estado de integración documentado, que no se había actualizado el mismo día de esos PRs (`HB-001` §15.1).
 >
-> **v0.10 — likes sobre posts (`ADR-005-likes-minimal-model.md`):** se agregan `POST`/`DELETE /api/posts/<post_id>/like` (§4.4) — segunda entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `reactions`) en pasar a implementada, en su versión mínima binaria (like/no-like, sin tipos de reacción). `GET`/`POST /api/posts` se extienden de forma aditiva con `likes_count`/`liked_by_me` (§4.3, §5) — no rompen el contrato existente. Ambos endpoints nuevos son idempotentes por diseño (§4.4). El Frontend (`CapsuleCard.jsx`) todavía no consume este contrato — sigue mostrando el `likes` fijo de `mockCapsules`; conectar el Frontend queda fuera de alcance de esta tarea, que fue exclusivamente de backend. Verificado con 18 pruebas nuevas + la suite completa (89/89, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
+> **v0.10 — likes sobre posts (`ADR-005-likes-minimal-model.md`):** se agregan `POST`/`DELETE /api/posts/<post_id>/like` (§4.4) — segunda entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `reactions`) en pasar a implementada, en su versión mínima binaria (like/no-like, sin tipos de reacción). `GET`/`POST /api/posts` se extienden de forma aditiva con `likes_count`/`liked_by_me` (§4.3, §5) — no rompen el contrato existente. Ambos endpoints nuevos son idempotentes por diseño (§4.4). El Frontend (`CapsuleCard.jsx`) ya consume este contrato en la misma tarea. Verificado con 18 pruebas nuevas + la suite completa (89/89, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
+>
+> **v0.11 — comentarios sobre posts (`ADR-006-comments-minimal-model.md`):** se agregan `POST`/`GET /api/posts/<post_id>/comments` (§4.5) — tercera entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata combinada "Comentarios + Respuestas") en pasar a implementada, solo en su mitad plana: comentar un post, sin hilos de respuestas. `GET`/`POST /api/posts` se extienden de forma aditiva con `comments_count` (§4.3, §5), sumado a `likes_count`/`liked_by_me` de v0.10 — no rompen el contrato existente. A diferencia del feed, el listado de comentarios va en orden cronológico ascendente (§4.5). El Frontend (`CapsuleCard.jsx`) ya consume este contrato en la misma tarea — panel expandible que carga el hilo bajo demanda (`GET .../comments` al abrirse, no precargado con el feed) y publica comentarios nuevos (`POST .../comments`). Verificado con 22 pruebas nuevas + la suite completa (93/93, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real.
 
 ---
 
@@ -306,11 +308,12 @@ Ejemplo mínimo válido — cambiar solo el nombre:
     "content": "string",
     "created_at": "string (ISO 8601)",
     "likes_count": "integer",
-    "liked_by_me": "boolean"
+    "liked_by_me": "boolean",
+    "comments_count": "integer"
   }
 }
 ```
-`likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`, §4.4) — un post recién creado siempre los devuelve en `0`/`false`, nadie pudo haberle dado like todavía.
+`likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`, §4.4); `comments_count` agregado en v0.11 (`ADR-006-comments-minimal-model.md`, §4.5) — un post recién creado siempre los devuelve en `0`/`false`, nadie pudo haberle dado like ni comentado todavía.
 
 **Response — error**
 
@@ -337,9 +340,9 @@ Ejemplo mínimo válido — cambiar solo el nombre:
 
 **Response — éxito (200)**
 ```json
-{ "posts": [ { "id", "author": {...}, "content", "created_at", "likes_count", "liked_by_me" }, ... ] }
+{ "posts": [ { "id", "author": {...}, "content", "created_at", "likes_count", "liked_by_me", "comments_count" }, ... ] }
 ```
-Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts. `likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`) — extensión aditiva, no rompe el contrato existente.
+Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts. `likes_count`/`liked_by_me` (v0.10) y `comments_count` (v0.11) son extensiones aditivas — no rompen el contrato existente.
 
 **Response — error**
 
@@ -400,6 +403,71 @@ Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si 
 
 ---
 
+### 4.5 Comentarios
+
+#### `POST /api/posts/<post_id>/comments`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-006-comments-minimal-model.md`) |
+| Blueprint | `comments_bp` (`backend/app/interfaces/routes/comment_routes.py`) |
+| Auth requerida | **Sí** — `Bearer <jwt>` en el header `Authorization`. `author_id` se obtiene exclusivamente de `get_jwt_identity()` — nunca del body |
+
+**Semántica.** Comenta el post `post_id` en nombre del usuario autenticado, en texto plano — sin hilos de respuestas (`ADR-006` §No objetivos). Cualquier usuario autenticado puede comentar cualquier post, no solo el autor.
+
+**Request body**
+```json
+{ "content": "string (1–1000 caracteres tras trim)" }
+```
+`post_id` va en la URL, como UUID (conversor `uuid` de Flask/Werkzeug).
+
+**Response — éxito (201)**
+```json
+{
+  "comment": {
+    "id": "string (UUID)",
+    "post_id": "string (UUID)",
+    "author": { "id": "string (UUID)", "username": "string", "name": "string" },
+    "content": "string",
+    "created_at": "string (ISO 8601)"
+  }
+}
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Body vacío; `content` ausente, vacío tras `trim()`, o mayor a 1000 caracteres | `{"msg": "..."}` |
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+| `404` | `post_id` no corresponde a ningún post real — incluye cualquier segmento de URL que no sea un UUID válido (el conversor de ruta ya descarta esos casos antes de llegar al handler) | `{"msg": "..."}` |
+
+#### `GET /api/posts/<post_id>/comments`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-006-comments-minimal-model.md`) |
+| Blueprint | `comments_bp`, mismo blueprint que `POST .../comments` |
+| Auth requerida | **Sí** — mismo criterio que el resto del feed hoy |
+
+**Semántica.** Lista los comentarios del post `post_id`, en orden **cronológico ascendente** (más antiguo primero — `ADR-006` §Opciones consideradas, a diferencia de `GET /api/posts` que va al revés). Sin paginación real: límite fijo de **100** comentarios.
+
+**Request:** sin body. Mismo formato de `post_id` que `POST .../comments`.
+
+**Response — éxito (200)**
+```json
+{ "comments": [ { "id", "post_id", "author": {...}, "content", "created_at" }, ... ] }
+```
+Lista vacía (`[]`) si el post no tiene comentarios.
+
+**Response — error:** mismos `401`/`404` que `POST .../comments`.
+
+**Notas de implementación (ambos endpoints):**
+- Whitelist explícita: solo `content` se lee del body en `POST` — nunca `post_id`/`author_id`/`id` (`post_id` viene de la URL).
+- El objeto `author` reutiliza la misma forma reducida que `posts.author` — nunca expone `email`, `phone`, `password_hash` ni otros campos privados.
+
+---
+
 ## 5. Modelo de datos expuesto por la API
 
 Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) pero sí documenta **qué forma tiene el dato tal como cruza la frontera HTTP**, que puede no coincidir 1:1 con el modelo de persistencia:
@@ -407,8 +475,9 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | Objeto | Campos expuestos hoy | Fuente |
 |---|---|---|
 | `user` (en response de register, login, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date` | `ADR-002-user-profile-fields.md`; coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — nunca debe exponerse). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
-| `post` (en response de `POST`/`GET /api/posts`) | `id`, `author` (`id`/`username`/`name`, forma reducida de `user`), `content`, `created_at`, `likes_count`, `liked_by_me` | `ADR-004-posts-minimal-model.md` + `ADR-005-likes-minimal-model.md` (`likes_count`/`liked_by_me`, v0.10); coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` en la respuesta — no hay edición todavía (`ADR-004` §No objetivos), así que exponerlo no aporta nada hoy |
+| `post` (en response de `POST`/`GET /api/posts`) | `id`, `author` (`id`/`username`/`name`, forma reducida de `user`), `content`, `created_at`, `likes_count`, `liked_by_me`, `comments_count` | `ADR-004-posts-minimal-model.md` + `ADR-005-likes-minimal-model.md` (`likes_count`/`liked_by_me`, v0.10) + `ADR-006-comments-minimal-model.md` (`comments_count`, v0.11); coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` en la respuesta — no hay edición todavía (`ADR-004` §No objetivos), así que exponerlo no aporta nada hoy |
 | `like` — no se expone como objeto propio; solo el resumen agregado (`likes_count`/`liked_by_me`) embebido en `post` | — | `ADR-005-likes-minimal-model.md` §No objetivos: no se lista quién dio like a un post |
+| `comment` (en response de `POST`/`GET /api/posts/<id>/comments`) | `id`, `post_id`, `author` (misma forma reducida que en `post`), `content`, `created_at` | `ADR-006-comments-minimal-model.md`; coincide con `comments` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` — mismo motivo que `post` |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 

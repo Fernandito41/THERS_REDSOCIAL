@@ -108,6 +108,40 @@ export default function AppShell() {
     setComposerOpen(false);
   };
 
+  // POST/DELETE /api/posts/<id>/like (ADR-005-likes-minimal-model.md).
+  // Optimistic update -- el toggle se ve al instante; si la request falla,
+  // se revierte y se avisa con el mismo patrón de error que el resto de
+  // AppShell (getErrorMessage + Toast). Ambos endpoints son idempotentes
+  // (ADR-005 §Decisión), así que un doble clic durante una request en vuelo
+  // nunca deja el contador desincronizado.
+  const handleToggleLike = async (postId) => {
+    const capsule = capsules.find((c) => c.id === postId);
+    if (!capsule) return;
+
+    const wasLiked = capsule.liked_by_me;
+    const previousCount = capsule.likes_count;
+
+    setCapsules((prev) =>
+      prev.map((c) =>
+        c.id === postId
+          ? { ...c, liked_by_me: !wasLiked, likes_count: previousCount + (wasLiked ? -1 : 1) }
+          : c
+      )
+    );
+
+    try {
+      const res = wasLiked
+        ? await api.delete(`/posts/${postId}/like`, { headers: authHeaders() })
+        : await api.post(`/posts/${postId}/like`, null, { headers: authHeaders() });
+      setCapsules((prev) => prev.map((c) => (c.id === postId ? { ...c, ...res.data } : c)));
+    } catch (error) {
+      setCapsules((prev) =>
+        prev.map((c) => (c.id === postId ? { ...c, liked_by_me: wasLiked, likes_count: previousCount } : c))
+      );
+      toast.error(getErrorMessage(error, t));
+    }
+  };
+
   // Guard defensivo, no una decisión de ruteo: ProtectedRoute ya garantiza
   // isAuthenticated antes de montar AppShell; esto solo evita un crash en el
   // instante de re-render que sigue a logout() (currentUser pasa a null un
@@ -246,6 +280,7 @@ export default function AppShell() {
               onMarkAllRead: handleMarkAllRead,
               onUpdateUser: updateProfile,
               onOpenComposer: () => setComposerOpen(true),
+              onToggleLike: handleToggleLike,
             }}
           />
         </main>

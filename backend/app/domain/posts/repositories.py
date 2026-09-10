@@ -18,3 +18,8 @@ class PostRepository(ABC):
         ordenados por `created_at` descendente, con el autor ya resuelto
         (sin N+1) -- ADR-004: feed global, sin filtrar por `follows`
         (esa relación no existe todavía)."""
+
+    @abstractmethod
+    def get_by_id(self, post_id):
+        """Devuelve el post con ese id, o None si no existe (ADR-005 --
+        usado por like/unlike para devolver 404 sobre un post inexistente)."""

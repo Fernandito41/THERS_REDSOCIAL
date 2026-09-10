@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.8 |
+| Versión | 0.9 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -23,6 +23,8 @@
 > **v0.7 — auditoría documental integral de THERS (corrección de un hallazgo obsoleto, sin cambios de esquema).** §11 y §14 seguían advirtiendo `JWT_SECRET_KEY = "super-secret-key"` **hardcodeado** en `backend/app/config.py` como hallazgo de seguridad abierto — ya corregido desde `BACKEND_ARCHITECTURE.md` v0.2 (lee `os.environ.get("JWT_SECRET_KEY")`, con un fallback de desarrollo explícitamente inseguro advertido por `stderr`, nunca un literal hardcodeado). El propio `ADR-003-profile-update-contract.md` (§Estado actual) ya había señalado esta desincronización entre documentos hermanos sin corregirla, por estar fuera de su alcance. Verificado en esta auditoría releyendo `backend/app/config.py` línea por línea. Ningún esquema, entidad ni columna cambió — solo se sincronizaron §11 y §14 con el código real.
 >
 > **v0.8 — primera entidad social real, `posts` (`ADR-004-posts-minimal-model.md`):** `posts` pasa de candidata objetivo (§4.B › Contenido) a **implementada** (§4.A, §5.2) — deliberadamente mínima: solo `author_id` (FK a `users`, `ON DELETE CASCADE`) y `content` (texto, máximo 2000 caracteres). Primera relación real entre entidades (§6). Nuevo índice `ix_posts_created_at` (§8), justificado por `GET /api/posts` (§9 se actualiza con la cuarta migración). `visibility`, medios, reacciones, comentarios, hashtags, mood, ubicación, edición/borrado — todo lo demás que §4.B seguía listando junto a "Posts" — sigue sin ratificar, cada uno queda para su propio ADR (`ADR-004` §Decisiones pendientes). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 71 pruebas).
+>
+> **v0.9 — segunda entidad social real, `likes` (`ADR-005-likes-minimal-model.md`):** `reactions` (§4.B › Interacciones, "Likes / reacciones") pasa de candidata objetivo a **implementada** (§4.A, §5.3), pero solo en su versión mínima binaria (like/no-like) — la forma general "con tipo" que §4.B seguía describiendo sigue sin ratificar. Nueva tabla `likes`: `post_id`/`user_id` (FKs a `posts`/`users`, ambas `ON DELETE CASCADE`), `UNIQUE (post_id, user_id)` (`uq_likes_post_user`), sin `updated_at` (un like no se edita, solo se crea o se borra). Sin índice adicional — la propia `UNIQUE` ya cubre el patrón de acceso real por `post_id` (§8). Segunda relación real entre entidades (§6): `likes.post_id → posts.id`, `likes.user_id → users.id`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 89 pruebas).
 
 ---
 
@@ -105,6 +107,7 @@ Se distingue entre:
 |---|---|---|
 | `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`/`GET /api/users/me`/`PATCH /api/users/me`) | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password_hash` reales (columnas de perfil ratificadas por `ADR-002`, v0.5); login autentica consultando `users` por `email`; `PATCH /api/users/me` (`ADR-003`, v0.6) actualiza `name`/`username`/`phone`/`country_code`/`birth_date`, con `username_changed_at` sosteniendo el cooldown de `username`; el backend devuelve el objeto público completo (§5) con datos reales |
 | `posts` | **IMPLEMENTADA — v0.8** (ratificada por `ADR-004-posts-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts`) | Primera entidad de la capa objetivo (§4.B, "Contenido") en pasar a implementada. Modelo deliberadamente mínimo: `author_id` (FK a `users`) y `content` (texto, máximo 2000 caracteres) — sin `visibility`, sin medios, sin ningún otro campo que §4.B seguía listando para "Contenido" |
+| `likes` | **IMPLEMENTADA — v0.9** (ratificada por `ADR-005-likes-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/posts/<id>/like`, agregada en `GET`/`POST /api/posts`) | Segunda entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su versión mínima binaria (like/no-like). Modelo: `post_id`+`user_id` (FKs, `UNIQUE` compuesta) — sin tipos de reacción, sin listar quién dio like |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -164,7 +167,7 @@ Estados usados en esta capa:
 #### Interacciones
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
 |---|---|---|---|
-| Likes / reacciones | Entidad `reactions` (N:N usuario↔post, con tipo) — colapsa "like" y "reacción" | OBJETIVO | Modelado sin decidir |
+| Likes / reacciones | ~~Entidad `reactions` (N:N usuario↔post, con tipo) — colapsa "like" y "reacción"~~ — **resuelto en v0.9 para el caso binario** (`ADR-005-likes-minimal-model.md`, tabla `likes`, ver §4.A/§5.3); la forma general "con tipo" (❤️/👍/😂/etc.) sigue sin ratificar | OBJETIVO (tipos de reacción) / IMPLEMENTADA (binario) | Modelado de tipos de reacción sin decidir |
 | Comentarios + Respuestas a comentarios | Entidad única `comments` **auto-referencial** (respuesta = comentario con padre) | OBJETIVO | Colapsa dos funciones en una entidad; PK/FK sin decidir |
 | Guardar publicaciones | Tabla puente `saves` (usuario↔post) | OBJETIVO | — |
 | Menciones | Tabla puente `mentions` **o** parseo en render sin persistir | PENDIENTE DE DECISIÓN | Persistir vs derivar en lectura, no decidido |
@@ -283,12 +286,45 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 ---
 
+### 5.3 `likes`
+
+> Tercera entidad con definición formal (capa 4.A), ratificada por `ADR-005-likes-minimal-model.md` — resuelve únicamente el caso binario like/no-like de la candidata `reactions` (§4.B). Tipos de reacción, notificaciones y listar quién dio like **no** están en esta entidad — quedan para un ADR futuro si el producto los necesita.
+
+**Propósito.** Registra que un usuario le dio "me gusta" a un post — tabla puente N:N entre `users` y `posts`, sin ningún atributo más allá de quién/qué/cuándo.
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` — mismo patrón que `users.id`/`posts.id` |
+| `post_id` | **UUID**, FK → `posts.id` | No | Post likeado |
+| `user_id` | **UUID**, FK → `users.id` | No | Quién dio el like. Siempre resuelto desde `get_jwt_identity()`, nunca aceptado del body (mismo principio anti mass-assignment que `posts.author_id`) |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Auditoría — sin uso funcional todavía (no hay orden ni listado de likes en esta versión) |
+
+**Sin `updated_at`.** A diferencia de `users`/`posts`, un like no se edita in place — se crea o se borra, nunca se actualiza (`ADR-005` §Modelo de datos).
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `post_id → posts.id` y `user_id → users.id`, ambas `ON DELETE CASCADE` — mismo placeholder que `ADR-004` ya aceptó para `posts.author_id` (borrado de cuenta/post tampoco existe todavía como funcionalidad).
+
+**Relaciones.** `users (1) ←→ (N) likes ←→ (N) 1) posts` — tabla puente N:N entre `users` y `posts`.
+
+**Constraints relevantes**
+- `post_id`/`user_id` **NOT NULL** — todo like tiene post y usuario, sin excepción.
+- `UNIQUE (post_id, user_id)` (`uq_likes_post_user`) — un usuario no puede likear el mismo post dos veces; también sostiene la idempotencia de `POST /api/posts/<id>/like` (`ADR-005` §Decisión).
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-005` §Decisiones pendientes): tipos de reacción más allá del binario, tabla/columna de notificaciones asociadas, forma de exponer quién dio like (si el producto lo necesita).
+
+---
+
 ## 6. Relaciones entre entidades
 
-**v0.8 — primera relación implementada:** `posts.author_id → users.id` (`ADR-004-posts-minimal-model.md`, ver §5.2) — `ON DELETE CASCADE`. Es la única relación real hoy; todo lo demás sigue siendo candidato (§4.B).
+**v0.8 — primera relación implementada:** `posts.author_id → users.id` (`ADR-004-posts-minimal-model.md`, ver §5.2) — `ON DELETE CASCADE`.
+
+**v0.9 — segunda y tercera relación implementadas:** `likes.post_id → posts.id` y `likes.user_id → users.id` (`ADR-005-likes-minimal-model.md`, ver §5.3), ambas `ON DELETE CASCADE` — `likes` es la primera tabla puente N:N real del esquema. Todo lo demás sigue siendo candidato (§4.B).
 
 Regla de diseño para cuando existan más entidades (para evitar decisiones improvisadas durante la implementación):
-- Las entidades dependientes referencian a `users` (o a `posts`, cuando corresponda — p. ej. un futuro `reactions.post_id`) con una FK.
+- Las entidades dependientes referencian a `users` y/o `posts` (o a otras entidades ratificadas, cuando corresponda) con una FK.
 - La cardinalidad, la política `ON DELETE` y las tablas puente (p. ej. relaciones N:N de "follows") se definirán **cuando esas entidades se ratifiquen**, cada una como ADR (`HB-001` §12). Las relaciones candidatas del producto objetivo se listan en §4.B, pero **no** se dibujan ni modelan aquí.
 
 ---
@@ -319,6 +355,7 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 | Índice único de email | `users(email)` — `UNIQUE` | El login busca al usuario **por email** en cada intento de autenticación (`Login.jsx` envía `email`; el backend deberá hacer `SELECT ... WHERE email = ?`). La restricción `UNIQUE` de §5 crea este índice automáticamente y sirve tanto para integridad como para el lookup de login. |
 | Índice único de username (`uq_users_username`) | `users(username)` — `UNIQUE` | **v0.5 (`ADR-002`).** `POST /api/register` valida unicidad de `username` en cada registro; la constraint `UNIQUE` de §5 crea este índice automáticamente. Ningún flujo consulta hoy por `username` fuera de esa validación de unicidad (login sigue siendo por email) — no se justifica un índice adicional de búsqueda. |
 | `ix_posts_created_at` | `posts(created_at)` | **v0.8 (`ADR-004`).** `GET /api/posts` ordena por `created_at DESC` en cada consulta del feed — primer índice justificado por una consulta de una entidad distinta de `users`. |
+| `uq_likes_post_user` | `likes(post_id, user_id)`, `UNIQUE` | **v0.9 (`ADR-005`).** Impone la regla de negocio (un usuario no likea el mismo post dos veces) y, por ser `post_id` su columna líder, ya cubre `COUNT(*)`/`IN (...)` por post sin necesitar un índice adicional. |
 
 **No se añaden más índices en esta versión.** La PK (`id`) de cada entidad ya está indexada por definición. Cualquier índice adicional (p. ej. `posts(author_id)`, si en el futuro se filtra el feed por autor) se justificará **cuando exista la consulta que lo pague**, no antes.
 
@@ -403,7 +440,7 @@ Decisiones que este documento **no toma** porque no están respaldadas por la do
 - **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo) — no aplica a `users` todavía, sigue pendiente para entidades futuras.
 
 ### Entidades candidatas del modelo objetivo
-La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). Entre las candidatas que siguen sin ratificar: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions`, `comments`, `saves`, `mentions`, `hashtags` (+`post_hashtags`), `follows`, `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.
+La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. Entre las candidatas que siguen sin ratificar: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `comments`, `saves`, `mentions`, `hashtags` (+`post_hashtags`), `follows`, `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.
 
 ### Operación
 - ~~Herramienta de migraciones~~ — **resuelto en código: Flask-Migrate/Alembic**, scaffolding en `backend/migrations/` (ver `BACKEND_ARCHITECTURE.md` §8); ratificación formal pendiente de confirmar. **Ubicación de la carpeta `database/`** sigue sin definir — las migraciones quedaron dentro de `backend/`, no en una carpeta `database/` separada.

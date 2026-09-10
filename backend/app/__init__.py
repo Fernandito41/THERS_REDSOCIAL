@@ -32,4 +32,7 @@ def create_app():
     from app.interfaces.routes.post_routes import posts_bp
     app.register_blueprint(posts_bp, url_prefix="/api")
 
+    from app.interfaces.routes.like_routes import likes_bp
+    app.register_blueprint(likes_bp, url_prefix="/api")
+
     return app

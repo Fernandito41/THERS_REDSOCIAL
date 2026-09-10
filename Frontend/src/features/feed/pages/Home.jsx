@@ -8,8 +8,15 @@ import CapsuleCard from "../components/CapsuleCard";
 import { mockSuggestions, mockTopics } from "../data/mockData";
 
 export default function Home() {
-  const { currentUser, capsules, capsulesLoading, followingIds, onToggleFollow, onOpenComposer } =
-    useOutletContext();
+  const {
+    currentUser,
+    capsules,
+    capsulesLoading,
+    followingIds,
+    onToggleFollow,
+    onOpenComposer,
+    onToggleLike,
+  } = useOutletContext();
 
   const firstName = currentUser.name.split(" ")[0];
 
@@ -61,7 +68,7 @@ export default function Home() {
         ) : (
           <div className="space-y-6">
             {capsules.map((capsule) => (
-              <CapsuleCard key={capsule.id} capsule={capsule} />
+              <CapsuleCard key={capsule.id} capsule={capsule} onToggleLike={onToggleLike} />
             ))}
           </div>
         )}

@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.8 (Propuesta) |
+| Versión | 0.10 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -27,6 +27,10 @@
 > **v0.8 — primer endpoint de una entidad social real (`ADR-004-posts-minimal-model.md`):** se agrega `POST`/`GET /api/posts` (§4.3) — primera entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B) en pasar a implementada, más allá de `users`. Modelo deliberadamente mínimo: solo texto, sin mood/imagen/hashtags/ubicación/reacciones/comentarios (cada uno queda para su propio ADR). Feed **global** — `GET /api/posts` devuelve posts de todos los autores, sin filtrar por `follows` (esa relación no existe todavía). El Frontend (`Home.jsx`, `CreateCapsuleFlow.jsx`) todavía no consume este contrato — sigue mostrando `mockCapsules`; conectar el Frontend queda fuera de alcance de esta tarea, que fue exclusivamente de backend. Verificado con 12 pruebas nuevas + la suite completa (71/71, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade`/`downgrade`).
 >
 > **v0.7 — validación de formato de `email` y longitud mínima de `password` en `POST /api/register` (cierra §9 ítem 2):** `domain/auth/validators.py` gana `is_valid_email()` (regex básica, sin verificar dominio real) e `is_valid_password()` (mínimo 8 caracteres, `MIN_PASSWORD_LENGTH`) — mismo patrón que los validadores ya existentes de `username`/`phone`/`country_code`/`birth_date`. Ambos umbrales son placeholders de producto explícitos y revisables (mismo criterio que `MIN_AGE_YEARS`, `ADR-002` §3), decididos como cambio técnico de bajo impacto (`HB-001` §11) por no alterar arquitectura, esquema ni ningún endpoint más allá de `register`. `POST /api/login` y `PATCH /api/users/me` **no cambian** — ninguno de los dos valida formato de credenciales (login no reformatea lo que ya existe; `PATCH` no permite editar `email`/`password`, `ADR-003`). Reflejado en §4.1 y §9. Verificado con 3 pruebas nuevas + la suite completa (59/59, ejecutada contra PostgreSQL 16 real).
+>
+> **v0.9 — corrección retroactiva de estado de integración del Frontend (este documento quedó desactualizado, no el código):** `Profile.jsx` (`feature/frontend-profile-page-redesign`, PR #43) ya consume `PATCH /api/users/me` para `name`/`username`, contradiciendo la nota de v0.5 de que "todavía no consume este endpoint" — `bio`/`mood`/`interests`/`favoriteTrack` siguen en `localStorage`, correctamente, porque esas columnas no están ratificadas (`DATABASE_ARCHITECTURE.md` §4.B). El feed (`AppShell.jsx`, `feature/frontend-feed-posts-integration`, PR #39) ya consume `GET`/`POST /api/posts` en vez de `mockCapsules`, contradiciendo la nota de v0.8. Ninguno de los dos contratos cambió — solo se corrige el estado de integración documentado, que no se había actualizado el mismo día de esos PRs (`HB-001` §15.1).
+>
+> **v0.10 — likes sobre posts (`ADR-005-likes-minimal-model.md`):** se agregan `POST`/`DELETE /api/posts/<post_id>/like` (§4.4) — segunda entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `reactions`) en pasar a implementada, en su versión mínima binaria (like/no-like, sin tipos de reacción). `GET`/`POST /api/posts` se extienden de forma aditiva con `likes_count`/`liked_by_me` (§4.3, §5) — no rompen el contrato existente. Ambos endpoints nuevos son idempotentes por diseño (§4.4). El Frontend (`CapsuleCard.jsx`) todavía no consume este contrato — sigue mostrando el `likes` fijo de `mockCapsules`; conectar el Frontend queda fuera de alcance de esta tarea, que fue exclusivamente de backend. Verificado con 18 pruebas nuevas + la suite completa (89/89, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 
 ---
 
@@ -300,10 +304,13 @@ Ejemplo mínimo válido — cambiar solo el nombre:
     "id": "string (UUID)",
     "author": { "id": "string (UUID)", "username": "string", "name": "string" },
     "content": "string",
-    "created_at": "string (ISO 8601)"
+    "created_at": "string (ISO 8601)",
+    "likes_count": "integer",
+    "liked_by_me": "boolean"
   }
 }
 ```
+`likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`, §4.4) — un post recién creado siempre los devuelve en `0`/`false`, nadie pudo haberle dado like todavía.
 
 **Response — error**
 
@@ -330,15 +337,66 @@ Ejemplo mínimo válido — cambiar solo el nombre:
 
 **Response — éxito (200)**
 ```json
-{ "posts": [ { "id", "author": {...}, "content", "created_at" }, ... ] }
+{ "posts": [ { "id", "author": {...}, "content", "created_at", "likes_count", "liked_by_me" }, ... ] }
 ```
-Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts.
+Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts. `likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`) — extensión aditiva, no rompe el contrato existente.
 
 **Response — error**
 
 | Código | Causa | Body |
 |---|---|---|
 | `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+
+---
+
+### 4.4 Likes
+
+#### `POST /api/posts/<post_id>/like`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-005-likes-minimal-model.md`) |
+| Blueprint | `likes_bp` (`backend/app/interfaces/routes/like_routes.py`) |
+| Auth requerida | **Sí** — `Bearer <jwt>` en el header `Authorization`. Quién da el like se obtiene exclusivamente de `get_jwt_identity()` — nunca del body |
+
+**Semántica.** Da like al post `post_id` en nombre del usuario autenticado. **Idempotente**: repetir la llamada no falla ni duplica el like (`ADR-005` §Decisión, Opción A) — pensado para que el Frontend no tenga que distinguir "primer like" de "doble tap accidental".
+
+**Request:** sin body. `post_id` va en la URL, como UUID (conversor `uuid` de Flask/Werkzeug).
+
+**Response — éxito (200)**
+```json
+{ "likes_count": "integer", "liked_by_me": true }
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+| `404` | `post_id` no corresponde a ningún post real — incluye cualquier segmento de URL que no sea un UUID válido (el conversor de ruta ya descarta esos casos antes de llegar al handler) | `{"msg": "..."}` |
+
+#### `DELETE /api/posts/<post_id>/like`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-005-likes-minimal-model.md`) |
+| Blueprint | `likes_bp`, mismo blueprint que `POST .../like` |
+| Auth requerida | **Sí** — mismo criterio que `POST .../like` |
+
+**Semántica.** Quita el like del usuario autenticado sobre el post `post_id`. **Idempotente**: si el usuario no lo había likeado, no falla — devuelve el mismo estado que si acabara de quitarlo.
+
+**Request:** sin body. Mismo formato de `post_id` que `POST .../like`.
+
+**Response — éxito (200)**
+```json
+{ "likes_count": "integer", "liked_by_me": false }
+```
+
+**Response — error:** mismos `401`/`404` que `POST .../like`.
+
+**Notas de implementación (ambos endpoints):**
+- No aceptan ningún campo de body — toda la información viene de la URL (`post_id`) y del JWT (`ADR-005` §Seguridad).
+- No exponen qué usuarios dieron like a un post — solo el conteo agregado y si el usuario que pregunta ya likeó (`ADR-005` §No objetivos).
 
 ---
 
@@ -349,7 +407,8 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | Objeto | Campos expuestos hoy | Fuente |
 |---|---|---|
 | `user` (en response de register, login, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date` | `ADR-002-user-profile-fields.md`; coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — nunca debe exponerse). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
-| `post` (en response de `POST`/`GET /api/posts`) | `id`, `author` (`id`/`username`/`name`, forma reducida de `user`), `content`, `created_at` | `ADR-004-posts-minimal-model.md`; coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` en la respuesta — no hay edición todavía (`ADR-004` §No objetivos), así que exponerlo no aporta nada hoy |
+| `post` (en response de `POST`/`GET /api/posts`) | `id`, `author` (`id`/`username`/`name`, forma reducida de `user`), `content`, `created_at`, `likes_count`, `liked_by_me` | `ADR-004-posts-minimal-model.md` + `ADR-005-likes-minimal-model.md` (`likes_count`/`liked_by_me`, v0.10); coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` en la respuesta — no hay edición todavía (`ADR-004` §No objetivos), así que exponerlo no aporta nada hoy |
+| `like` — no se expone como objeto propio; solo el resumen agregado (`likes_count`/`liked_by_me`) embebido en `post` | — | `ADR-005-likes-minimal-model.md` §No objetivos: no se lista quién dio like a un post |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 

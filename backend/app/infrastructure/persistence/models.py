@@ -113,3 +113,46 @@ class Post(db.Model):
 
     def __repr__(self):
         return f"<Post id={self.id} author_id={self.author_id}>"
+
+
+class Like(db.Model):
+    __tablename__ = "likes"
+
+    # Segunda entidad del alcance objetivo del producto en pasar a
+    # ratificada (ADR-005-likes-minimal-model.md) -- caso binario like/no-like,
+    # sin tipos de reacción (esa forma general sigue como candidata
+    # `reactions` sin ratificar, DATABASE_ARCHITECTURE.md §4.B).
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    # ON DELETE CASCADE en ambas FKs: si se borra el post o el usuario, sus
+    # likes se borran con él (mismo placeholder que ADR-004 ya aceptó para
+    # posts.author_id -- borrado de cuenta/post no existe todavía).
+    post_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    # Sin `updated_at`: un like no se edita in place, solo se crea o se
+    # borra (ADR-005 §Modelo de datos).
+
+    __table_args__ = (
+        db.UniqueConstraint("post_id", "user_id", name="uq_likes_post_user"),
+    )
+
+    def __repr__(self):
+        return f"<Like post_id={self.post_id} user_id={self.user_id}>"

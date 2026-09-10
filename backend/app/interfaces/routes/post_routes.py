@@ -11,6 +11,9 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.application.posts.create_post_use_case import create_post
 from app.application.posts.list_posts_use_case import DEFAULT_LIMIT, list_posts
 from app.domain.posts.validators import MAX_CONTENT_LENGTH, is_valid_content
+from app.infrastructure.persistence.repositories.comment_repository import (
+    SQLAlchemyCommentRepository,
+)
 from app.infrastructure.persistence.repositories.like_repository import (
     SQLAlchemyLikeRepository,
 )
@@ -22,6 +25,7 @@ posts_bp = Blueprint("posts", __name__)
 
 _post_repository = SQLAlchemyPostRepository()
 _like_repository = SQLAlchemyLikeRepository()
+_comment_repository = SQLAlchemyCommentRepository()
 
 
 @posts_bp.route("/posts", methods=["POST"])
@@ -57,5 +61,7 @@ def list_all():
     # viewer_id (ADR-005): quién pregunta, para resolver `liked_by_me` por
     # post -- mismo JWT que ya identifica al autor en create().
     viewer_id = get_jwt_identity()
-    posts = list_posts(_post_repository, _like_repository, viewer_id, DEFAULT_LIMIT)
+    posts = list_posts(
+        _post_repository, _like_repository, _comment_repository, viewer_id, DEFAULT_LIMIT
+    )
     return jsonify({"posts": posts}), 200

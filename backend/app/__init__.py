@@ -35,4 +35,7 @@ def create_app():
     from app.interfaces.routes.like_routes import likes_bp
     app.register_blueprint(likes_bp, url_prefix="/api")
 
+    from app.interfaces.routes.comment_routes import comments_bp
+    app.register_blueprint(comments_bp, url_prefix="/api")
+
     return app

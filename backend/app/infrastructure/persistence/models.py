@@ -156,3 +156,50 @@ class Like(db.Model):
 
     def __repr__(self):
         return f"<Like post_id={self.post_id} user_id={self.user_id}>"
+
+
+class Comment(db.Model):
+    __tablename__ = "comments"
+
+    # Tercera entidad del alcance objetivo del producto en pasar a
+    # ratificada (ADR-006-comments-minimal-model.md) -- comentario plano
+    # sobre un post, sin hilos de respuestas (`parent_comment_id` queda
+    # fuera, ver ADR-006 §No objetivos).
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    # ON DELETE CASCADE en ambas FKs: si se borra el post o el usuario, sus
+    # comentarios se borran con él (mismo placeholder que ADR-004/ADR-005 ya
+    # aceptaron -- borrado de cuenta/post no existe todavía).
+    post_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("posts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    author_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Sin límite de longitud a nivel de esquema -- la validación de negocio
+    # (MAX_CONTENT_LENGTH) vive en domain/comments/validators.py, no aquí.
+    content = db.Column(db.Text, nullable=False)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    # lazy="joined": listar comentarios siempre necesita el autor (mismo
+    # motivo que Post.author) -- evita el N+1 de resolverlo por separado.
+    author = db.relationship("User", lazy="joined")
+
+    def __repr__(self):
+        return f"<Comment id={self.id} post_id={self.post_id} author_id={self.author_id}>"

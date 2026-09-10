@@ -16,6 +16,8 @@ export default function Home() {
     onToggleFollow,
     onOpenComposer,
     onToggleLike,
+    onLoadComments,
+    onPostComment,
   } = useOutletContext();
 
   const firstName = currentUser.name.split(" ")[0];
@@ -68,7 +70,13 @@ export default function Home() {
         ) : (
           <div className="space-y-6">
             {capsules.map((capsule) => (
-              <CapsuleCard key={capsule.id} capsule={capsule} onToggleLike={onToggleLike} />
+              <CapsuleCard
+                key={capsule.id}
+                capsule={capsule}
+                onToggleLike={onToggleLike}
+                onLoadComments={onLoadComments}
+                onPostComment={onPostComment}
+              />
             ))}
           </div>
         )}

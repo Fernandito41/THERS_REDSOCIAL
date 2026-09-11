@@ -27,7 +27,7 @@ import { loadProfile, moveProfile } from "../lib/profileStorage";
 //   - Nombre / usuario   -> reales (PATCH /api/users/me, ADR-003).
 //   - Bio, ubicación, sitio web, mood, intereses, portada, acento -> locales
 //     (localStorage): no hay columnas ratificadas (DATABASE_ARCHITECTURE.md §4.B).
-//   - Seguidores         -> 0 de verdad: no existe la funcionalidad todavía.
+//   - Seguidores / Seguidos -> reales (GET /api/users/me, ADR-007).
 //   - Respuestas / Media / Guardados / Me gusta -> secciones vacías declaradas
 //     como no disponibles, nunca rellenadas con contenido inventado.
 //   - Sin insignia de verificado: no existe como funcionalidad.
@@ -60,12 +60,12 @@ export default function Profile() {
     currentUser,
     capsules,
     capsulesLoading,
-    followingIds,
     notifications,
     onUpdateUser,
     onToggleLike,
     onLoadComments,
     onPostComment,
+    onToggleFollowAuthor,
   } = useOutletContext();
   const toast = useToast();
   const { t } = useLanguage();
@@ -111,8 +111,8 @@ export default function Profile() {
 
   const stats = {
     posts: ownCapsules.length,
-    followers: 0,
-    following: followingIds.size,
+    followers: currentUser.followers_count ?? 0,
+    following: currentUser.following_count ?? 0,
   };
 
   const closeEditor = () => {
@@ -163,9 +163,11 @@ export default function Profile() {
           <CapsuleCard
             key={capsule.id}
             capsule={capsule}
+            currentUserId={currentUser.id}
             onToggleLike={onToggleLike}
             onLoadComments={onLoadComments}
             onPostComment={onPostComment}
+            onToggleFollowAuthor={onToggleFollowAuthor}
           />
         ))}
       </div>

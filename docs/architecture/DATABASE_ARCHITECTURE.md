@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.10 |
+| Versión | 0.11 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -27,6 +27,8 @@
 > **v0.9 — segunda entidad social real, `likes` (`ADR-005-likes-minimal-model.md`):** `reactions` (§4.B › Interacciones, "Likes / reacciones") pasa de candidata objetivo a **implementada** (§4.A, §5.3), pero solo en su versión mínima binaria (like/no-like) — la forma general "con tipo" que §4.B seguía describiendo sigue sin ratificar. Nueva tabla `likes`: `post_id`/`user_id` (FKs a `posts`/`users`, ambas `ON DELETE CASCADE`), `UNIQUE (post_id, user_id)` (`uq_likes_post_user`), sin `updated_at` (un like no se edita, solo se crea o se borra). Sin índice adicional — la propia `UNIQUE` ya cubre el patrón de acceso real por `post_id` (§8). Segunda relación real entre entidades (§6): `likes.post_id → posts.id`, `likes.user_id → users.id`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 89 pruebas).
 >
 > **v0.10 — comentarios planos sobre posts, `comments` (`ADR-006-comments-minimal-model.md`):** la candidata combinada "Comentarios + Respuestas a comentarios" (§4.B › Interacciones) se resuelve **solo a medias** — pasa a **implementada** (§4.A, §5.4) únicamente su mitad plana: comentar un post, sin hilos de respuestas (`parent_comment_id` sigue sin ratificar). Nueva tabla `comments`: `post_id`/`author_id` (FKs a `posts`/`users`, ambas `ON DELETE CASCADE`), `content` (texto, máximo 1000 caracteres), con `updated_at`+trigger (mismo patrón de auditoría que `posts`, aunque sin edición todavía). Nuevo índice compuesto `ix_comments_post_id_created_at` (§8), justificado por `GET /api/posts/<id>/comments`. Tercera y cuarta relación real entre entidades (§6): `comments.post_id → posts.id`, `comments.author_id → users.id`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 93 pruebas).
+>
+> **v0.11 — seguir/dejar de seguir, `follows` (`ADR-007-follows-minimal-model.md`):** "Seguir, Dejar de seguir, Seguidores, Seguidos" (§4.B › Relaciones sociales) pasa de candidata objetivo a **implementada** (§4.A, §5.5). Nueva tabla `follows`: `follower_id`/`followed_id` (FKs a `users`, ambas `ON DELETE CASCADE`), `UNIQUE (follower_id, followed_id)` (`uq_follows_follower_followed`), **primera `CHECK` constraint del esquema** (`ck_follows_no_self_follow`: `follower_id <> followed_id`), sin `updated_at` (mismo criterio que `likes`). Primera relación auto-referencial (`users`↔`users`) del modelo. Nuevo índice `ix_follows_followed_id` (§8) — a diferencia de `likes`, sí hace falta un segundo índice porque `followers_count` filtra por la columna no líder de la `UNIQUE`. Quinta y sexta relación real entre entidades (§6): `follows.follower_id → users.id`, `follows.followed_id → users.id`. `users` gana `followers_count`/`following_count` calculados (no columnas propias) expuestos en `GET`/`PATCH /api/users/me`; `posts.author` gana `is_followed_by_me` calculado, expuesto en `GET`/`POST /api/posts`. El feed **sigue sin filtrar por seguidos** — deliberadamente fuera de este ADR (§No objetivos). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 124 pruebas).
 
 ---
 
@@ -111,6 +113,7 @@ Se distingue entre:
 | `posts` | **IMPLEMENTADA — v0.8** (ratificada por `ADR-004-posts-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts`) | Primera entidad de la capa objetivo (§4.B, "Contenido") en pasar a implementada. Modelo deliberadamente mínimo: `author_id` (FK a `users`) y `content` (texto, máximo 2000 caracteres) — sin `visibility`, sin medios, sin ningún otro campo que §4.B seguía listando para "Contenido" |
 | `likes` | **IMPLEMENTADA — v0.9** (ratificada por `ADR-005-likes-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/posts/<id>/like`, agregada en `GET`/`POST /api/posts`) | Segunda entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su versión mínima binaria (like/no-like). Modelo: `post_id`+`user_id` (FKs, `UNIQUE` compuesta) — sin tipos de reacción, sin listar quién dio like |
 | `comments` | **IMPLEMENTADA — v0.10** (ratificada por `ADR-006-comments-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts/<id>/comments`, agregada en `GET`/`POST /api/posts`) | Tercera entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su mitad plana. Modelo: `post_id`+`author_id` (FKs) y `content` (texto, máximo 1000 caracteres) — sin `parent_comment_id`, sin hilos de respuestas |
+| `follows` | **IMPLEMENTADA — v0.11** (ratificada por `ADR-007-follows-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/users/<id>/follow`, agregada en `GET`/`PATCH /api/users/me` y en `GET`/`POST /api/posts`) | Cuarta entidad de la capa objetivo (§4.B, "Relaciones sociales") en pasar a implementada. Modelo: `follower_id`+`followed_id` (FKs, `UNIQUE` compuesta, primera `CHECK` del esquema) — sin listar seguidores/seguidos, sin personalizar el feed |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -180,7 +183,7 @@ Estados usados en esta capa:
 #### Relaciones sociales
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
 |---|---|---|---|
-| Seguir, Dejar de seguir, Seguidores, Seguidos | **Una** tabla puente `follows` (auto-referencial `users`↔`users`) — las cuatro funciones son la misma estructura | OBJETIVO | Cardinalidad y política `ON DELETE` sin decidir |
+| Seguir, Dejar de seguir, Seguidores, Seguidos | ~~**Una** tabla puente `follows` (auto-referencial `users`↔`users`) — las cuatro funciones son la misma estructura~~ — **resuelto en v0.11** (`ADR-007-follows-minimal-model.md`, ver §4.A/§5.5): seguir/dejar de seguir y los contadores; listar seguidores/seguidos sigue sin ratificar | IMPLEMENTADA (seguir/contar) / PENDIENTE (listar) | Listar seguidores/seguidos sin decidir |
 | Bloquear usuarios | Tabla puente `blocks` (auto-referencial) | OBJETIVO | — |
 | Restringir usuarios | Tabla puente `restrictions` **o** atributo de la relación social | PENDIENTE DE DECISIÓN | La semántica de "restringir" vs "bloquear" está por definir |
 
@@ -351,13 +354,47 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 ---
 
+### 5.5 `follows`
+
+> Quinta entidad con definición formal (capa 4.A), ratificada por `ADR-007-follows-minimal-model.md` — primera relación auto-referencial (`users`↔`users`) del esquema. Listar seguidores/seguidos, notificaciones y personalizar el feed **no** están en esta entidad — quedan para un ADR futuro si el producto los necesita.
+
+**Propósito.** Registra que un usuario sigue a otro — tabla puente N:N auto-referencial sobre `users`, sin ningún atributo más allá de quién/a quién/cuándo.
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` — mismo patrón que el resto de entidades |
+| `follower_id` | **UUID**, FK → `users.id` | No | Quién sigue. Siempre resuelto desde `get_jwt_identity()`, nunca aceptado del body |
+| `followed_id` | **UUID**, FK → `users.id` | No | A quién se sigue. Viene de la URL (`user_id`), nunca del body |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Auditoría — sin uso funcional todavía (no hay orden ni listado de follows en esta versión) |
+
+**Sin `updated_at`.** Igual que `likes` (`ADR-005` §Modelo de datos): una relación de "seguir" se crea o se borra, nunca se edita in place.
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `follower_id → users.id` y `followed_id → users.id`, ambas `ON DELETE CASCADE` — mismo placeholder que el resto de entidades (borrado de cuenta no existe todavía como funcionalidad).
+
+**Relaciones.** `users (1) ←→ (N) follows ←→ (N) 1) users` — tabla puente N:N auto-referencial: un usuario puede seguir a muchos, y ser seguido por muchos.
+
+**Constraints relevantes**
+- `follower_id`/`followed_id` **NOT NULL** — todo follow tiene ambos lados, sin excepción.
+- `UNIQUE (follower_id, followed_id)` (`uq_follows_follower_followed`) — un usuario no puede seguir dos veces al mismo usuario; sostiene la idempotencia de `POST /api/users/<id>/follow`.
+- `CHECK (follower_id <> followed_id)` (`ck_follows_no_self_follow`) — **primera `CHECK` constraint del esquema**: un usuario no puede seguirse a sí mismo, impuesto a nivel de motor y no solo en la aplicación (`DATABASE_ARCHITECTURE.md` §3, "la base de datos como última línea de defensa").
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-007` §Decisiones pendientes): personalizar el feed por seguidos, listar seguidores/seguidos, notificaciones de "nuevo seguidor", perfiles públicos de otros usuarios.
+
+---
+
 ## 6. Relaciones entre entidades
 
 **v0.8 — primera relación implementada:** `posts.author_id → users.id` (`ADR-004-posts-minimal-model.md`, ver §5.2) — `ON DELETE CASCADE`.
 
 **v0.9 — segunda y tercera relación implementadas:** `likes.post_id → posts.id` y `likes.user_id → users.id` (`ADR-005-likes-minimal-model.md`, ver §5.3), ambas `ON DELETE CASCADE` — `likes` es la primera tabla puente N:N real del esquema.
 
-**v0.10 — cuarta y quinta relación implementadas:** `comments.post_id → posts.id` y `comments.author_id → users.id` (`ADR-006-comments-minimal-model.md`, ver §5.4), ambas `ON DELETE CASCADE`. Todo lo demás sigue siendo candidato (§4.B).
+**v0.10 — cuarta y quinta relación implementadas:** `comments.post_id → posts.id` y `comments.author_id → users.id` (`ADR-006-comments-minimal-model.md`, ver §5.4), ambas `ON DELETE CASCADE`.
+
+**v0.11 — sexta y séptima relación implementadas:** `follows.follower_id → users.id` y `follows.followed_id → users.id` (`ADR-007-follows-minimal-model.md`, ver §5.5), ambas `ON DELETE CASCADE` — primera relación auto-referencial (`users`↔`users`) del esquema. Todo lo demás sigue siendo candidato (§4.B).
 
 Regla de diseño para cuando existan más entidades (para evitar decisiones improvisadas durante la implementación):
 - Las entidades dependientes referencian a `users` y/o `posts` (o a otras entidades ratificadas, cuando corresponda) con una FK.
@@ -393,6 +430,8 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 | `ix_posts_created_at` | `posts(created_at)` | **v0.8 (`ADR-004`).** `GET /api/posts` ordena por `created_at DESC` en cada consulta del feed — primer índice justificado por una consulta de una entidad distinta de `users`. |
 | `uq_likes_post_user` | `likes(post_id, user_id)`, `UNIQUE` | **v0.9 (`ADR-005`).** Impone la regla de negocio (un usuario no likea el mismo post dos veces) y, por ser `post_id` su columna líder, ya cubre `COUNT(*)`/`IN (...)` por post sin necesitar un índice adicional. |
 | `ix_comments_post_id_created_at` | `comments(post_id, created_at)`, compuesto | **v0.10 (`ADR-006`).** `GET /api/posts/<id>/comments` filtra por `post_id` y ordena por `created_at ASC` — la columna líder (`post_id`) cubre además el `COUNT(*)` de `comments_count` sin necesitar un índice adicional. |
+| `uq_follows_follower_followed` | `follows(follower_id, followed_id)`, `UNIQUE` | **v0.11 (`ADR-007`).** Impone la regla de negocio (no seguir dos veces al mismo usuario) y cubre `following_count`/`POST .../follow` por ser `follower_id` su columna líder. |
+| `ix_follows_followed_id` | `follows(followed_id)` | **v0.11 (`ADR-007`).** `followers_count` y "¿me sigue esta persona?" filtran por `followed_id` — a diferencia de `likes`, esta *no* es la columna líder de la `UNIQUE` de arriba, así que necesita su propio índice o escanearía la tabla completa. |
 
 **No se añaden más índices en esta versión.** La PK (`id`) de cada entidad ya está indexada por definición. Cualquier índice adicional (p. ej. `posts(author_id)`, si en el futuro se filtra el feed por autor) se justificará **cuando exista la consulta que lo pague**, no antes.
 
@@ -477,7 +516,7 @@ Decisiones que este documento **no toma** porque no están respaldadas por la do
 - **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo) — no aplica a `users` todavía, sigue pendiente para entidades futuras.
 
 ### Entidades candidatas del modelo objetivo
-La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. ~~`comments` (mitad plana)~~ — **resuelto en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4): solo comentar un post; sigue pendiente `parent_comment_id`/hilos de respuestas. Entre las candidatas que siguen sin ratificar: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions` (forma general con tipos), `saves`, `mentions`, `hashtags` (+`post_hashtags`), `follows`, `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.
+La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. ~~`comments` (mitad plana)~~ — **resuelto en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4): solo comentar un post; sigue pendiente `parent_comment_id`/hilos de respuestas. ~~`follows`~~ — **resuelto en v0.11** (`ADR-007-follows-minimal-model.md`, ver §4.A/§5.5): seguir/dejar de seguir y contadores; sigue pendiente listar seguidores/seguidos. Entre las candidatas que siguen sin ratificar: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions` (forma general con tipos), `saves`, `mentions`, `hashtags` (+`post_hashtags`), `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.
 
 ### Operación
 - ~~Herramienta de migraciones~~ — **resuelto en código: Flask-Migrate/Alembic**, scaffolding en `backend/migrations/` (ver `BACKEND_ARCHITECTURE.md` §8); ratificación formal pendiente de confirmar. **Ubicación de la carpeta `database/`** sigue sin definir — las migraciones quedaron dentro de `backend/`, no en una carpeta `database/` separada.

@@ -38,4 +38,7 @@ def create_app():
     from app.interfaces.routes.comment_routes import comments_bp
     app.register_blueprint(comments_bp, url_prefix="/api")
 
+    from app.interfaces.routes.follow_routes import follows_bp
+    app.register_blueprint(follows_bp, url_prefix="/api")
+
     return app

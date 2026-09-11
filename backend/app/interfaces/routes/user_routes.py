@@ -27,6 +27,9 @@ from app.domain.auth.validators import (
     meets_minimum_age,
     parse_birth_date,
 )
+from app.infrastructure.persistence.repositories.follow_repository import (
+    SQLAlchemyFollowRepository,
+)
 from app.infrastructure.persistence.repositories.user_repository import (
     SQLAlchemyUserRepository,
 )
@@ -34,6 +37,7 @@ from app.infrastructure.persistence.repositories.user_repository import (
 users_bp = Blueprint("users", __name__)
 
 _user_repository = SQLAlchemyUserRepository()
+_follow_repository = SQLAlchemyFollowRepository()
 
 # Whitelist de campos editables por PATCH /api/users/me (ADR-003 §Campos
 # editables). La ruta extrae cada campo explícitamente de `data.get(...)` --
@@ -50,7 +54,7 @@ def me():
     user_id = get_jwt_identity()
 
     try:
-        user = get_current_user(user_id, _user_repository)
+        user = get_current_user(user_id, _user_repository, _follow_repository)
     except UserNotFoundError:
         return jsonify({"msg": "Usuario no encontrado"}), 404
 
@@ -117,7 +121,7 @@ def update_me():
         return jsonify({"msg": "No se recibió ningún campo para actualizar"}), 400
 
     try:
-        user = update_profile(user_id, fields, _user_repository)
+        user = update_profile(user_id, fields, _user_repository, _follow_repository)
     except UserNotFoundError:
         return jsonify({"msg": "Usuario no encontrado"}), 404
     except UsernameAlreadyExistsError:

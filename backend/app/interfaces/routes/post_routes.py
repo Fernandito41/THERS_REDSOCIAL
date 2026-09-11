@@ -14,6 +14,9 @@ from app.domain.posts.validators import MAX_CONTENT_LENGTH, is_valid_content
 from app.infrastructure.persistence.repositories.comment_repository import (
     SQLAlchemyCommentRepository,
 )
+from app.infrastructure.persistence.repositories.follow_repository import (
+    SQLAlchemyFollowRepository,
+)
 from app.infrastructure.persistence.repositories.like_repository import (
     SQLAlchemyLikeRepository,
 )
@@ -26,6 +29,7 @@ posts_bp = Blueprint("posts", __name__)
 _post_repository = SQLAlchemyPostRepository()
 _like_repository = SQLAlchemyLikeRepository()
 _comment_repository = SQLAlchemyCommentRepository()
+_follow_repository = SQLAlchemyFollowRepository()
 
 
 @posts_bp.route("/posts", methods=["POST"])
@@ -62,6 +66,7 @@ def list_all():
     # post -- mismo JWT que ya identifica al autor en create().
     viewer_id = get_jwt_identity()
     posts = list_posts(
-        _post_repository, _like_repository, _comment_repository, viewer_id, DEFAULT_LIMIT
+        _post_repository, _like_repository, _comment_repository, _follow_repository,
+        viewer_id, DEFAULT_LIMIT,
     )
     return jsonify({"posts": posts}), 200

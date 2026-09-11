@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.11 (Propuesta) |
+| Versión | 0.12 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -33,6 +33,8 @@
 > **v0.10 — likes sobre posts (`ADR-005-likes-minimal-model.md`):** se agregan `POST`/`DELETE /api/posts/<post_id>/like` (§4.4) — segunda entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `reactions`) en pasar a implementada, en su versión mínima binaria (like/no-like, sin tipos de reacción). `GET`/`POST /api/posts` se extienden de forma aditiva con `likes_count`/`liked_by_me` (§4.3, §5) — no rompen el contrato existente. Ambos endpoints nuevos son idempotentes por diseño (§4.4). El Frontend (`CapsuleCard.jsx`) ya consume este contrato en la misma tarea. Verificado con 18 pruebas nuevas + la suite completa (89/89, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.11 — comentarios sobre posts (`ADR-006-comments-minimal-model.md`):** se agregan `POST`/`GET /api/posts/<post_id>/comments` (§4.5) — tercera entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata combinada "Comentarios + Respuestas") en pasar a implementada, solo en su mitad plana: comentar un post, sin hilos de respuestas. `GET`/`POST /api/posts` se extienden de forma aditiva con `comments_count` (§4.3, §5), sumado a `likes_count`/`liked_by_me` de v0.10 — no rompen el contrato existente. A diferencia del feed, el listado de comentarios va en orden cronológico ascendente (§4.5). El Frontend (`CapsuleCard.jsx`) ya consume este contrato en la misma tarea — panel expandible que carga el hilo bajo demanda (`GET .../comments` al abrirse, no precargado con el feed) y publica comentarios nuevos (`POST .../comments`). Verificado con 22 pruebas nuevas + la suite completa (93/93, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real.
+>
+> **v0.12 — seguir/dejar de seguir usuarios (`ADR-007-follows-minimal-model.md`):** se agregan `POST`/`DELETE /api/users/<user_id>/follow` (§4.6) — cuarta entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `follows`) en pasar a implementada. `GET`/`PATCH /api/users/me` se extienden con `followers_count`/`following_count` (§4.2, §5); `GET`/`POST /api/posts` se extienden con `author.is_followed_by_me` (§4.3, §5) — ninguna rompe el contrato existente. El feed **sigue global**, no se personaliza por seguidos (`ADR-007` §No objetivos — decisión de producto separada, no un efecto colateral de este ADR). El Frontend ya consume este contrato en la misma tarea: `CapsuleCard.jsx` gana "Seguir"/"Siguiendo" sobre el autor de un post real, `Profile.jsx` muestra `followers_count`/`following_count` reales. El panel de sugerencias mock de `Home.jsx` no se toca — sus personas no son usuarios reales. Verificado con 17 pruebas nuevas + la suite completa (124/124, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real.
 
 ---
 
@@ -118,7 +120,9 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
     "name": "string",
     "phone": "string",
     "country_code": "string",
-    "birth_date": "string (ISO yyyy-mm-dd)"
+    "birth_date": "string (ISO yyyy-mm-dd)",
+    "followers_count": "integer",
+    "following_count": "integer"
   }
 }
 ```
@@ -164,7 +168,9 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
     "name": "string",
     "phone": "string",
     "country_code": "string",
-    "birth_date": "string (ISO yyyy-mm-dd)"
+    "birth_date": "string (ISO yyyy-mm-dd)",
+    "followers_count": "integer",
+    "following_count": "integer"
   }
 }
 ```
@@ -204,7 +210,9 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
     "name": "string",
     "phone": "string",
     "country_code": "string",
-    "birth_date": "string (ISO yyyy-mm-dd)"
+    "birth_date": "string (ISO yyyy-mm-dd)",
+    "followers_count": "integer",
+    "following_count": "integer"
   }
 }
 ```
@@ -220,6 +228,7 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 - Primer endpoint protegido real del backend — fija el patrón que `BACKEND_ARCHITECTURE.md` §9/§14 señalaba como ausente.
 - `flask_jwt_extended` distingue por defecto entre `401` (token ausente/expirado) y `422` (token malformado); se homogenizaron los tres casos a `401` con callbacks en `app/extensions.py` (`unauthorized_loader`/`invalid_token_loader`/`expired_token_loader`), para que cualquier endpoint protegido futuro herede el mismo comportamiento sin repetirlo.
 - Nunca expone `password`, `password_hash`, `confirm_password`, `token` ni `secret` en la respuesta.
+- `followers_count`/`following_count` agregados en v0.12 (`ADR-007-follows-minimal-model.md`, §4.6) — siempre reales para el usuario autenticado. En `POST /api/register`/`POST /api/login` estos mismos campos también viajan, siempre en `0`: una cuenta recién creada no puede tener seguidores/seguidos todavía.
 
 #### `PATCH /api/users/me`
 
@@ -259,7 +268,9 @@ Ejemplo mínimo válido — cambiar solo el nombre:
     "name": "string",
     "phone": "string",
     "country_code": "string",
-    "birth_date": "string (ISO yyyy-mm-dd)"
+    "birth_date": "string (ISO yyyy-mm-dd)",
+    "followers_count": "integer",
+    "following_count": "integer"
   }
 }
 ```
@@ -304,7 +315,12 @@ Ejemplo mínimo válido — cambiar solo el nombre:
 {
   "post": {
     "id": "string (UUID)",
-    "author": { "id": "string (UUID)", "username": "string", "name": "string" },
+    "author": {
+      "id": "string (UUID)",
+      "username": "string",
+      "name": "string",
+      "is_followed_by_me": "boolean"
+    },
     "content": "string",
     "created_at": "string (ISO 8601)",
     "likes_count": "integer",
@@ -313,7 +329,7 @@ Ejemplo mínimo válido — cambiar solo el nombre:
   }
 }
 ```
-`likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`, §4.4); `comments_count` agregado en v0.11 (`ADR-006-comments-minimal-model.md`, §4.5) — un post recién creado siempre los devuelve en `0`/`false`, nadie pudo haberle dado like ni comentado todavía.
+`likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`, §4.4); `comments_count` agregado en v0.11 (`ADR-006-comments-minimal-model.md`, §4.5) — un post recién creado siempre los devuelve en `0`/`false`, nadie pudo haberle dado like ni comentado todavía. `author.is_followed_by_me` agregado en v0.12 (`ADR-007-follows-minimal-model.md`, §4.6) — en `false` para un post recién creado, porque el autor es siempre uno mismo y nadie se sigue a sí mismo (`ck_follows_no_self_follow`).
 
 **Response — error**
 
@@ -334,15 +350,15 @@ Ejemplo mínimo válido — cambiar solo el nombre:
 | Blueprint | `posts_bp`, mismo blueprint que `POST /api/posts` |
 | Auth requerida | **Sí** — mismo criterio que el resto del feed hoy: solo alcanzable desde rutas protegidas del Frontend (`ProtectedRoute`, `FRONTEND_ARCHITECTURE.md` §7) |
 
-**Semántica.** Feed **global**: devuelve los posts de **todos** los autores, no solo de quienes el usuario sigue — `follows` no existe todavía (`ADR-004` §Opciones consideradas). Sin paginación real: límite fijo de **50** posts más recientes.
+**Semántica.** Feed **global**: devuelve los posts de **todos** los autores, no solo de quienes el usuario sigue. `follows` ya existe (`ADR-007-follows-minimal-model.md`), pero este endpoint **sigue sin filtrar por seguidos** — personalizar el feed es una decisión de producto separada, deliberadamente fuera de alcance de `ADR-007` (§No objetivos). Sin paginación real: límite fijo de **50** posts más recientes.
 
 **Request:** sin body. Header `Authorization: Bearer <token>` obligatorio.
 
 **Response — éxito (200)**
 ```json
-{ "posts": [ { "id", "author": {...}, "content", "created_at", "likes_count", "liked_by_me", "comments_count" }, ... ] }
+{ "posts": [ { "id", "author": { "id", "username", "name", "is_followed_by_me" }, "content", "created_at", "likes_count", "liked_by_me", "comments_count" }, ... ] }
 ```
-Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts. `likes_count`/`liked_by_me` (v0.10) y `comments_count` (v0.11) son extensiones aditivas — no rompen el contrato existente.
+Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts. `likes_count`/`liked_by_me` (v0.10), `comments_count` (v0.11) y `author.is_followed_by_me` (v0.12) son extensiones aditivas — no rompen el contrato existente.
 
 **Response — error**
 
@@ -468,16 +484,70 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 
 ---
 
+### 4.6 Follows
+
+#### `POST /api/users/<user_id>/follow`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-007-follows-minimal-model.md`) |
+| Blueprint | `follows_bp` (`backend/app/interfaces/routes/follow_routes.py`) |
+| Auth requerida | **Sí** — `Bearer <jwt>` en el header `Authorization`. Quién sigue se obtiene exclusivamente de `get_jwt_identity()` — nunca del body |
+
+**Semántica.** Sigue a `user_id` en nombre del usuario autenticado. **Idempotente**: repetir la llamada no falla ni duplica (mismo criterio que `ADR-005` §Decisión, Opción A). Un usuario no puede seguirse a sí mismo — impuesto tanto en la aplicación como en el esquema (`CHECK ck_follows_no_self_follow`).
+
+**Request:** sin body. `user_id` va en la URL, como UUID (conversor `uuid` de Flask/Werkzeug).
+
+**Response — éxito (200)**
+```json
+{ "following": true }
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | `user_id` es el propio usuario autenticado | `{"msg": "..."}` |
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+| `404` | `user_id` no corresponde a ningún usuario real — incluye cualquier segmento de URL que no sea un UUID válido (el conversor de ruta ya descarta esos casos antes de llegar al handler) | `{"msg": "..."}` |
+
+#### `DELETE /api/users/<user_id>/follow`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-007-follows-minimal-model.md`) |
+| Blueprint | `follows_bp`, mismo blueprint que `POST .../follow` |
+| Auth requerida | **Sí** — mismo criterio que `POST .../follow` |
+
+**Semántica.** Deja de seguir a `user_id`. **Idempotente**: si no lo seguía, no falla. Dejar de seguirse a uno mismo es un no-op inofensivo — la restricción de auto-seguimiento solo aplica para *empezar* a seguir, así que este endpoint no devuelve `400` en ese caso.
+
+**Request:** sin body. Mismo formato de `user_id` que `POST .../follow`.
+
+**Response — éxito (200)**
+```json
+{ "following": false }
+```
+
+**Response — error:** mismos `401`/`404` que `POST .../follow` (sin el `400` de auto-seguimiento).
+
+**Notas de implementación (ambos endpoints):**
+- No aceptan ningún campo de body — toda la información viene de la URL (`user_id`) y del JWT (mismo principio que `ADR-005`/`ADR-006`).
+- No exponen la lista de seguidores/seguidos de nadie — solo el conteo agregado (`GET`/`PATCH /api/users/me`, §4.2) y si el usuario que pregunta ya sigue a un autor (`author.is_followed_by_me`, §4.3) — `ADR-007` §No objetivos.
+- No personalizan `GET /api/posts` — el feed sigue global (§4.3).
+
+---
+
 ## 5. Modelo de datos expuesto por la API
 
 Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) pero sí documenta **qué forma tiene el dato tal como cruza la frontera HTTP**, que puede no coincidir 1:1 con el modelo de persistencia:
 
 | Objeto | Campos expuestos hoy | Fuente |
 |---|---|---|
-| `user` (en response de register, login, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date` | `ADR-002-user-profile-fields.md`; coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — nunca debe exponerse). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
-| `post` (en response de `POST`/`GET /api/posts`) | `id`, `author` (`id`/`username`/`name`, forma reducida de `user`), `content`, `created_at`, `likes_count`, `liked_by_me`, `comments_count` | `ADR-004-posts-minimal-model.md` + `ADR-005-likes-minimal-model.md` (`likes_count`/`liked_by_me`, v0.10) + `ADR-006-comments-minimal-model.md` (`comments_count`, v0.11); coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` en la respuesta — no hay edición todavía (`ADR-004` §No objetivos), así que exponerlo no aporta nada hoy |
+| `user` (en response de register, login, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date`, `followers_count`, `following_count` | `ADR-002-user-profile-fields.md` + `ADR-007-follows-minimal-model.md` (`followers_count`/`following_count`, v0.12); coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — nunca debe exponerse). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
+| `post` (en response de `POST`/`GET /api/posts`) | `id`, `author` (`id`/`username`/`name`/`is_followed_by_me`, forma reducida de `user`), `content`, `created_at`, `likes_count`, `liked_by_me`, `comments_count` | `ADR-004-posts-minimal-model.md` + `ADR-005-likes-minimal-model.md` (`likes_count`/`liked_by_me`, v0.10) + `ADR-006-comments-minimal-model.md` (`comments_count`, v0.11) + `ADR-007-follows-minimal-model.md` (`author.is_followed_by_me`, v0.12); coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` en la respuesta — no hay edición todavía (`ADR-004` §No objetivos), así que exponerlo no aporta nada hoy |
 | `like` — no se expone como objeto propio; solo el resumen agregado (`likes_count`/`liked_by_me`) embebido en `post` | — | `ADR-005-likes-minimal-model.md` §No objetivos: no se lista quién dio like a un post |
 | `comment` (en response de `POST`/`GET /api/posts/<id>/comments`) | `id`, `post_id`, `author` (misma forma reducida que en `post`), `content`, `created_at` | `ADR-006-comments-minimal-model.md`; coincide con `comments` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` — mismo motivo que `post` |
+| `follow` — no se expone como objeto propio; solo `{"following": bool}` en `POST`/`DELETE .../follow`, y el resumen agregado (`followers_count`/`following_count` en `user`, `is_followed_by_me` en `post.author`) | — | `ADR-007-follows-minimal-model.md` §No objetivos: no se lista quién sigue a quién |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 

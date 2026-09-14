@@ -249,3 +249,84 @@ class Follow(db.Model):
 
     def __repr__(self):
         return f"<Follow follower_id={self.follower_id} followed_id={self.followed_id}>"
+
+
+class Notification(db.Model):
+    __tablename__ = "notifications"
+
+    # Sexta entidad del alcance objetivo del producto en pasar a ratificada
+    # (ADR-008-notifications-minimal-model.md) -- discriminador de tipo
+    # único (`type`), no una tabla por tipo de evento (DATABASE_ARCHITECTURE.md
+    # §4.B › Notificaciones: "una entidad `notifications` con discriminador
+    # de tipo -- no una tabla por tipo"). Cubre los tres eventos que el
+    # backend ya sabe generar: 'like', 'comment', 'follow'.
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    # ON DELETE CASCADE en ambas FKs a `users`: mismo placeholder que el
+    # resto de entidades (borrado de cuenta no existe todavía como
+    # funcionalidad).
+    recipient_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    actor_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # VARCHAR corto en vez de un ENUM de PostgreSQL -- agregar un tipo nuevo
+    # (p. ej. 'mention' el día que exista) no debe requerir un ALTER TYPE;
+    # el conjunto válido ('like'/'comment'/'follow') se valida en la capa de
+    # aplicación, no en el esquema (mismo criterio ya aceptado para
+    # `content` de posts/comments: la forma se valida en domain/, no con un
+    # CHECK).
+    type = db.Column(db.String(20), nullable=False)
+
+    # Nullable: solo 'like'/'comment' tienen un post de origen -- 'follow'
+    # no tiene ningún post asociado, viaja como NULL (ADR-008 §Modelo de
+    # datos). ON DELETE CASCADE: si el post se borra, sus notificaciones
+    # asociadas se borran con él (no tendría sentido notificar sobre un post
+    # que ya no existe).
+    post_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("posts.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+    # NULL significa "no leída" -- se usa como el propio booleano en vez de
+    # una columna `read` separada, para poder ordenar/filtrar por "hace
+    # cuánto se leyó" en el futuro sin migrar de nuevo (mismo espíritu que
+    # `username_changed_at`, aunque ese caso es de otra entidad). Nunca
+    # cruza la frontera HTTP como timestamp -- la API expone `read` como
+    # booleano (`API_CONTRACT.md` §5, mismo criterio que
+    # `username_changed_at` nunca se expone tal cual).
+    read_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    # Sin `updated_at`: una notificación no se edita in place más allá de
+    # marcarse como leída (`read_at`), mismo criterio que Like/Follow no
+    # llevan `updated_at` (ADR-005/ADR-007 §Modelo de datos).
+
+    # lazy="joined": listar notificaciones siempre necesita el actor (mismo
+    # motivo que Post.author/Comment.author) -- evita el N+1 de resolverlo
+    # por separado. `recipient` no se declara como relationship -- ningún
+    # caso de uso necesita navegar de la notificación a su destinatario
+    # completo, solo compara su id (siempre ya conocido: es quien pregunta).
+    actor = db.relationship("User", foreign_keys=[actor_id], lazy="joined")
+
+    __table_args__ = (
+        db.Index("ix_notifications_recipient_id_created_at", "recipient_id", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<Notification recipient_id={self.recipient_id} type={self.type!r}>"

@@ -4,12 +4,14 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD.md` |
 | Identificador propuesto | `DB-002` (acompaña a `DB-001` / `DATABASE_ARCHITECTURE.md`) — **pendiente de ratificación** |
-| Versión | 0.7 |
+| Versión | 0.8 |
 | Estado | **Borrador — representa solo el modelo conceptual ratificado hasta hoy** |
 | Depende de | `DATABASE_ARCHITECTURE.md` (fuente de verdad directa), `HB-001`, `REPOSITORY_STRUCTURE.md` |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
->  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). Las entidades ratificadas hoy son `users`, `posts`, `likes`, `comments` y `follows` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). Las entidades ratificadas hoy son `users`, `posts`, `likes`, `comments`, `follows` y `notifications` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>
+> **v0.8 — octava, novena y décima relación del modelo (`ADR-008-notifications-minimal-model.md`).** `notifications` pasa de candidata objetivo (§8, solo para los tipos `like`/`comment`/`follow`) a ratificada (`DATABASE_ARCHITECTURE.md` §4.A/§5.6, v0.12) — se agrega al diagrama (§3) junto con las relaciones `USERS ||--o{ NOTIFICATIONS` (dos veces: como destinatario y como actor) y `POSTS ||--o{ NOTIFICATIONS`. Reflejado en §3, §4, §5, §6, §7, §8.
 >
 > **v0.7 — sexta y séptima relación del modelo, primera auto-referencial (`ADR-007-follows-minimal-model.md`).** `follows` pasa de candidata objetivo ("Seguir, Dejar de seguir, Seguidores, Seguidos") a ratificada (`DATABASE_ARCHITECTURE.md` §4.A/§5.5, v0.11) — se agrega al diagrama (§3) junto con las relaciones `USERS ||--o{ FOLLOWS` (dos veces: como quien sigue y como quien es seguido). `followers_count`/`following_count` de `users` y `is_followed_by_me` de `posts.author` son **calculados**, no columnas propias — no se dibujan como atributos de `USERS`/`POSTS` en el diagrama (regla de "solo columnas reales de la tabla"). Reflejado en §3, §4, §5, §6, §7, §8.
 >
@@ -92,6 +94,16 @@ erDiagram
         timestamptz created_at "NOT NULL, DEFAULT now()"
     }
 
+    NOTIFICATIONS {
+        uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
+        uuid recipient_id FK "NOT NULL — ON DELETE CASCADE (ADR-008)"
+        uuid actor_id FK "NOT NULL — ON DELETE CASCADE (ADR-008)"
+        varchar_20 type "NOT NULL — discriminador: like/comment/follow (ADR-008)"
+        uuid post_id FK "NULLABLE — solo like/comment, ON DELETE CASCADE (ADR-008)"
+        timestamptz read_at "NULLABLE — NULL = no leída, nunca expuesta cruda en la API"
+        timestamptz created_at "NOT NULL, DEFAULT now()"
+    }
+
     USERS ||--o{ POSTS : "publica"
     USERS ||--o{ LIKES : "da like"
     POSTS ||--o{ LIKES : "recibe like"
@@ -99,6 +111,9 @@ erDiagram
     POSTS ||--o{ COMMENTS : "recibe comentario"
     USERS ||--o{ FOLLOWS : "sigue"
     USERS ||--o{ FOLLOWS : "es seguido"
+    USERS ||--o{ NOTIFICATIONS : "recibe"
+    USERS ||--o{ NOTIFICATIONS : "genera"
+    POSTS ||--o{ NOTIFICATIONS : "origina"
 ```
 
 > **Nota sobre el tipo de `id`:** UUID con `DEFAULT gen_random_uuid()` a nivel de PostgreSQL (función nativa desde PostgreSQL 13, sin extensión adicional), implementado en `backend/app/infrastructure/persistence/models.py` y en la migración `a1b2c3d4e5f6_create_users_table.py` (`DATABASE_ARCHITECTURE.md` §5). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend.
@@ -118,6 +133,8 @@ erDiagram
 > **Nota sobre `COMMENTS` (v0.6, `ADR-006-comments-minimal-model.md`):** resuelve solo la mitad plana de la candidata combinada "Comentarios + Respuestas" (§8) — sin `parent_comment_id`, sin hilos. `created_at` define orden **ascendente** (más antiguo primero), a diferencia de `POSTS` que va al revés. `updated_at`+trigger siguen la misma convención de auditoría que `POSTS`, aunque tampoco hay edición todavía.
 >
 > **Nota sobre `FOLLOWS` (v0.7, `ADR-007-follows-minimal-model.md`):** primera relación auto-referencial (`users`↔`users`) que este ERD dibuja — por eso `USERS ||--o{ FOLLOWS` aparece dos veces, una por cada lado de la relación ("sigue"/"es seguido"). Sin `updated_at`, mismo criterio que `LIKES`. `UNIQUE (follower_id, followed_id)` (mismo caso que `LIKES`, no representable con `UK` de Mermaid sobre una sola columna) más una **`CHECK (follower_id <> followed_id)`** — primera restricción `CHECK` del esquema, tampoco representable en la notación de Mermaid, ver `DATABASE_ARCHITECTURE.md` §5.5 para el detalle exacto. `followers_count`/`following_count` de `USERS` e `is_followed_by_me` de `posts.author` (`API_CONTRACT.md`) son **calculados** a partir de `FOLLOWS`, no columnas propias — no se dibujan como atributos de ninguna entidad.
+>
+> **Nota sobre `NOTIFICATIONS` (v0.8, `ADR-008-notifications-minimal-model.md`):** primera entidad que este ERD dibuja con **dos** relaciones distintas hacia `USERS` en roles distintos (`recipient_id`/"recibe" y `actor_id`/"genera", ambas `ON DELETE CASCADE`) más una tercera hacia `POSTS` (`post_id`, nullable — solo aplica a `like`/`comment`, `NULL` en `follow`). Sin `updated_at`, mismo criterio que `LIKES`/`FOLLOWS`: se crea o se marca leída (`read_at`), nunca se edita de otro modo. **Sin `UNIQUE`** — a diferencia de `LIKES`/`FOLLOWS`, dos notificaciones del mismo tipo/actor/post en momentos distintos son eventos legítimos, no un duplicado a impedir (`DATABASE_ARCHITECTURE.md` §5.6). Cubre solo los tipos `like`/`comment`/`follow` — respuestas, menciones y mensajes siguen como candidatas (§8), dependientes de entidades que todavía no existen.
 
 ---
 
@@ -145,6 +162,8 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 > **v0.6 — cuarta y quinta relación dibujadas:** `USERS ||--o{ COMMENTS` y `POSTS ||--o{ COMMENTS` — un usuario puede escribir muchos comentarios, un post puede recibir muchos comentarios; cada comentario tiene exactamente un autor y un post.
 >
 > **v0.7 — sexta y séptima relación dibujadas, primera auto-referencial:** `USERS ||--o{ FOLLOWS` (dos veces) — un usuario puede seguir a muchos usuarios y ser seguido por muchos usuarios; cada fila de `FOLLOWS` conecta exactamente dos usuarios distintos (`CHECK ck_follows_no_self_follow`). La leyenda se mantiene para cuando el modelo siga creciendo.
+>
+> **v0.8 — octava, novena y décima relación dibujadas:** `USERS ||--o{ NOTIFICATIONS` (dos veces, "recibe"/"genera") y `POSTS ||--o{ NOTIFICATIONS` ("origina") — un usuario puede recibir muchas notificaciones y generar muchas (con acciones sobre contenido de otros); un post puede originar muchas notificaciones (una por cada like/comentario que recibe); cada notificación tiene exactamente un destinatario, un actor, y opcionalmente un post de origen (`NULL` en las de tipo `follow`).
 
 ---
 
@@ -157,6 +176,7 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 | `likes` |  Ratificada — v0.5 (caso binario) | `POST`/`DELETE /api/posts/<id>/like` registran y quitan likes reales, respaldados por PostgreSQL (`ADR-005-likes-minimal-model.md`) | `id` UUID (PK), `post_id` UUID (FK → `posts.id`), `user_id` UUID (FK → `users.id`), `created_at` TIMESTAMPTZ, `UNIQUE (post_id, user_id)` |
 | `comments` |  Ratificada — v0.6 (mitad plana) | `POST`/`GET /api/posts/<id>/comments` crean y listan comentarios reales, respaldados por PostgreSQL (`ADR-006-comments-minimal-model.md`) | `id` UUID (PK), `post_id` UUID (FK → `posts.id`), `author_id` UUID (FK → `users.id`), `content` TEXT, `created_at`/`updated_at` TIMESTAMPTZ |
 | `follows` |  Ratificada — v0.7 | `POST`/`DELETE /api/users/<id>/follow` registran y quitan follows reales, respaldados por PostgreSQL (`ADR-007-follows-minimal-model.md`) | `id` UUID (PK), `follower_id` UUID (FK → `users.id`), `followed_id` UUID (FK → `users.id`), `created_at` TIMESTAMPTZ, `UNIQUE (follower_id, followed_id)`, `CHECK (follower_id <> followed_id)` |
+| `notifications` |  Ratificada — v0.8 (solo `like`/`comment`/`follow`) | `GET /api/notifications`/`PATCH /api/notifications/<id>/read` listan y marcan como leídas notificaciones reales, generadas como efecto secundario de like/comentario/follow, respaldadas por PostgreSQL (`ADR-008-notifications-minimal-model.md`) | `id` UUID (PK), `recipient_id` UUID (FK → `users.id`), `actor_id` UUID (FK → `users.id`), `type` VARCHAR(20), `post_id` UUID (FK → `posts.id`, nullable), `read_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
 
 **Constraints relevantes de `users`:**
 - `email`: **UNIQUE** (case-insensitive, vía `CITEXT`) + **NOT NULL** (login por email; genera un índice justificado, `DATABASE_ARCHITECTURE.md` §8).
@@ -179,6 +199,8 @@ No se añaden columnas adicionales solo para "completar" el diagrama (regla expl
 
 **v0.7 — sexta y séptima relación real, primera auto-referencial:** `users (1) ←→ (N) follows` (dos veces: `follows.follower_id → users.id` y `follows.followed_id → users.id`, ambas `ON DELETE CASCADE`) — `ADR-007-follows-minimal-model.md`. Cada fila de `follows` conecta exactamente dos usuarios distintos.
 
+**v0.8 — octava, novena y décima relación real:** `users (1) ←→ (N) notifications` (dos veces: `notifications.recipient_id → users.id` y `notifications.actor_id → users.id`) y `posts (1) ←→ (N) notifications` (`notifications.post_id → posts.id`, nullable), todas `ON DELETE CASCADE` — `ADR-008-notifications-minimal-model.md`. Cada notificación tiene exactamente un destinatario, un actor, y opcionalmente un post de origen.
+
 Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHITECTURE.md` §6): las entidades dependientes referenciarán a `users` y/o a `posts` mediante FK; las relaciones N:N que sigan pendientes (participantes de conversación, etc.) se modelarán con tablas puente siguiendo el mismo patrón que `likes`/`comments`/`follows` ya establecieron. Nada de esto se dibuja hasta que se ratifique.
 
 ---
@@ -187,7 +209,7 @@ Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHI
 
 - El diagrama contiene **exactamente** las entidades y columnas que `DATABASE_ARCHITECTURE.md` ratifica — ni una más.
 - No se modeló ninguna entidad "por ser común en redes sociales" (regla 1).
-- `username`, `phone`, `country_code`, `birth_date` (`ADR-002-user-profile-fields.md`) y `username_changed_at` (`ADR-003-profile-update-contract.md`) se dibujan desde v0.3 — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `posts` (v0.4, `ADR-004-posts-minimal-model.md`) es la primera entidad *distinta* de `users` y la primera relación real que este ERD dibuja — deliberadamente sin `visibility`/medios/reacciones/comentarios, cada uno sigue como candidata (§8). `likes` (v0.5, `ADR-005-likes-minimal-model.md`) es la primera tabla puente N:N — resuelve solo el caso binario de la candidata `reactions`, tipos de reacción siguen como candidata (§8). `comments` (v0.6, `ADR-006-comments-minimal-model.md`) resuelve solo la mitad plana de "Comentarios + Respuestas" — `parent_comment_id`/hilos siguen como candidata (§8). `follows` (v0.7, `ADR-007-follows-minimal-model.md`) es la primera relación auto-referencial — listar seguidores/seguidos sigue como candidata (§8); `followers_count`/`following_count`/`is_followed_by_me` son calculados, no columnas, y no se dibujan como tales. `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia.
+- `username`, `phone`, `country_code`, `birth_date` (`ADR-002-user-profile-fields.md`) y `username_changed_at` (`ADR-003-profile-update-contract.md`) se dibujan desde v0.3 — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `posts` (v0.4, `ADR-004-posts-minimal-model.md`) es la primera entidad *distinta* de `users` y la primera relación real que este ERD dibuja — deliberadamente sin `visibility`/medios/reacciones/comentarios, cada uno sigue como candidata (§8). `likes` (v0.5, `ADR-005-likes-minimal-model.md`) es la primera tabla puente N:N — resuelve solo el caso binario de la candidata `reactions`, tipos de reacción siguen como candidata (§8). `comments` (v0.6, `ADR-006-comments-minimal-model.md`) resuelve solo la mitad plana de "Comentarios + Respuestas" — `parent_comment_id`/hilos siguen como candidata (§8). `follows` (v0.7, `ADR-007-follows-minimal-model.md`) es la primera relación auto-referencial — listar seguidores/seguidos sigue como candidata (§8); `followers_count`/`following_count`/`is_followed_by_me` son calculados, no columnas, y no se dibujan como tales. `notifications` (v0.8, `ADR-008-notifications-minimal-model.md`) resuelve solo los tipos `like`/`comment`/`follow` de la candidata combinada de Notificaciones — respuestas, menciones y mensajes siguen como candidata (§8), dependientes de entidades que todavía no existen. `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia.
 
 ---
 
@@ -209,7 +231,7 @@ Versiones anteriores de este documento (hasta v0.2) registraban aquí una contra
 | **Interacciones** | ~~`reactions`/`likes` (caso binario)~~ — **ratificada v0.5** (`likes`, ver §3/§5); tipos de reacción sigue candidata; ~~`comments` (plano)~~ — **ratificada v0.6** (ver §3/§5), auto-referencia para respuestas (`parent_comment_id`) sigue candidata; `saves`, `mentions`, `hashtags`, `post_hashtags` (puente) | Relaciones N:N requieren tablas puente |
 | **Relaciones sociales** | ~~`follows`~~ — **ratificada v0.7** (ver §3/§5): seguir/dejar de seguir y contadores; listar seguidores/seguidos sigue candidata; `blocks`, `restrictions` | Política `ON DELETE` a decidir por relación |
 | **Mensajería** | `conversations`, `conversation_participants` (puente), `messages`, `message_media`, estado leído/no leído | — |
-| **Notificaciones** | `notifications` | Referenciaría a `users` y a la entidad origen |
+| **Notificaciones** | ~~`notifications` (like/comment/follow)~~ — **ratificada v0.8** (ver §3/§5); respuestas, menciones, mensajes, push/email, preferencias, "marcar todas como leídas", borrado siguen candidatas | Los tipos pendientes dependen de que existan primero sus entidades de origen (hilos de comentarios, `mentions`, `conversations`) |
 | **Seguridad** | `sessions`, `devices`, `password_changes` (historial), `security_events`/auditoría | JWT es hoy stateless; ninguna sesión se persiste aún |
 
 ### Decisiones transversales pendientes (heredadas de `DATABASE_ARCHITECTURE.md` §14)
@@ -220,4 +242,4 @@ Versiones anteriores de este documento (hasta v0.2) registraban aquí una contra
 
 ## 9. Cierre
 
-Este ERD **no modifica** backend, Frontend, Handbook ni instala dependencias: documenta el modelo conceptual ratificado (`users`, `posts`, `likes`, `comments`, `follows`) y registra explícitamente todo lo pendiente. Crecerá a medida que el alcance funcional confirmado se traduzca en decisiones de persistencia ratificadas en `DATABASE_ARCHITECTURE.md` (ADR, `HB-001` §11–12), no antes.
+Este ERD **no modifica** backend, Frontend, Handbook ni instala dependencias: documenta el modelo conceptual ratificado (`users`, `posts`, `likes`, `comments`, `follows`, `notifications`) y registra explícitamente todo lo pendiente. Crecerá a medida que el alcance funcional confirmado se traduzca en decisiones de persistencia ratificadas en `DATABASE_ARCHITECTURE.md` (ADR, `HB-001` §11–12), no antes.

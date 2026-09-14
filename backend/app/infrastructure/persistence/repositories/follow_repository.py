@@ -22,6 +22,8 @@ class SQLAlchemyFollowRepository(FollowRepository):
             # UNIQUE (follower_id, followed_id) -- ya existía el follow;
             # idempotente por diseño (ADR-007 §Decisión).
             db.session.rollback()
+            return False
+        return True
 
     def remove(self, follower_id, followed_id):
         db.session.execute(

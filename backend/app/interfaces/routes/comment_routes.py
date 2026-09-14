@@ -21,6 +21,9 @@ from app.domain.posts.exceptions import PostNotFoundError
 from app.infrastructure.persistence.repositories.comment_repository import (
     SQLAlchemyCommentRepository,
 )
+from app.infrastructure.persistence.repositories.notification_repository import (
+    SQLAlchemyNotificationRepository,
+)
 from app.infrastructure.persistence.repositories.post_repository import (
     SQLAlchemyPostRepository,
 )
@@ -29,6 +32,7 @@ comments_bp = Blueprint("comments", __name__)
 
 _post_repository = SQLAlchemyPostRepository()
 _comment_repository = SQLAlchemyCommentRepository()
+_notification_repository = SQLAlchemyNotificationRepository()
 
 
 @comments_bp.route("/posts/<uuid:post_id>/comments", methods=["POST"])
@@ -53,7 +57,12 @@ def create(post_id):
 
     try:
         comment = create_comment(
-            post_id, author_id, content.strip(), _post_repository, _comment_repository
+            post_id,
+            author_id,
+            content.strip(),
+            _post_repository,
+            _comment_repository,
+            _notification_repository,
         )
     except PostNotFoundError:
         return jsonify({"msg": "Post no encontrado"}), 404

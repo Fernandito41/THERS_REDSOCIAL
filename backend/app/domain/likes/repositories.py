@@ -11,7 +11,10 @@ class LikeRepository(ABC):
     def add(self, post_id, user_id):
         """Registra que `user_id` dio like a `post_id`. Idempotente: si el
         like ya existía (UNIQUE (post_id, user_id)), no falla ni duplica
-        (ADR-005 §Decisión, Opción A)."""
+        (ADR-005 §Decisión, Opción A). Devuelve True si el like se creó en
+        esta llamada, False si ya existía -- ADR-008-notifications-minimal-model.md
+        lo usa para no notificar en una repetición idempotente de un like ya
+        dado."""
 
     @abstractmethod
     def remove(self, post_id, user_id):

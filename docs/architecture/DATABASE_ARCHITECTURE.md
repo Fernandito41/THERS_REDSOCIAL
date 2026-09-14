@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.11 |
+| Versión | 0.12 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -29,6 +29,8 @@
 > **v0.10 — comentarios planos sobre posts, `comments` (`ADR-006-comments-minimal-model.md`):** la candidata combinada "Comentarios + Respuestas a comentarios" (§4.B › Interacciones) se resuelve **solo a medias** — pasa a **implementada** (§4.A, §5.4) únicamente su mitad plana: comentar un post, sin hilos de respuestas (`parent_comment_id` sigue sin ratificar). Nueva tabla `comments`: `post_id`/`author_id` (FKs a `posts`/`users`, ambas `ON DELETE CASCADE`), `content` (texto, máximo 1000 caracteres), con `updated_at`+trigger (mismo patrón de auditoría que `posts`, aunque sin edición todavía). Nuevo índice compuesto `ix_comments_post_id_created_at` (§8), justificado por `GET /api/posts/<id>/comments`. Tercera y cuarta relación real entre entidades (§6): `comments.post_id → posts.id`, `comments.author_id → users.id`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 93 pruebas).
 >
 > **v0.11 — seguir/dejar de seguir, `follows` (`ADR-007-follows-minimal-model.md`):** "Seguir, Dejar de seguir, Seguidores, Seguidos" (§4.B › Relaciones sociales) pasa de candidata objetivo a **implementada** (§4.A, §5.5). Nueva tabla `follows`: `follower_id`/`followed_id` (FKs a `users`, ambas `ON DELETE CASCADE`), `UNIQUE (follower_id, followed_id)` (`uq_follows_follower_followed`), **primera `CHECK` constraint del esquema** (`ck_follows_no_self_follow`: `follower_id <> followed_id`), sin `updated_at` (mismo criterio que `likes`). Primera relación auto-referencial (`users`↔`users`) del modelo. Nuevo índice `ix_follows_followed_id` (§8) — a diferencia de `likes`, sí hace falta un segundo índice porque `followers_count` filtra por la columna no líder de la `UNIQUE`. Quinta y sexta relación real entre entidades (§6): `follows.follower_id → users.id`, `follows.followed_id → users.id`. `users` gana `followers_count`/`following_count` calculados (no columnas propias) expuestos en `GET`/`PATCH /api/users/me`; `posts.author` gana `is_followed_by_me` calculado, expuesto en `GET`/`POST /api/posts`. El feed **sigue sin filtrar por seguidos** — deliberadamente fuera de este ADR (§No objetivos). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 124 pruebas).
+>
+> **v0.12 — notificaciones, `notifications` (`ADR-008-notifications-minimal-model.md`):** "Likes, Comentarios, Respuestas, Nuevos seguidores, Menciones, Mensajes, Actividad relevante" (§4.B › Notificaciones) pasa **parcialmente** de candidata objetivo a **implementada** (§4.A, §5.6) — solo los tres eventos que el backend ya genera hoy (`like`, `comment`, `follow`); respuestas, menciones y mensajes siguen sin ratificar porque las entidades de las que dependen (hilos de comentarios, `mentions`, `conversations`) tampoco existen todavía. Nueva tabla `notifications`: `recipient_id`/`actor_id` (FKs a `users`, ambas `ON DELETE CASCADE`), `type` (`VARCHAR(20)`, discriminador validado en la aplicación, no `ENUM` de PostgreSQL), `post_id` (FK a `posts`, `ON DELETE CASCADE`, nullable — solo aplica a `like`/`comment`), `read_at` (`TIMESTAMPTZ`, nullable, `NULL` = no leída), sin `updated_at` (mismo criterio que `likes`/`follows`: se crea o se marca leída, nunca se edita de otro modo). Sin `UNIQUE` — a diferencia de `likes`/`follows`, dos notificaciones del mismo tipo/actor/post en momentos distintos son eventos legítimos, no un duplicado a impedir. Nuevo índice compuesto `ix_notifications_recipient_id_created_at` (§8). Octava relación real entre entidades (§6): `notifications.recipient_id → users.id`, `notifications.actor_id → users.id`, `notifications.post_id → posts.id`. Verificado con 21 pruebas nuevas + la suite completa (145/145, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real.
 
 ---
 
@@ -114,6 +116,7 @@ Se distingue entre:
 | `likes` | **IMPLEMENTADA — v0.9** (ratificada por `ADR-005-likes-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/posts/<id>/like`, agregada en `GET`/`POST /api/posts`) | Segunda entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su versión mínima binaria (like/no-like). Modelo: `post_id`+`user_id` (FKs, `UNIQUE` compuesta) — sin tipos de reacción, sin listar quién dio like |
 | `comments` | **IMPLEMENTADA — v0.10** (ratificada por `ADR-006-comments-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts/<id>/comments`, agregada en `GET`/`POST /api/posts`) | Tercera entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su mitad plana. Modelo: `post_id`+`author_id` (FKs) y `content` (texto, máximo 1000 caracteres) — sin `parent_comment_id`, sin hilos de respuestas |
 | `follows` | **IMPLEMENTADA — v0.11** (ratificada por `ADR-007-follows-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/users/<id>/follow`, agregada en `GET`/`PATCH /api/users/me` y en `GET`/`POST /api/posts`) | Cuarta entidad de la capa objetivo (§4.B, "Relaciones sociales") en pasar a implementada. Modelo: `follower_id`+`followed_id` (FKs, `UNIQUE` compuesta, primera `CHECK` del esquema) — sin listar seguidores/seguidos, sin personalizar el feed |
+| `notifications` | **IMPLEMENTADA — v0.12** (ratificada por `ADR-008-notifications-minimal-model.md`; definición formal en §5; en uso real por `GET /api/notifications`/`PATCH /api/notifications/<id>/read`, generada como efecto secundario de `POST /api/posts/<id>/like`, `POST /api/posts/<id>/comments` y `POST /api/users/<id>/follow`) | Quinta entidad de la capa objetivo (§4.B, "Notificaciones") en pasar a implementada, solo para los tipos `like`/`comment`/`follow`. Modelo: `recipient_id`+`actor_id` (FKs a `users`), `type` (discriminador), `post_id` (FK a `posts`, nullable), `read_at` (nullable) — sin respuestas/menciones/mensajes, sin push/email, sin preferencias configurables |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -198,7 +201,8 @@ Estados usados en esta capa:
 #### Notificaciones
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
 |---|---|---|---|
-| Likes, Comentarios, Respuestas, Nuevos seguidores, Menciones, Mensajes, Actividad relevante | **Una** entidad `notifications` con discriminador de tipo — no una tabla por tipo | OBJETIVO | Estructura del tipo/payload sin decidir |
+| Likes, Comentarios, Nuevos seguidores | ~~**Una** entidad `notifications` con discriminador de tipo — no una tabla por tipo~~ — **resuelto en v0.12** (`ADR-008-notifications-minimal-model.md`, ver §4.A/§5.6) para estos tres eventos | IMPLEMENTADA | — |
+| Respuestas (a comentarios), Menciones, Mensajes, Actividad relevante | Misma entidad `notifications`, tipos adicionales | PENDIENTE DE DECISIÓN | Dependen de que existan primero las entidades de origen (`parent_comment_id`/hilos, `mentions`, `conversations`) — ninguna está ratificada todavía |
 
 #### Seguridad
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
@@ -386,6 +390,41 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 ---
 
+### 5.6 `notifications`
+
+> Sexta entidad con definición formal (capa 4.A), ratificada por `ADR-008-notifications-minimal-model.md` — cubre solo los tres eventos que el backend ya genera: `like`, `comment`, `follow`. Respuestas a comentarios, menciones y mensajes **no** están en esta entidad — dependen de que sus propias entidades de origen se ratifiquen primero.
+
+**Propósito.** Registra que un evento social (like, comentario, follow) generó una notificación para el usuario destinatario — discriminada por `type`, no una tabla por tipo de evento (§4.B › Notificaciones).
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` — mismo patrón que el resto de entidades |
+| `recipient_id` | **UUID**, FK → `users.id` | No | Quién recibe la notificación — el autor del post (`like`/`comment`) o el usuario seguido (`follow`) |
+| `actor_id` | **UUID**, FK → `users.id` | No | Quién generó el evento. Siempre resuelto desde `get_jwt_identity()` de quien hizo la acción original, nunca aceptado del body |
+| `type` | `VARCHAR(20)` | No | Discriminador: `'like'` / `'comment'` / `'follow'`. Validado en `domain/`, no como `ENUM` de PostgreSQL — agregar un tipo nuevo el día de mañana no requiere `ALTER TYPE` (`ADR-008` §Opciones consideradas) |
+| `post_id` | **UUID**, FK → `posts.id` | **Sí** | Post de origen — solo aplica a `like`/`comment`; `NULL` en `follow` |
+| `read_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = no leída. Se expone en la API como booleano (`read`), nunca como el timestamp crudo (`API_CONTRACT.md` §5) |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Define el orden de la lista (más reciente primero) |
+
+**Sin `updated_at`.** Igual que `likes`/`follows`: una notificación no se edita in place más allá de marcarse como leída (`read_at`), que tiene su propia semántica de "solo se fija una vez" (`ADR-008` §Contrato API).
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `recipient_id → users.id` y `actor_id → users.id` (ambas `ON DELETE CASCADE`, mismo placeholder que el resto de entidades); `post_id → posts.id` (`ON DELETE CASCADE` — si el post se borra, no tiene sentido conservar notificaciones sobre un post inexistente).
+
+**Relaciones.** `users (1) ←→ (N) notifications` (dos veces: como destinatario y como actor) y `posts (1) ←→ (N) notifications` — un post puede generar muchas notificaciones (una por cada like/comentario que recibe), una notificación tiene exactamente un destinatario, un actor, y opcionalmente un post de origen.
+
+**Constraints relevantes**
+- `recipient_id`/`actor_id`/`type` **NOT NULL** — toda notificación tiene destinatario, actor y tipo, sin excepción.
+- **Sin `UNIQUE`.** A diferencia de `likes`/`follows`, dos notificaciones legítimas pueden compartir destinatario/actor/post/tipo (like → unlike → like genera dos notificaciones reales, `ADR-008` §Opciones consideradas) — no hay una repetición a impedir a nivel de esquema.
+- **Sin `CHECK` de auto-notificación.** Ningún endpoint acepta datos para esta tabla directamente del usuario — los tres únicos puntos de creación (`like_post_use_case`, `create_comment_use_case`, `follow_user_use_case`) ya comparan `actor_id`/`recipient_id` en la capa de aplicación antes de crear la fila; no hay superficie de ataque que una `CHECK` adicional esté cerrando (a diferencia de `follows`, donde sí hacía falta como segunda línea de defensa).
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-008` §Decisiones pendientes): notificaciones push/email, preferencias configurables, tipos adicionales (respuestas, menciones, mensajes — dependen de sus propias entidades), endpoint de "marcar todas como leídas", contador de no leídas como endpoint propio, borrado/expiración, actualización en tiempo real (WebSockets/SSE).
+
+---
+
 ## 6. Relaciones entre entidades
 
 **v0.8 — primera relación implementada:** `posts.author_id → users.id` (`ADR-004-posts-minimal-model.md`, ver §5.2) — `ON DELETE CASCADE`.
@@ -395,6 +434,8 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 **v0.10 — cuarta y quinta relación implementadas:** `comments.post_id → posts.id` y `comments.author_id → users.id` (`ADR-006-comments-minimal-model.md`, ver §5.4), ambas `ON DELETE CASCADE`.
 
 **v0.11 — sexta y séptima relación implementadas:** `follows.follower_id → users.id` y `follows.followed_id → users.id` (`ADR-007-follows-minimal-model.md`, ver §5.5), ambas `ON DELETE CASCADE` — primera relación auto-referencial (`users`↔`users`) del esquema. Todo lo demás sigue siendo candidato (§4.B).
+
+**v0.12 — octava, novena y décima relación implementadas:** `notifications.recipient_id → users.id`, `notifications.actor_id → users.id` y `notifications.post_id → posts.id` (`ADR-008-notifications-minimal-model.md`, ver §5.6), todas `ON DELETE CASCADE`. Todo lo demás sigue siendo candidato (§4.B).
 
 Regla de diseño para cuando existan más entidades (para evitar decisiones improvisadas durante la implementación):
 - Las entidades dependientes referencian a `users` y/o `posts` (o a otras entidades ratificadas, cuando corresponda) con una FK.
@@ -432,6 +473,7 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 | `ix_comments_post_id_created_at` | `comments(post_id, created_at)`, compuesto | **v0.10 (`ADR-006`).** `GET /api/posts/<id>/comments` filtra por `post_id` y ordena por `created_at ASC` — la columna líder (`post_id`) cubre además el `COUNT(*)` de `comments_count` sin necesitar un índice adicional. |
 | `uq_follows_follower_followed` | `follows(follower_id, followed_id)`, `UNIQUE` | **v0.11 (`ADR-007`).** Impone la regla de negocio (no seguir dos veces al mismo usuario) y cubre `following_count`/`POST .../follow` por ser `follower_id` su columna líder. |
 | `ix_follows_followed_id` | `follows(followed_id)` | **v0.11 (`ADR-007`).** `followers_count` y "¿me sigue esta persona?" filtran por `followed_id` — a diferencia de `likes`, esta *no* es la columna líder de la `UNIQUE` de arriba, así que necesita su propio índice o escanearía la tabla completa. |
+| `ix_notifications_recipient_id_created_at` | `notifications(recipient_id, created_at)`, compuesto | **v0.12 (`ADR-008`).** `GET /api/notifications` filtra por `recipient_id` (siempre el usuario autenticado) y ordena por `created_at DESC` — la columna líder (`recipient_id`) cubre el filtro sin escanear la tabla completa, mismo patrón que `ix_comments_post_id_created_at`. |
 
 **No se añaden más índices en esta versión.** La PK (`id`) de cada entidad ya está indexada por definición. Cualquier índice adicional (p. ej. `posts(author_id)`, si en el futuro se filtra el feed por autor) se justificará **cuando exista la consulta que lo pague**, no antes.
 
@@ -516,7 +558,7 @@ Decisiones que este documento **no toma** porque no están respaldadas por la do
 - **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo) — no aplica a `users` todavía, sigue pendiente para entidades futuras.
 
 ### Entidades candidatas del modelo objetivo
-La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. ~~`comments` (mitad plana)~~ — **resuelto en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4): solo comentar un post; sigue pendiente `parent_comment_id`/hilos de respuestas. ~~`follows`~~ — **resuelto en v0.11** (`ADR-007-follows-minimal-model.md`, ver §4.A/§5.5): seguir/dejar de seguir y contadores; sigue pendiente listar seguidores/seguidos. Entre las candidatas que siguen sin ratificar: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions` (forma general con tipos), `saves`, `mentions`, `hashtags` (+`post_hashtags`), `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `notifications`, `password_changes`, `security_events`.
+La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. ~~`comments` (mitad plana)~~ — **resuelto en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4): solo comentar un post; sigue pendiente `parent_comment_id`/hilos de respuestas. ~~`follows`~~ — **resuelto en v0.11** (`ADR-007-follows-minimal-model.md`, ver §4.A/§5.5): seguir/dejar de seguir y contadores; sigue pendiente listar seguidores/seguidos. ~~`notifications`~~ — **resuelto en v0.12** (`ADR-008-notifications-minimal-model.md`, ver §4.A/§5.6): solo los tipos `like`/`comment`/`follow`; sigue pendiente todo lo demás (respuestas, menciones, mensajes, push/email, preferencias, "marcar todas como leídas", borrado). Entre las candidatas que siguen sin ratificar: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions` (forma general con tipos), `saves`, `mentions`, `hashtags` (+`post_hashtags`), `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `password_changes`, `security_events`.
 
 ### Operación
 - ~~Herramienta de migraciones~~ — **resuelto en código: Flask-Migrate/Alembic**, scaffolding en `backend/migrations/` (ver `BACKEND_ARCHITECTURE.md` §8); ratificación formal pendiente de confirmar. **Ubicación de la carpeta `database/`** sigue sin definir — las migraciones quedaron dentro de `backend/`, no en una carpeta `database/` separada.

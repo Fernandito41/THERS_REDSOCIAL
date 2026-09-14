@@ -18,6 +18,9 @@ from app.domain.follows.exceptions import CannotFollowSelfError
 from app.infrastructure.persistence.repositories.follow_repository import (
     SQLAlchemyFollowRepository,
 )
+from app.infrastructure.persistence.repositories.notification_repository import (
+    SQLAlchemyNotificationRepository,
+)
 from app.infrastructure.persistence.repositories.user_repository import (
     SQLAlchemyUserRepository,
 )
@@ -26,6 +29,7 @@ follows_bp = Blueprint("follows", __name__)
 
 _user_repository = SQLAlchemyUserRepository()
 _follow_repository = SQLAlchemyFollowRepository()
+_notification_repository = SQLAlchemyNotificationRepository()
 
 
 @follows_bp.route("/users/<uuid:user_id>/follow", methods=["POST"])
@@ -38,7 +42,9 @@ def follow(user_id):
     follower_id = get_jwt_identity()
 
     try:
-        result = follow_user(follower_id, str(user_id), _user_repository, _follow_repository)
+        result = follow_user(
+            follower_id, str(user_id), _user_repository, _follow_repository, _notification_repository
+        )
     except CannotFollowSelfError:
         return jsonify({"msg": "No podés seguirte a vos mismo"}), 400
     except UserNotFoundError:

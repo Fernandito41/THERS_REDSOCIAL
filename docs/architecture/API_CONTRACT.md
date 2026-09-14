@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.12 (Propuesta) |
+| Versión | 0.13 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -35,6 +35,8 @@
 > **v0.11 — comentarios sobre posts (`ADR-006-comments-minimal-model.md`):** se agregan `POST`/`GET /api/posts/<post_id>/comments` (§4.5) — tercera entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata combinada "Comentarios + Respuestas") en pasar a implementada, solo en su mitad plana: comentar un post, sin hilos de respuestas. `GET`/`POST /api/posts` se extienden de forma aditiva con `comments_count` (§4.3, §5), sumado a `likes_count`/`liked_by_me` de v0.10 — no rompen el contrato existente. A diferencia del feed, el listado de comentarios va en orden cronológico ascendente (§4.5). El Frontend (`CapsuleCard.jsx`) ya consume este contrato en la misma tarea — panel expandible que carga el hilo bajo demanda (`GET .../comments` al abrirse, no precargado con el feed) y publica comentarios nuevos (`POST .../comments`). Verificado con 22 pruebas nuevas + la suite completa (93/93, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real.
 >
 > **v0.12 — seguir/dejar de seguir usuarios (`ADR-007-follows-minimal-model.md`):** se agregan `POST`/`DELETE /api/users/<user_id>/follow` (§4.6) — cuarta entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `follows`) en pasar a implementada. `GET`/`PATCH /api/users/me` se extienden con `followers_count`/`following_count` (§4.2, §5); `GET`/`POST /api/posts` se extienden con `author.is_followed_by_me` (§4.3, §5) — ninguna rompe el contrato existente. El feed **sigue global**, no se personaliza por seguidos (`ADR-007` §No objetivos — decisión de producto separada, no un efecto colateral de este ADR). El Frontend ya consume este contrato en la misma tarea: `CapsuleCard.jsx` gana "Seguir"/"Siguiendo" sobre el autor de un post real, `Profile.jsx` muestra `followers_count`/`following_count` reales. El panel de sugerencias mock de `Home.jsx` no se toca — sus personas no son usuarios reales. Verificado con 17 pruebas nuevas + la suite completa (124/124, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real.
+>
+> **v0.13 — notificaciones (`ADR-008-notifications-minimal-model.md`):** se agregan `GET /api/notifications` y `PATCH /api/notifications/<id>/read` (§4.7) — sexta entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `notifications`) en pasar a implementada. Cubre solo los tres eventos que el backend ya sabe generar: dar like a un post (`ADR-005`), comentarlo (`ADR-006`) y seguir a un usuario (`ADR-007`) — nunca al propio actor sobre su propio contenido, y nunca duplicada por una repetición idempotente de un like/follow ya existente (`ADR-008` §Opciones consideradas). `POST /api/posts/<id>/like`, `POST /api/posts/<id>/comments` y `POST /api/users/<id>/follow` **no cambian su contrato** — la notificación es un efecto secundario invisible en la respuesta de quien dispara la acción. El Frontend ya consume este contrato en la misma tarea: `AppShell.jsx` reemplaza `mockNotifications` por `GET /api/notifications` (mismo patrón que `capsules`/`posts`, `ADR-004`) y `handleMarkRead`/`handleMarkAllRead` llaman a `PATCH .../read` con optimistic update (mismo patrón que `handleToggleLike`, `ADR-005`); sin endpoint de "marcar todas" en el backend (`ADR-008` §No objetivos), `handleMarkAllRead` itera sobre las no leídas. Verificado con 21 pruebas nuevas + la suite completa (145/145, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real con dos usuarios reales generando los tres tipos de evento.
 
 ---
 
@@ -537,6 +539,74 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 
 ---
 
+### 4.7 Notificaciones
+
+#### `GET /api/notifications`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-008-notifications-minimal-model.md`) |
+| Blueprint | `notifications_bp` (`backend/app/interfaces/routes/notification_routes.py`) |
+| Auth requerida | **Sí** — `Bearer <jwt>` en el header `Authorization`. Solo lista las notificaciones del propio usuario autenticado — no hay `user_id` en la URL de este endpoint, a diferencia de `follows` |
+
+**Semántica.** Lista las notificaciones del usuario autenticado, más recientes primero. Cubre solo tres tipos de evento, los únicos que el backend genera hoy: `like` (alguien le dio like a un post tuyo), `comment` (alguien comentó un post tuyo), `follow` (alguien empezó a seguirte) — nunca sobre tu propio contenido, nunca duplicada por una repetición idempotente de un like/follow ya existente (`ADR-008` §Opciones consideradas). Sin paginación real: límite fijo de **50**.
+
+**Request:** sin body. Header `Authorization: Bearer <token>` obligatorio.
+
+**Response — éxito (200)**
+```json
+{
+  "notifications": [
+    {
+      "id": "string (UUID)",
+      "type": "like | comment | follow",
+      "actor": { "id": "string (UUID)", "username": "string", "name": "string" },
+      "post_id": "string (UUID) | null",
+      "read": "boolean",
+      "created_at": "string (ISO 8601)"
+    }
+  ]
+}
+```
+`post_id` es `null` para `type: "follow"` — ese evento no tiene ningún post de origen. Lista vacía (`[]`) si no hay notificaciones.
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+
+#### `PATCH /api/notifications/<notification_id>/read`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-008-notifications-minimal-model.md`) |
+| Blueprint | `notifications_bp`, mismo blueprint que `GET /api/notifications` |
+| Auth requerida | **Sí** — mismo criterio que `GET /api/notifications`. Solo se puede marcar como leída una notificación propia |
+
+**Semántica.** Marca como leída la notificación `notification_id`. **Idempotente**: si ya estaba leída, no falla — devuelve el mismo estado (mismo criterio que `ADR-005`/`ADR-007`).
+
+**Request:** sin body. `notification_id` va en la URL, como UUID (conversor `uuid` de Flask/Werkzeug).
+
+**Response — éxito (200)**
+```json
+{ "read": true }
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+| `404` | `notification_id` no existe, **o** existe pero pertenece a otro usuario — mismo mensaje/código en ambos casos, no se distingue cuál ocurrió (mismo criterio que `POST /api/login` no distingue email inexistente de password incorrecta); incluye cualquier segmento de URL que no sea un UUID válido | `{"msg": "..."}` |
+
+**Notas de implementación (ambos endpoints):**
+- Sin endpoint de "marcar todas como leídas" en el backend — cada notificación se marca individualmente (`ADR-008` §No objetivos); el Frontend puede ofrecer esa acción iterando sobre las no leídas.
+- Sin endpoint de contador de no leídas — el Frontend ya puede derivarlo contando `read: false` sobre la lista que `GET /api/notifications` devuelve.
+- `POST /api/posts/<id>/like`, `POST /api/posts/<id>/comments` y `POST /api/users/<id>/follow` **no cambian su contrato** — generar la notificación correspondiente es un efecto secundario invisible en la respuesta de quien dispara la acción, visible solo para quien la recibe.
+
+---
+
 ## 5. Modelo de datos expuesto por la API
 
 Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) pero sí documenta **qué forma tiene el dato tal como cruza la frontera HTTP**, que puede no coincidir 1:1 con el modelo de persistencia:
@@ -548,6 +618,7 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | `like` — no se expone como objeto propio; solo el resumen agregado (`likes_count`/`liked_by_me`) embebido en `post` | — | `ADR-005-likes-minimal-model.md` §No objetivos: no se lista quién dio like a un post |
 | `comment` (en response de `POST`/`GET /api/posts/<id>/comments`) | `id`, `post_id`, `author` (misma forma reducida que en `post`), `content`, `created_at` | `ADR-006-comments-minimal-model.md`; coincide con `comments` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` — mismo motivo que `post` |
 | `follow` — no se expone como objeto propio; solo `{"following": bool}` en `POST`/`DELETE .../follow`, y el resumen agregado (`followers_count`/`following_count` en `user`, `is_followed_by_me` en `post.author`) | — | `ADR-007-follows-minimal-model.md` §No objetivos: no se lista quién sigue a quién |
+| `notification` (en response de `GET /api/notifications`) | `id`, `type` (`like`/`comment`/`follow`), `actor` (misma forma reducida que en `post`/`comment`), `post_id` (nullable), `read` | `ADR-008-notifications-minimal-model.md`; coincide con `notifications` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` (internamente un timestamp) — se expone como booleano, nunca como el timestamp crudo, mismo criterio que `username_changed_at` nunca cruza la frontera HTTP |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 

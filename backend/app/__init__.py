@@ -41,4 +41,7 @@ def create_app():
     from app.interfaces.routes.follow_routes import follows_bp
     app.register_blueprint(follows_bp, url_prefix="/api")
 
+    from app.interfaces.routes.notification_routes import notifications_bp
+    app.register_blueprint(notifications_bp, url_prefix="/api")
+
     return app

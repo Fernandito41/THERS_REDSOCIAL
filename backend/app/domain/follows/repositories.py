@@ -12,7 +12,10 @@ class FollowRepository(ABC):
     def add(self, follower_id, followed_id):
         """Registra que `follower_id` sigue a `followed_id`. Idempotente:
         si el follow ya existía (UNIQUE (follower_id, followed_id)), no
-        falla ni duplica (ADR-007 §Decisión, mismo criterio que ADR-005)."""
+        falla ni duplica (ADR-007 §Decisión, mismo criterio que ADR-005).
+        Devuelve True si el follow se creó en esta llamada, False si ya
+        existía -- ADR-008-notifications-minimal-model.md lo usa para no
+        notificar en una repetición idempotente de un follow ya hecho."""
 
     @abstractmethod
     def remove(self, follower_id, followed_id):

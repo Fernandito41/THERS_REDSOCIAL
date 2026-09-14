@@ -2,16 +2,18 @@ import { useOutletContext } from "react-router-dom";
 import {
   IoHeart,
   IoPersonAdd,
-  IoAt,
   IoChatbubble,
   IoCheckmarkDoneOutline,
 } from "react-icons/io5";
 import Avatar from "@shared/components/Avatar";
 
+// Tipos reales que GET /api/notifications puede devolver
+// (ADR-008-notifications-minimal-model.md) -- "mention" no está en esta
+// lista: el backend nunca lo produce todavía (mentions sigue sin ratificar,
+// DATABASE_ARCHITECTURE.md §4.B).
 const ICONS = {
-  reaction: { icon: IoHeart, color: "text-ember-500" },
+  like: { icon: IoHeart, color: "text-ember-500" },
   follow: { icon: IoPersonAdd, color: "text-pulse-500" },
-  mention: { icon: IoAt, color: "text-pulse-500" },
   comment: { icon: IoChatbubble, color: "text-muted" },
 };
 

@@ -22,6 +22,8 @@ class SQLAlchemyLikeRepository(LikeRepository):
             # usuario sobre este post; idempotente por diseño (ADR-005
             # §Decisión, Opción A), no se re-lanza como error.
             db.session.rollback()
+            return False
+        return True
 
     def remove(self, post_id, user_id):
         db.session.execute(

@@ -22,7 +22,7 @@ import { useToast } from "@shared/components/Toast";
 import NavRail from "./NavRail";
 import MobileNav from "./MobileNav";
 import CreateCapsuleFlow from "@features/feed/components/CreateCapsuleFlow";
-import { mockNotifications } from "@features/feed/data/mockData";
+import { mapNotification } from "@features/feed/lib/mapNotification";
 
 function authHeaders() {
   return { Authorization: `Bearer ${getStoredToken()}` };
@@ -45,7 +45,9 @@ export default function AppShell() {
   const [capsules, setCapsules] = useState([]);
   const [capsulesLoading, setCapsulesLoading] = useState(true);
   const [followingIds, setFollowingIds] = useState(() => new Set());
-  const [notifications, setNotifications] = useState(mockNotifications);
+  // `notifications` = notificaciones reales (GET /api/notifications,
+  // ADR-008-notifications-minimal-model.md) -- ya no mockNotifications.
+  const [notifications, setNotifications] = useState([]);
   const [isComposerOpen, setComposerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -65,7 +67,22 @@ export default function AppShell() {
       }
     }
 
+    // GET /api/notifications (ADR-008). Sin estado de loading propio --
+    // Notifications.jsx ya maneja bien una lista vacía mientras llega
+    // (mismo criterio que unreadCount parte de [] hasta que resuelva). Un
+    // error acá no bloquea el resto del shell -- se avisa por Toast, mismo
+    // patrón que loadPosts.
+    async function loadNotifications() {
+      try {
+        const res = await api.get("/notifications", { headers: authHeaders() });
+        if (!cancelled) setNotifications(res.data.notifications.map(mapNotification));
+      } catch (error) {
+        if (!cancelled) toast.error(getErrorMessage(error, t));
+      }
+    }
+
     loadPosts();
+    loadNotifications();
     return () => {
       cancelled = true;
     };
@@ -85,12 +102,29 @@ export default function AppShell() {
     });
   };
 
-  const handleMarkRead = (id) => {
+  // PATCH /api/notifications/<id>/read (ADR-008-notifications-minimal-model.md).
+  // Optimistic update + rollback, mismo patrón que handleToggleLike
+  // (ADR-005). Un no-op silencioso si ya estaba leída o el id no existe más
+  // en el estado local -- evita una request de más al reabrir el panel.
+  const handleMarkRead = async (id) => {
+    const notification = notifications.find((n) => n.id === id);
+    if (!notification || notification.read) return;
+
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+
+    try {
+      await api.patch(`/notifications/${id}/read`, null, { headers: authHeaders() });
+    } catch (error) {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: false } : n)));
+      toast.error(getErrorMessage(error, t));
+    }
   };
 
+  // Sin endpoint batch en el backend (ADR-008 §No objetivos) -- marca cada
+  // notificación no leída individualmente, reutilizando handleMarkRead
+  // (mismo optimistic update + rollback por ítem, sin duplicar esa lógica).
   const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    notifications.filter((n) => !n.read).forEach((n) => handleMarkRead(n.id));
   };
 
   const handleLogout = () => {

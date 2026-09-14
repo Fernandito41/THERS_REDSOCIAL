@@ -202,10 +202,7 @@ export const mockConversations = [
   },
 ];
 
-export const mockNotifications = [
-  { id: 1, type: "reaction", actor: "Alex", photo: photo("alex"), detail: "reaccionó a tu Cápsula", time: "hace 5 min", important: false, read: false },
-  { id: 2, type: "follow", actor: "Sofia", photo: photo("sofia"), detail: "comenzó a seguirte", time: "hace 1 h", important: true, read: false },
-  { id: 3, type: "mention", actor: "Carlos", photo: photo("carlos"), detail: "te mencionó en una Cápsula", time: "hace 3 h", important: true, read: false },
-  { id: 4, type: "comment", actor: "Maria", photo: photo("maria"), detail: "comentó tu Cápsula", time: "hace 5 h", important: false, read: true },
-  { id: 5, type: "reaction", actor: "Kevin", photo: photo("kevin"), detail: "reaccionó a tu Momento", time: "ayer", important: false, read: true },
-];
+// mockNotifications se eliminó acá -- Notifications.jsx/AppShell.jsx ya
+// consumen GET /api/notifications real (ADR-008-notifications-minimal-model.md),
+// mismo criterio que mockCapsules dejó de usarse para el feed cuando
+// `posts` pasó a ser real (ADR-004).

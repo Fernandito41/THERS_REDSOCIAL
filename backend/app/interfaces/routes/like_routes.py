@@ -16,6 +16,9 @@ from app.domain.posts.exceptions import PostNotFoundError
 from app.infrastructure.persistence.repositories.like_repository import (
     SQLAlchemyLikeRepository,
 )
+from app.infrastructure.persistence.repositories.notification_repository import (
+    SQLAlchemyNotificationRepository,
+)
 from app.infrastructure.persistence.repositories.post_repository import (
     SQLAlchemyPostRepository,
 )
@@ -24,6 +27,7 @@ likes_bp = Blueprint("likes", __name__)
 
 _post_repository = SQLAlchemyPostRepository()
 _like_repository = SQLAlchemyLikeRepository()
+_notification_repository = SQLAlchemyNotificationRepository()
 
 
 @likes_bp.route("/posts/<uuid:post_id>/like", methods=["POST"])
@@ -34,7 +38,9 @@ def like(post_id):
     user_id = get_jwt_identity()
 
     try:
-        result = like_post(post_id, user_id, _post_repository, _like_repository)
+        result = like_post(
+            post_id, user_id, _post_repository, _like_repository, _notification_repository
+        )
     except PostNotFoundError:
         return jsonify({"msg": "Post no encontrado"}), 404
 

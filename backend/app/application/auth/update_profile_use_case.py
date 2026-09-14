@@ -18,7 +18,7 @@ from app.domain.auth.exceptions import UserNotFoundError, UsernameChangeNotAllow
 from app.domain.auth.username_policy import can_change_username
 
 
-def update_profile(user_id, fields, user_repository):
+def update_profile(user_id, fields, user_repository, follow_repository):
     user = user_repository.find_by_id(user_id)
     if user is None:
         raise UserNotFoundError()
@@ -37,15 +37,21 @@ def update_profile(user_id, fields, user_repository):
         else:
             update_fields["username_changed_at"] = datetime.now(timezone.utc)
 
+    # followers_count/following_count (ADR-007) no cambian con este PATCH --
+    # se recalculan igual en ambas salidas tempranas y en la final, para que
+    # la respuesta de PATCH /api/users/me tenga la misma forma que GET.
+    followers_count = follow_repository.followers_count(user_id)
+    following_count = follow_repository.following_count(user_id)
+
     if not update_fields:
         # El único campo enviado era `username` igual al actual: nada que
         # persistir, pero la request sigue siendo válida -- se devuelve el
         # usuario tal como está (no es un 400: ya pasó la whitelist/validación
         # de formato en la route).
-        return to_public_user(user)
+        return to_public_user(user, followers_count, following_count)
 
     updated_user = user_repository.update(user_id, update_fields)
     if updated_user is None:
         raise UserNotFoundError()
 
-    return to_public_user(updated_user)
+    return to_public_user(updated_user, followers_count, following_count)

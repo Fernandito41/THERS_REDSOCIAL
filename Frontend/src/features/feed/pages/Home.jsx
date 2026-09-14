@@ -18,6 +18,7 @@ export default function Home() {
     onToggleLike,
     onLoadComments,
     onPostComment,
+    onToggleFollowAuthor,
   } = useOutletContext();
 
   const firstName = currentUser.name.split(" ")[0];
@@ -73,9 +74,11 @@ export default function Home() {
               <CapsuleCard
                 key={capsule.id}
                 capsule={capsule}
+                currentUserId={currentUser.id}
                 onToggleLike={onToggleLike}
                 onLoadComments={onLoadComments}
                 onPostComment={onPostComment}
+                onToggleFollowAuthor={onToggleFollowAuthor}
               />
             ))}
           </div>

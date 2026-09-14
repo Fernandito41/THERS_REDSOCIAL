@@ -47,15 +47,14 @@ def _clean_tables(app):
     # filas entre tests, no crea estructura.
     #
     # `posts` referencia a `users` (author_id, ON DELETE CASCADE,
-    # ADR-004-posts-minimal-model.md), `likes` referencia a ambas (post_id/
-    # user_id, ON DELETE CASCADE, ADR-005-likes-minimal-model.md) y
-    # `comments` también referencia a ambas (post_id/author_id, ON DELETE
-    # CASCADE, ADR-006-comments-minimal-model.md) -- un TRUNCATE de una sola
-    # tabla falla si otra tiene filas dependientes, salvo que todas se
-    # trunquen juntas en la misma sentencia (Postgres lo permite sin
-    # necesitar CASCADE en el propio TRUNCATE cuando la tabla referenciante
-    # también está en la lista).
+    # ADR-004-posts-minimal-model.md), `likes` y `comments` referencian a
+    # ambas (ADR-005/ADR-006), y `follows` referencia dos veces a `users`
+    # (follower_id/followed_id, ON DELETE CASCADE, ADR-007-follows-minimal-model.md)
+    # -- un TRUNCATE de una sola tabla falla si otra tiene filas dependientes,
+    # salvo que todas se trunquen juntas en la misma sentencia (Postgres lo
+    # permite sin necesitar CASCADE en el propio TRUNCATE cuando la tabla
+    # referenciante también está en la lista).
     yield
     with app.app_context():
-        db.session.execute(db.text("TRUNCATE TABLE comments, likes, posts, users"))
+        db.session.execute(db.text("TRUNCATE TABLE comments, likes, follows, posts, users"))
         db.session.commit()

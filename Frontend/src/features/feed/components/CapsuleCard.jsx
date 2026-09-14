@@ -9,7 +9,8 @@ import { formatRelativeTime } from "../lib/formatRelativeTime";
 
 // Tratamiento dedicado para posts reales de solo texto (GET/POST /api/posts,
 // ADR-004-posts-minimal-model.md) -- sin imagen/mood/hashtags/ubicación (no
-// existen en el contrato). Likes y comentarios sí son reales:
+// existen en el contrato). Likes, comentarios y seguir al autor sí son
+// reales:
 // - El botón de like (`likes_count`/`liked_by_me`, GET/POST/DELETE
 //   /api/posts, ADR-005-likes-minimal-model.md) usa el mismo ícono
 //   (IoHeart/IoHeartOutline) y color (ember-500) que el resto de la UI ya
@@ -18,12 +19,24 @@ import { formatRelativeTime } from "../lib/formatRelativeTime";
 //   /api/posts/<id>/comments, ADR-006-comments-minimal-model.md) se carga
 //   bajo demanda -- no tiene sentido traer el hilo completo de cada post
 //   del feed de antemano, solo el del que el usuario realmente abre.
+// - El control "Seguir"/"Siguiendo" (`author.is_followed_by_me`, GET/POST/
+//   DELETE /api/users/<id>/follow, ADR-007-follows-minimal-model.md) solo
+//   se muestra sobre autores de posts reales -- es la única fuente de
+//   usuarios reales visibles hoy en la UI, el panel de sugerencias de
+//   Home.jsx sigue siendo mock (ADR-007 §No objetivos).
 // Tipografía más grande que ocupa el espacio que dejaría una imagen, sobre
 // superficie plana: la identidad monocroma del perfil
 // (Frontend/src/assets/ideas_perfil.jpeg) deja las tarjetas sin el degradé
 // morado que tenían antes, usando solo tokens de tailwind.config.js
 // (surface/canvas/line, sombra soft/lift).
-export default function CapsuleCard({ capsule, onToggleLike, onLoadComments, onPostComment }) {
+export default function CapsuleCard({
+  capsule,
+  currentUserId,
+  onToggleLike,
+  onLoadComments,
+  onPostComment,
+  onToggleFollowAuthor,
+}) {
   const toast = useToast();
   const { t } = useLanguage();
 
@@ -72,7 +85,7 @@ export default function CapsuleCard({ capsule, onToggleLike, onLoadComments, onP
     <article className="bg-surface dark:bg-surface-dark border border-line dark:border-line-dark rounded-[28px] shadow-soft hover:shadow-lift transition-shadow overflow-hidden animate-capsule-in motion-reduce:animate-none">
       <div className="flex items-center gap-3 px-6 pt-6">
         <Avatar name={capsule.author.name} size="w-11 h-11" />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-ink dark:text-ink-dark font-semibold text-sm leading-tight truncate">
             {capsule.author.name}
           </p>
@@ -80,6 +93,21 @@ export default function CapsuleCard({ capsule, onToggleLike, onLoadComments, onP
             @{capsule.author.username} · {formatRelativeTime(capsule.created_at)}
           </p>
         </div>
+
+        {capsule.author.id !== currentUserId && (
+          <button
+            type="button"
+            onClick={() => onToggleFollowAuthor?.(capsule.author.id)}
+            aria-pressed={capsule.author.is_followed_by_me}
+            className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition ${
+              capsule.author.is_followed_by_me
+                ? "bg-canvas dark:bg-canvas-dark border-line dark:border-line-dark text-muted hover:bg-line dark:hover:bg-line-dark"
+                : "bg-pulse-600 border-pulse-600 text-white hover:bg-pulse-700"
+            }`}
+          >
+            {capsule.author.is_followed_by_me ? "Siguiendo" : "Seguir"}
+          </button>
+        )}
       </div>
 
       <div className="px-6 pt-4 pb-3">

@@ -2,9 +2,14 @@
 # (API_CONTRACT.md §5) -- centralizada acá para no duplicarla en los tres
 # casos de uso (ADR-002 — docs/architecture/ADR-002-user-profile-fields.md).
 # Nunca incluye password/password_hash/confirm_password/token/secret.
+#
+# followers_count/following_count (ADR-007-follows-minimal-model.md):
+# defaults en 0 -- un usuario recién registrado no tiene seguidores/seguidos
+# todavía (register/login no reciben estos contadores, solo GET/PATCH
+# /api/users/me los calcula de verdad).
 
 
-def to_public_user(user):
+def to_public_user(user, followers_count=0, following_count=0):
     return {
         "id": str(user.id),
         "username": user.username,
@@ -13,4 +18,6 @@ def to_public_user(user):
         "phone": user.phone,
         "country_code": user.country_code,
         "birth_date": user.birth_date.isoformat(),
+        "followers_count": followers_count,
+        "following_count": following_count,
     }

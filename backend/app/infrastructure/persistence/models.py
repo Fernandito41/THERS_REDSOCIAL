@@ -203,3 +203,49 @@ class Comment(db.Model):
 
     def __repr__(self):
         return f"<Comment id={self.id} post_id={self.post_id} author_id={self.author_id}>"
+
+
+class Follow(db.Model):
+    __tablename__ = "follows"
+
+    # Cuarta entidad del alcance objetivo del producto en pasar a ratificada
+    # (ADR-007-follows-minimal-model.md) -- primera relación auto-referencial
+    # (users<->users) del esquema.
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    # ON DELETE CASCADE en ambas FKs: mismo placeholder que el resto de
+    # entidades (borrado de cuenta no existe todavía como funcionalidad).
+    follower_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    followed_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    # Sin `updated_at`: seguir a alguien no se edita in place, solo se crea
+    # o se borra (mismo criterio que Like, ADR-005 §Modelo de datos).
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "follower_id", "followed_id", name="uq_follows_follower_followed"
+        ),
+        db.CheckConstraint(
+            "follower_id <> followed_id", name="ck_follows_no_self_follow"
+        ),
+    )
+
+    def __repr__(self):
+        return f"<Follow follower_id={self.follower_id} followed_id={self.followed_id}>"

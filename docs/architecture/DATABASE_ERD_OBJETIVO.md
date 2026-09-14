@@ -4,12 +4,14 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD_OBJETIVO.md` |
 | Identificador propuesto | `DB-003` (acompaña a `DB-001`/`DATABASE_ARCHITECTURE.md` y `DB-002`/`DATABASE_ERD.md`) — **pendiente de ratificación** |
-| Versión | 0.6 |
+| Versión | 0.7 |
 | Estado | **Borrador — PROPUESTA CANDIDATA, no ratificada** |
 | Depende de | `DATABASE_ARCHITECTURE.md` §4.B (fuente directa), `HB-001` §11–12 (ADR) |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
 >  **Esto NO es el esquema de PostgreSQL ni un modelo ratificado.** Es la **visualización de las estructuras candidatas** de la *arquitectura objetivo del producto* (`DATABASE_ARCHITECTURE.md` §4.B). Cada entidad, columna, PK, FK y cardinalidad que aparece aquí es una **hipótesis a ratificar por ADR** (`HB-001` §11–12), no una decisión tomada. No se implementa nada a partir de este documento.
+>
+> **v0.7 — `FOLLOWS` ya no es candidata, es ratificada (`ADR-007-follows-minimal-model.md`).** A diferencia de `REACTIONS`/`COMMENTS` (v0.5/v0.6), acá no hay una "mitad" que siga pendiente de modelado: `id`/`follower_id`/`followed_id`/timestamps ya cubren exactamente lo que este diagrama proponía. Lo que sigue sin ratificar no es una columna o relación adicional de `FOLLOWS` — es una **capacidad** separada (listar seguidores/seguidos, `GET /api/users/<id>/followers`) y una decisión de producto separada (personalizar el feed por seguidos), ninguna de las dos parte del modelado de la entidad en sí. `FOLLOWS` migra por completo a `DATABASE_ERD.md` — se deja anotada aquí, no eliminada, por ser punto de referencia de `BLOCKS`/`RESTRICTIONS` (mismo criterio que `POSTS` en v0.4).
 >
 > **v0.5 — `REACTIONS` se resuelve parcialmente: el caso binario ya no es candidato (`ADR-005-likes-minimal-model.md`).** La versión binaria (like/no-like, sin `type`) migró a `DATABASE_ERD.md` como entidad `likes`. `REACTIONS` **sigue dibujada en este documento** porque su forma general — con la columna discriminante `type` (❤️/👍/😂/etc.) que se ve abajo — sigue sin ratificar; este ADR deliberadamente no la implementó (`ADR-005` §No objetivos). No confundir: `likes` (ratificada) y `REACTIONS` (candidata, aquí) no son la misma entidad, aunque la segunda generalice a la primera.
 >
@@ -266,7 +268,7 @@ erDiagram
 | `saves` | OBJETIVO | Guardar publicaciones | — |
 | `mentions` | **[FORMA PENDIENTE]** | Menciones | Persistir vs derivar en render |
 | `hashtags` + `post_hashtags` | OBJETIVO | Hashtags | Puente N:N |
-| `follows` | OBJETIVO | Relaciones sociales | Seguir/dejar/seguidores/seguidos → 1 puente |
+| `follows` | ~~OBJETIVO~~ — **ratificada v0.7** (`ADR-007-follows-minimal-model.md`, ver `DATABASE_ERD.md` §3/§5) | Relaciones sociales | Seguir/dejar/seguidores/seguidos → 1 puente (listar seguidores/seguidos sigue sin ratificar, es capacidad separada) |
 | `blocks` | OBJETIVO | Bloqueo | — |
 | `restrictions` | **[FORMA PENDIENTE]** | Restringir | Semántica vs bloqueo por definir |
 | `conversations` + `conversation_participants` + `messages` | OBJETIVO | Mensajería (1:1 y grupal) | Privadas + grupales → misma estructura |

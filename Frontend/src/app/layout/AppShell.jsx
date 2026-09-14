@@ -169,6 +169,45 @@ export default function AppShell() {
     return res.data.comment;
   };
 
+  // POST/DELETE /api/users/<id>/follow (ADR-007-follows-minimal-model.md).
+  // No reutiliza followingIds/handleToggleFollow (ese Set en memoria sigue
+  // siendo exclusivo del panel de sugerencias mock de Home.jsx -- esas
+  // personas no existen en el backend, llamar a este endpoint con sus ids
+  // daría 404 real). Actúa sobre `author.is_followed_by_me`, que ya viaja
+  // con cada post -- y actualiza TODOS los posts de ese autor en `capsules`,
+  // no solo el que disparó la acción, para que el estado quede consistente
+  // en toda la tarjeta del feed. Mismo patrón de optimistic update +
+  // rollback que handleToggleLike (ADR-005).
+  const handleToggleFollowAuthor = async (authorId) => {
+    const capsule = capsules.find((c) => c.author.id === authorId);
+    if (!capsule) return;
+
+    const wasFollowing = capsule.author.is_followed_by_me;
+
+    setCapsules((prev) =>
+      prev.map((c) =>
+        c.author.id === authorId
+          ? { ...c, author: { ...c.author, is_followed_by_me: !wasFollowing } }
+          : c
+      )
+    );
+
+    try {
+      wasFollowing
+        ? await api.delete(`/users/${authorId}/follow`, { headers: authHeaders() })
+        : await api.post(`/users/${authorId}/follow`, null, { headers: authHeaders() });
+    } catch (error) {
+      setCapsules((prev) =>
+        prev.map((c) =>
+          c.author.id === authorId
+            ? { ...c, author: { ...c.author, is_followed_by_me: wasFollowing } }
+            : c
+        )
+      );
+      toast.error(getErrorMessage(error, t));
+    }
+  };
+
   // Guard defensivo, no una decisión de ruteo: ProtectedRoute ya garantiza
   // isAuthenticated antes de montar AppShell; esto solo evita un crash en el
   // instante de re-render que sigue a logout() (currentUser pasa a null un
@@ -310,6 +349,7 @@ export default function AppShell() {
               onToggleLike: handleToggleLike,
               onLoadComments: handleLoadComments,
               onPostComment: handlePostComment,
+              onToggleFollowAuthor: handleToggleFollowAuthor,
             }}
           />
         </main>

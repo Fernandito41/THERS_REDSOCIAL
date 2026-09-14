@@ -3,15 +3,22 @@
 # exclusivamente de get_jwt_identity() en la route -- este caso de uso no
 # conoce Flask ni JWT, solo recibe el id ya resuelto (mismo patrón de
 # inyección de repositorio que login_use_case/register_use_case).
+#
+# follow_repository (ADR-007-follows-minimal-model.md): resuelve
+# followers_count/following_count reales para el objeto público.
 
 from app.domain.auth.exceptions import UserNotFoundError
 from app.application.auth.user_presenter import to_public_user
 
 
-def get_current_user(user_id, user_repository):
+def get_current_user(user_id, user_repository, follow_repository):
     user = user_repository.find_by_id(user_id)
 
     if user is None:
         raise UserNotFoundError()
 
-    return to_public_user(user)
+    return to_public_user(
+        user,
+        followers_count=follow_repository.followers_count(user_id),
+        following_count=follow_repository.following_count(user_id),
+    )

@@ -152,9 +152,7 @@
       "backToLogin": "Volver a iniciar sesión",
       "errorPasswordRequired": "Ingresá una nueva contraseña.",
       "errorPasswordTooShort": "Usá al menos 8 caracteres.",
-      "errorConfirmPasswordMismatch": "Las contraseñas no coinciden.",
-      "inProgressTitle": "Función en construcción",
-      "inProgressToast": "El equipo de Backend está terminando de implementar el reseteo de contraseña. Este formulario ya valida los datos y está listo para conectarse en cuanto el endpoint esté disponible."
+      "errorConfirmPasswordMismatch": "Las contraseñas no coinciden."
     },
 
     "passwordStrength": {

@@ -17,3 +17,20 @@ Flask-Migrate==4.1.0
 psycopg[binary]==3.3.4
 
 gunicorn==23.0.0
+
+# SDK oficial de Resend (ADR-009-password-reset-and-email-verification.md) --
+# el único punto del backend que lo importa es
+# infrastructure/email/resend_email_sender.py (BACKEND_ARCHITECTURE.md §17,
+# mismo principio que confina psycopg a infrastructure/persistence/). Trae
+# `requests` como dependencia transitiva (no se agrega por separado).
+resend==2.45.0
+
+# `flask db ...` (Flask-Migrate) ya cargaba backend/.env solo, vía el
+# auto-load interno del CLI de Flask (detecta python-dotenv instalado). Un
+# script plano como `python run.py` -- el punto de entrada real de THERS,
+# ver README/CLAUDE.md §11 -- no pasa por ese CLI y nunca lo cargaba, así
+# que una variable definida únicamente en `.env` (p. ej. RESEND_API_KEY)
+# nunca llegaba a `os.environ` al arrancar así. `app/config.py` ahora llama
+# a `load_dotenv()` explícitamente para que ambos caminos de arranque se
+# comporten igual (ver detalle en ese archivo).
+python-dotenv==1.2.3

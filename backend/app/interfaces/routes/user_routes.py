@@ -10,11 +10,14 @@
 # único punto que conoce tanto el caso de uso (application/) como la
 # implementación concreta del repositorio (infrastructure/).
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.application.auth.get_current_user_use_case import get_current_user
+from app.application.auth.send_verification_email_use_case import send_verification_email
 from app.application.auth.update_profile_use_case import update_profile
+from app.application.email.email_service import EmailService
+from app.config import Config
 from app.domain.auth.exceptions import (
     UserNotFoundError,
     UsernameAlreadyExistsError,
@@ -27,6 +30,10 @@ from app.domain.auth.validators import (
     meets_minimum_age,
     parse_birth_date,
 )
+from app.infrastructure.email.factory import create_email_sender
+from app.infrastructure.persistence.repositories.email_verification_repository import (
+    SQLAlchemyEmailVerificationTokenRepository,
+)
 from app.infrastructure.persistence.repositories.follow_repository import (
     SQLAlchemyFollowRepository,
 )
@@ -38,6 +45,13 @@ users_bp = Blueprint("users", __name__)
 
 _user_repository = SQLAlchemyUserRepository()
 _follow_repository = SQLAlchemyFollowRepository()
+_email_verification_token_repository = SQLAlchemyEmailVerificationTokenRepository()
+# Mismo criterio de selección Resend/Null que auth_routes.py (ADR-009
+# §Decisión) -- se repite acá, no se comparte el singleton entre módulos,
+# porque cada blueprint ya es su propia composition root
+# (BACKEND_ARCHITECTURE.md §17); construirlo dos veces es barato (ninguno
+# de los dos EmailSender mantiene estado propio).
+_email_service = EmailService(create_email_sender(Config.RESEND_API_KEY, Config.EMAIL_FROM))
 
 # Whitelist de campos editables por PATCH /api/users/me (ADR-003 §Campos
 # editables). La ruta extrae cada campo explícitamente de `data.get(...)` --
@@ -132,3 +146,26 @@ def update_me():
         ), 400
 
     return jsonify({"user": user}), 200
+
+
+@users_bp.route("/send-verification-email", methods=["POST"])
+@jwt_required()
+def send_verification_email_route():
+    # Protegido -- a diferencia de forgot-password/reset-password/verify-email
+    # (públicos, ADR-009 §Contrato API), acá quien pregunta ya demostró ser
+    # dueño de la cuenta con su JWT: no hace falta ocultar si el email está
+    # verificado o no, ni aplica ninguna lógica de anti-enumeración.
+    user_id = get_jwt_identity()
+
+    try:
+        result = send_verification_email(
+            user_id,
+            current_app.config["FRONTEND_URL"],
+            _user_repository,
+            _email_verification_token_repository,
+            _email_service,
+        )
+    except UserNotFoundError:
+        return jsonify({"msg": "Usuario no encontrado"}), 404
+
+    return jsonify(result), 200

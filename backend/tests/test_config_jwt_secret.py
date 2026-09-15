@@ -24,6 +24,14 @@ def _import_config_in_subprocess(env_overrides):
     env.setdefault(
         "DATABASE_URL", "postgresql+psycopg://thers:changeme@localhost/thers_test"
     )
+    # Sin esto, app/config.py encontraría el backend/.env real de quien
+    # corre los tests (misma ruta siempre, sin importar el cwd de este
+    # subproceso, ver ADR-009-password-reset-and-email-verification.md) y
+    # podría rescatar JWT_SECRET_KEY/ALLOW_INSECURE_JWT_DEV_FALLBACK desde
+    # ahí aunque este test los haya limpiado arriba -- el escenario que
+    # intenta simular ("la variable no está definida en ningún lado") dejaría
+    # de ser reproducible.
+    env["THERS_SKIP_DOTENV"] = "1"
     env.update(env_overrides)
 
     return subprocess.run(

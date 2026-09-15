@@ -13,6 +13,17 @@ os.environ["DATABASE_URL"] = os.environ.get(
     "postgresql+psycopg://thers:changeme@localhost:5432/thers_test",
 )
 
+# Fijada explícitamente en vacío, ANTES del primer import de `app` (que
+# dispara app/config.py -> load_dotenv(), ADR-009-password-reset-and-email-verification.md)
+# -- load_dotenv() nunca pisa una variable que ya está en os.environ
+# (override=False), así que esto garantiza que la suite use siempre
+# NullEmailSender (infrastructure/email/factory.py), sin importar si el
+# `backend/.env` real de quien corre los tests tiene una RESEND_API_KEY de
+# verdad cargada. Sin esto, correr `pytest` en una máquina con Resend
+# configurado para desarrollo intentaría enviar correos reales durante la
+# suite -- exactamente lo que DATABASE_URL de arriba ya evita para Postgres.
+os.environ["RESEND_API_KEY"] = ""
+
 import pytest
 
 from app import create_app
@@ -49,16 +60,21 @@ def _clean_tables(app):
     # `posts` referencia a `users` (author_id, ON DELETE CASCADE,
     # ADR-004-posts-minimal-model.md), `likes` y `comments` referencian a
     # ambas (ADR-005/ADR-006), `follows` referencia dos veces a `users`
-    # (follower_id/followed_id, ON DELETE CASCADE, ADR-007-follows-minimal-model.md)
-    # y `notifications` referencia a `users` dos veces (recipient_id/actor_id)
-    # y a `posts` una vez (ADR-008-notifications-minimal-model.md) -- un
-    # TRUNCATE de una sola tabla falla si otra tiene filas dependientes,
-    # salvo que todas se trunquen juntas en la misma sentencia (Postgres lo
-    # permite sin necesitar CASCADE en el propio TRUNCATE cuando la tabla
-    # referenciante también está en la lista).
+    # (follower_id/followed_id, ON DELETE CASCADE, ADR-007-follows-minimal-model.md),
+    # `notifications` referencia a `users` dos veces (recipient_id/actor_id)
+    # y a `posts` una vez (ADR-008-notifications-minimal-model.md), y
+    # `password_reset_tokens`/`email_verification_tokens` referencian a
+    # `users` una vez cada una (ADR-009-password-reset-and-email-verification.md)
+    # -- un TRUNCATE de una sola tabla falla si otra tiene filas
+    # dependientes, salvo que todas se trunquen juntas en la misma sentencia
+    # (Postgres lo permite sin necesitar CASCADE en el propio TRUNCATE
+    # cuando la tabla referenciante también está en la lista).
     yield
     with app.app_context():
         db.session.execute(
-            db.text("TRUNCATE TABLE notifications, comments, likes, follows, posts, users")
+            db.text(
+                "TRUNCATE TABLE password_reset_tokens, email_verification_tokens, "
+                "notifications, comments, likes, follows, posts, users"
+            )
         )
         db.session.commit()

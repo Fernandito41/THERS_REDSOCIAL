@@ -34,3 +34,15 @@ class UsernameChangeNotAllowedError(Exception):
     Backend); se traduce a 400 en la route para mantenerse dentro del
     catálogo de códigos que ADR-003 §Contrato PATCH ya documenta (no
     introduce 429, fuera de ese catálogo)."""
+
+
+class InvalidOrExpiredResetTokenError(Exception):
+    """El token de POST /api/reset-password no existe, ya expiró, o ya fue
+    usado -- los tres casos se tratan igual (mismo mensaje/código 400 en la
+    route) para no revelar cuál de los tres ocurrió
+    (ADR-009-password-reset-and-email-verification.md §Contrato API)."""
+
+
+class InvalidOrExpiredVerificationTokenError(Exception):
+    """El token de POST /api/verify-email no existe, ya expiró, o ya fue
+    usado -- mismo criterio que InvalidOrExpiredResetTokenError."""

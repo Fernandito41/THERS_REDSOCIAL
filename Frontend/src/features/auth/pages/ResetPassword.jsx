@@ -4,21 +4,22 @@ import { IoInformationCircleOutline } from "react-icons/io5";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 import Spinner from "@shared/components/Spinner";
+import { api, getErrorMessage } from "@shared/lib/api";
 import AuthCard from "../components/AuthCard";
 import PasswordField from "../components/PasswordField";
 import PasswordStrength from "../components/PasswordStrength";
 
-// INTEGRACIÓN PENDIENTE DEL BACKEND
-// ----------------------------------
-// Igual que ForgotPassword.jsx: API_CONTRACT.md no documenta todavía ningún
-// endpoint de reseteo de contraseña. El token se lee de la URL (?token=...)
-// porque es el mecanismo estándar de los flujos de "reset por email", pero
-// su formato/validez real (expiración, un solo uso, etc.) depende
-// exclusivamente de lo que Backend defina y documente -- no se inventa aquí.
-// Cuando el endpoint exista: reemplazar el bloque comentado en handleSubmit
-// por la llamada real (`token` + nueva contraseña) y, en su éxito, activar
-// `setSuccess(true)` -- esa rama de UI ("Tu contraseña fue actualizada
-// correctamente.") ya está implementada y lista, solo queda conectarla.
+// POST /api/reset-password (ADR-009-password-reset-and-email-verification.md,
+// API_CONTRACT.md §4.8) -- endpoint público, sin JWT: la identidad la aporta
+// el token, no una sesión iniciada en este navegador. El token se lee de la
+// URL (?token=...) y viaja tal cual en el body -- nunca se decodifica ni se
+// valida su forma en el Frontend, eso es responsabilidad exclusiva del
+// backend. Los errores (token inválido/expirado/ya usado, contraseñas que no
+// coinciden, contraseña demasiado corta) llegan todos como 400 con el mismo
+// formato {"msg": "..."} que el resto de la API -- getErrorMessage() ya sabe
+// mostrar ese mensaje tal cual (shared/lib/api.js), sin necesitar un caso
+// especial por cada tipo de error del token (el backend deliberadamente no
+// distingue "expiró" de "ya se usó" de "no existe", ADR-009 §Seguridad).
 export default function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -29,10 +30,6 @@ export default function ResetPassword() {
   const [form, setForm] = useState({ password: "", confirmPassword: "" });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // setSuccess(true) es el punto de integración real: se invoca dentro de
-  // handleSubmit una vez que exista la llamada al Backend (ver comentario
-  // en handleSubmit más abajo).
-  // eslint-disable-next-line no-unused-vars
   const [success, setSuccess] = useState(false);
 
   const handleChange = (e) => {
@@ -49,21 +46,27 @@ export default function ResetPassword() {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting || !token || !validate()) return;
 
     setIsSubmitting(true);
 
-    // --- INTEGRACIÓN PENDIENTE: reemplazar este bloque por la llamada real
-    // al Backend (token + nueva contraseña) cuando el endpoint exista y esté
-    // documentado en API_CONTRACT.md. En éxito real: setSuccess(true).
-    setIsSubmitting(false);
-    toast.info(t("auth.resetPassword.inProgressToast"), {
-      title: t("auth.resetPassword.inProgressTitle"),
-      duration: 8000,
-    });
-    // --- fin del punto de integración pendiente
+    try {
+      // Whitelist explícita de lo que se envía -- mismo criterio que el
+      // resto de llamadas a `api` en este proyecto (nunca se manda el
+      // objeto `form` completo tal cual, aunque hoy coincida 1:1).
+      await api.post("/reset-password", {
+        token,
+        password: form.password,
+        confirm_password: form.confirmPassword,
+      });
+      setSuccess(true);
+    } catch (error) {
+      toast.error(getErrorMessage(error, t));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!token) {

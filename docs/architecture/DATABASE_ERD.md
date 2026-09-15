@@ -4,12 +4,14 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD.md` |
 | Identificador propuesto | `DB-002` (acompaña a `DB-001` / `DATABASE_ARCHITECTURE.md`) — **pendiente de ratificación** |
-| Versión | 0.8 |
+| Versión | 0.9 |
 | Estado | **Borrador — representa solo el modelo conceptual ratificado hasta hoy** |
 | Depende de | `DATABASE_ARCHITECTURE.md` (fuente de verdad directa), `HB-001`, `REPOSITORY_STRUCTURE.md` |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
->  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). Las entidades ratificadas hoy son `users`, `posts`, `likes`, `comments`, `follows` y `notifications` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). Las entidades ratificadas hoy son `users`, `posts`, `likes`, `comments`, `follows`, `notifications`, `password_reset_tokens` y `email_verification_tokens` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>
+> **v0.9 — decimoprimera y decimosegunda relación del modelo (`ADR-009-password-reset-and-email-verification.md`).** `password_reset_tokens`/`email_verification_tokens` pasan de candidata objetivo ("Verificación de correo, Recuperación de contraseña", `PENDIENTE DE DECISIÓN`) a ratificadas (`DATABASE_ARCHITECTURE.md` §4.A/§5.7/§5.8, v0.13) — se agregan al diagrama (§3) junto con `USERS ||--o{ PASSWORD_RESET_TOKENS` y `USERS ||--o{ EMAIL_VERIFICATION_TOKENS`. `users` gana la columna `email_verified`. Reflejado en §3, §4, §5, §6, §7, §8.
 >
 > **v0.8 — octava, novena y décima relación del modelo (`ADR-008-notifications-minimal-model.md`).** `notifications` pasa de candidata objetivo (§8, solo para los tipos `like`/`comment`/`follow`) a ratificada (`DATABASE_ARCHITECTURE.md` §4.A/§5.6, v0.12) — se agrega al diagrama (§3) junto con las relaciones `USERS ||--o{ NOTIFICATIONS` (dos veces: como destinatario y como actor) y `POSTS ||--o{ NOTIFICATIONS`. Reflejado en §3, §4, §5, §6, §7, §8.
 >
@@ -59,6 +61,7 @@ erDiagram
         date birth_date "NOT NULL — edad mínima 13 años (ADR-002)"
         text password_hash "NOT NULL — nunca en claro"
         timestamptz username_changed_at "NULLABLE — soporta cooldown de 30 días (ADR-003), nunca expuesta en la API"
+        boolean email_verified "NOT NULL, DEFAULT false (ADR-009)"
         timestamptz created_at "NOT NULL, DEFAULT now()"
         timestamptz updated_at "NOT NULL, DEFAULT now(), mantenida por trigger"
     }
@@ -104,6 +107,24 @@ erDiagram
         timestamptz created_at "NOT NULL, DEFAULT now()"
     }
 
+    PASSWORD_RESET_TOKENS {
+        uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
+        uuid user_id FK "NOT NULL — ON DELETE CASCADE (ADR-009)"
+        varchar_64 token_hash UK "NOT NULL — SHA-256 del token crudo, nunca el valor en claro"
+        timestamptz expires_at "NOT NULL — 30 minutos desde su creación"
+        timestamptz used_at "NULLABLE — NULL = no usado, un solo uso"
+        timestamptz created_at "NOT NULL, DEFAULT now()"
+    }
+
+    EMAIL_VERIFICATION_TOKENS {
+        uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
+        uuid user_id FK "NOT NULL — ON DELETE CASCADE (ADR-009)"
+        varchar_64 token_hash UK "NOT NULL — SHA-256 del token crudo, nunca el valor en claro"
+        timestamptz expires_at "NOT NULL — 24 horas desde su creación"
+        timestamptz used_at "NULLABLE — NULL = no usado, un solo uso"
+        timestamptz created_at "NOT NULL, DEFAULT now()"
+    }
+
     USERS ||--o{ POSTS : "publica"
     USERS ||--o{ LIKES : "da like"
     POSTS ||--o{ LIKES : "recibe like"
@@ -114,6 +135,8 @@ erDiagram
     USERS ||--o{ NOTIFICATIONS : "recibe"
     USERS ||--o{ NOTIFICATIONS : "genera"
     POSTS ||--o{ NOTIFICATIONS : "origina"
+    USERS ||--o{ PASSWORD_RESET_TOKENS : "solicita"
+    USERS ||--o{ EMAIL_VERIFICATION_TOKENS : "solicita"
 ```
 
 > **Nota sobre el tipo de `id`:** UUID con `DEFAULT gen_random_uuid()` a nivel de PostgreSQL (función nativa desde PostgreSQL 13, sin extensión adicional), implementado en `backend/app/infrastructure/persistence/models.py` y en la migración `a1b2c3d4e5f6_create_users_table.py` (`DATABASE_ARCHITECTURE.md` §5). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend.
@@ -135,6 +158,8 @@ erDiagram
 > **Nota sobre `FOLLOWS` (v0.7, `ADR-007-follows-minimal-model.md`):** primera relación auto-referencial (`users`↔`users`) que este ERD dibuja — por eso `USERS ||--o{ FOLLOWS` aparece dos veces, una por cada lado de la relación ("sigue"/"es seguido"). Sin `updated_at`, mismo criterio que `LIKES`. `UNIQUE (follower_id, followed_id)` (mismo caso que `LIKES`, no representable con `UK` de Mermaid sobre una sola columna) más una **`CHECK (follower_id <> followed_id)`** — primera restricción `CHECK` del esquema, tampoco representable en la notación de Mermaid, ver `DATABASE_ARCHITECTURE.md` §5.5 para el detalle exacto. `followers_count`/`following_count` de `USERS` e `is_followed_by_me` de `posts.author` (`API_CONTRACT.md`) son **calculados** a partir de `FOLLOWS`, no columnas propias — no se dibujan como atributos de ninguna entidad.
 >
 > **Nota sobre `NOTIFICATIONS` (v0.8, `ADR-008-notifications-minimal-model.md`):** primera entidad que este ERD dibuja con **dos** relaciones distintas hacia `USERS` en roles distintos (`recipient_id`/"recibe" y `actor_id`/"genera", ambas `ON DELETE CASCADE`) más una tercera hacia `POSTS` (`post_id`, nullable — solo aplica a `like`/`comment`, `NULL` en `follow`). Sin `updated_at`, mismo criterio que `LIKES`/`FOLLOWS`: se crea o se marca leída (`read_at`), nunca se edita de otro modo. **Sin `UNIQUE`** — a diferencia de `LIKES`/`FOLLOWS`, dos notificaciones del mismo tipo/actor/post en momentos distintos son eventos legítimos, no un duplicado a impedir (`DATABASE_ARCHITECTURE.md` §5.6). Cubre solo los tipos `like`/`comment`/`follow` — respuestas, menciones y mensajes siguen como candidatas (§8), dependientes de entidades que todavía no existen.
+>
+> **Nota sobre `email_verified` en `USERS` y sobre `PASSWORD_RESET_TOKENS`/`EMAIL_VERIFICATION_TOKENS` (v0.9, `ADR-009-password-reset-and-email-verification.md`):** `email_verified` es la primera columna nueva que `USERS` gana desde `username_changed_at` (v0.3) — `DEFAULT false`, sin backfill posible para cuentas previas. Las dos tablas de tokens tienen exactamente la misma forma (`token_hash` con `UNIQUE`, no representable con el marcador `UK` de Mermaid sobre una constraint compuesta pero acá sí es una columna simple; `expires_at`; `used_at` nullable = no usado; sin `updated_at`, mismo criterio que `LIKES`/`FOLLOWS`) — se mantienen como dos entidades separadas, no una genérica, porque su TTL (30 minutos vs. 24 horas) y su política al consumirse (`password_reset_tokens` invalida otros tokens pendientes del mismo usuario, `email_verification_tokens` no) difieren (`DATABASE_ARCHITECTURE.md` §5.7/§5.8). El valor **crudo** del token nunca se dibuja como columna — solo su hash SHA-256, el mismo que se persiste.
 
 ---
 
@@ -164,6 +189,8 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 > **v0.7 — sexta y séptima relación dibujadas, primera auto-referencial:** `USERS ||--o{ FOLLOWS` (dos veces) — un usuario puede seguir a muchos usuarios y ser seguido por muchos usuarios; cada fila de `FOLLOWS` conecta exactamente dos usuarios distintos (`CHECK ck_follows_no_self_follow`). La leyenda se mantiene para cuando el modelo siga creciendo.
 >
 > **v0.8 — octava, novena y décima relación dibujadas:** `USERS ||--o{ NOTIFICATIONS` (dos veces, "recibe"/"genera") y `POSTS ||--o{ NOTIFICATIONS` ("origina") — un usuario puede recibir muchas notificaciones y generar muchas (con acciones sobre contenido de otros); un post puede originar muchas notificaciones (una por cada like/comentario que recibe); cada notificación tiene exactamente un destinatario, un actor, y opcionalmente un post de origen (`NULL` en las de tipo `follow`).
+>
+> **v0.9 — decimoprimera y decimosegunda relación dibujadas:** `USERS ||--o{ PASSWORD_RESET_TOKENS` y `USERS ||--o{ EMAIL_VERIFICATION_TOKENS` — un usuario puede tener muchos tokens de cada tipo a lo largo del tiempo (uno por cada pedido fuera de cooldown); cada token pertenece a exactamente un usuario.
 
 ---
 
@@ -171,12 +198,14 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 
 | Entidad | Estado | Justificación | Atributos (según `DATABASE_ARCHITECTURE.md` §5) |
 |---|---|---|---|
-| `users` |  Ratificada | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`; login autentica por `email`; `GET`/`PATCH /api/users/me` leen y actualizan el mismo registro | `id` UUID (PK), `name` VARCHAR(120), `username` VARCHAR(30) (UK), `email` CITEXT (UK), `phone` VARCHAR(20), `country_code` VARCHAR(6), `birth_date` DATE, `password_hash` TEXT, `username_changed_at` TIMESTAMPTZ (nullable, interna), `created_at`/`updated_at` TIMESTAMPTZ |
+| `users` |  Ratificada | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`; login autentica por `email`; `GET`/`PATCH /api/users/me` leen y actualizan el mismo registro | `id` UUID (PK), `name` VARCHAR(120), `username` VARCHAR(30) (UK), `email` CITEXT (UK), `phone` VARCHAR(20), `country_code` VARCHAR(6), `birth_date` DATE, `password_hash` TEXT, `username_changed_at` TIMESTAMPTZ (nullable, interna), `email_verified` BOOLEAN (`DEFAULT false`, v0.9), `created_at`/`updated_at` TIMESTAMPTZ |
 | `posts` |  Ratificada — v0.4 | `POST`/`GET /api/posts` crean y listan posts de texto reales, respaldados por PostgreSQL (`ADR-004-posts-minimal-model.md`) | `id` UUID (PK), `author_id` UUID (FK → `users.id`), `content` TEXT, `created_at`/`updated_at` TIMESTAMPTZ |
 | `likes` |  Ratificada — v0.5 (caso binario) | `POST`/`DELETE /api/posts/<id>/like` registran y quitan likes reales, respaldados por PostgreSQL (`ADR-005-likes-minimal-model.md`) | `id` UUID (PK), `post_id` UUID (FK → `posts.id`), `user_id` UUID (FK → `users.id`), `created_at` TIMESTAMPTZ, `UNIQUE (post_id, user_id)` |
 | `comments` |  Ratificada — v0.6 (mitad plana) | `POST`/`GET /api/posts/<id>/comments` crean y listan comentarios reales, respaldados por PostgreSQL (`ADR-006-comments-minimal-model.md`) | `id` UUID (PK), `post_id` UUID (FK → `posts.id`), `author_id` UUID (FK → `users.id`), `content` TEXT, `created_at`/`updated_at` TIMESTAMPTZ |
 | `follows` |  Ratificada — v0.7 | `POST`/`DELETE /api/users/<id>/follow` registran y quitan follows reales, respaldados por PostgreSQL (`ADR-007-follows-minimal-model.md`) | `id` UUID (PK), `follower_id` UUID (FK → `users.id`), `followed_id` UUID (FK → `users.id`), `created_at` TIMESTAMPTZ, `UNIQUE (follower_id, followed_id)`, `CHECK (follower_id <> followed_id)` |
 | `notifications` |  Ratificada — v0.8 (solo `like`/`comment`/`follow`) | `GET /api/notifications`/`PATCH /api/notifications/<id>/read` listan y marcan como leídas notificaciones reales, generadas como efecto secundario de like/comentario/follow, respaldadas por PostgreSQL (`ADR-008-notifications-minimal-model.md`) | `id` UUID (PK), `recipient_id` UUID (FK → `users.id`), `actor_id` UUID (FK → `users.id`), `type` VARCHAR(20), `post_id` UUID (FK → `posts.id`, nullable), `read_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
+| `password_reset_tokens` |  Ratificada — v0.9 | `POST /api/forgot-password`/`POST /api/reset-password` crean y consumen tokens reales de recuperación, respaldados por PostgreSQL (`ADR-009-password-reset-and-email-verification.md`) | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `token_hash` VARCHAR(64) (UK), `expires_at` TIMESTAMPTZ, `used_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
+| `email_verification_tokens` |  Ratificada — v0.9 | `POST /api/send-verification-email`/`POST /api/verify-email` crean y consumen tokens reales de verificación, respaldados por PostgreSQL (`ADR-009-password-reset-and-email-verification.md`) | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `token_hash` VARCHAR(64) (UK), `expires_at` TIMESTAMPTZ, `used_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
 
 **Constraints relevantes de `users`:**
 - `email`: **UNIQUE** (case-insensitive, vía `CITEXT`) + **NOT NULL** (login por email; genera un índice justificado, `DATABASE_ARCHITECTURE.md` §8).
@@ -184,6 +213,7 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 - `name`, `phone`, `country_code`, `birth_date`: **NOT NULL** (el formulario de registro los exige; formato validado en el backend).
 - `password_hash`: **NOT NULL** (nunca se almacena la contraseña en claro).
 - `username_changed_at`: nullable — soporta el cooldown de 30 días de `PATCH /api/users/me` (`ADR-003`), no forma parte del contrato HTTP público.
+- `email_verified`: **NOT NULL**, `DEFAULT false` (`ADR-009`) — solo `POST /api/verify-email` puede ponerla en `true`.
 
 No se añaden columnas adicionales solo para "completar" el diagrama (regla explícita de esta tarea).
 
@@ -201,6 +231,8 @@ No se añaden columnas adicionales solo para "completar" el diagrama (regla expl
 
 **v0.8 — octava, novena y décima relación real:** `users (1) ←→ (N) notifications` (dos veces: `notifications.recipient_id → users.id` y `notifications.actor_id → users.id`) y `posts (1) ←→ (N) notifications` (`notifications.post_id → posts.id`, nullable), todas `ON DELETE CASCADE` — `ADR-008-notifications-minimal-model.md`. Cada notificación tiene exactamente un destinatario, un actor, y opcionalmente un post de origen.
 
+**v0.9 — decimoprimera y decimosegunda relación real:** `users (1) ←→ (N) password_reset_tokens` (`password_reset_tokens.user_id → users.id`) y `users (1) ←→ (N) email_verification_tokens` (`email_verification_tokens.user_id → users.id`), ambas `ON DELETE CASCADE` — `ADR-009-password-reset-and-email-verification.md`.
+
 Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHITECTURE.md` §6): las entidades dependientes referenciarán a `users` y/o a `posts` mediante FK; las relaciones N:N que sigan pendientes (participantes de conversación, etc.) se modelarán con tablas puente siguiendo el mismo patrón que `likes`/`comments`/`follows` ya establecieron. Nada de esto se dibuja hasta que se ratifique.
 
 ---
@@ -209,7 +241,7 @@ Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHI
 
 - El diagrama contiene **exactamente** las entidades y columnas que `DATABASE_ARCHITECTURE.md` ratifica — ni una más.
 - No se modeló ninguna entidad "por ser común en redes sociales" (regla 1).
-- `username`, `phone`, `country_code`, `birth_date` (`ADR-002-user-profile-fields.md`) y `username_changed_at` (`ADR-003-profile-update-contract.md`) se dibujan desde v0.3 — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `posts` (v0.4, `ADR-004-posts-minimal-model.md`) es la primera entidad *distinta* de `users` y la primera relación real que este ERD dibuja — deliberadamente sin `visibility`/medios/reacciones/comentarios, cada uno sigue como candidata (§8). `likes` (v0.5, `ADR-005-likes-minimal-model.md`) es la primera tabla puente N:N — resuelve solo el caso binario de la candidata `reactions`, tipos de reacción siguen como candidata (§8). `comments` (v0.6, `ADR-006-comments-minimal-model.md`) resuelve solo la mitad plana de "Comentarios + Respuestas" — `parent_comment_id`/hilos siguen como candidata (§8). `follows` (v0.7, `ADR-007-follows-minimal-model.md`) es la primera relación auto-referencial — listar seguidores/seguidos sigue como candidata (§8); `followers_count`/`following_count`/`is_followed_by_me` son calculados, no columnas, y no se dibujan como tales. `notifications` (v0.8, `ADR-008-notifications-minimal-model.md`) resuelve solo los tipos `like`/`comment`/`follow` de la candidata combinada de Notificaciones — respuestas, menciones y mensajes siguen como candidata (§8), dependientes de entidades que todavía no existen. `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia.
+- `username`, `phone`, `country_code`, `birth_date` (`ADR-002-user-profile-fields.md`) y `username_changed_at` (`ADR-003-profile-update-contract.md`) se dibujan desde v0.3 — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `posts` (v0.4, `ADR-004-posts-minimal-model.md`) es la primera entidad *distinta* de `users` y la primera relación real que este ERD dibuja — deliberadamente sin `visibility`/medios/reacciones/comentarios, cada uno sigue como candidata (§8). `likes` (v0.5, `ADR-005-likes-minimal-model.md`) es la primera tabla puente N:N — resuelve solo el caso binario de la candidata `reactions`, tipos de reacción siguen como candidata (§8). `comments` (v0.6, `ADR-006-comments-minimal-model.md`) resuelve solo la mitad plana de "Comentarios + Respuestas" — `parent_comment_id`/hilos siguen como candidata (§8). `follows` (v0.7, `ADR-007-follows-minimal-model.md`) es la primera relación auto-referencial — listar seguidores/seguidos sigue como candidata (§8); `followers_count`/`following_count`/`is_followed_by_me` son calculados, no columnas, y no se dibujan como tales. `notifications` (v0.8, `ADR-008-notifications-minimal-model.md`) resuelve solo los tipos `like`/`comment`/`follow` de la candidata combinada de Notificaciones — respuestas, menciones y mensajes siguen como candidata (§8), dependientes de entidades que todavía no existen. `password_reset_tokens`/`email_verification_tokens` (v0.9, `ADR-009-password-reset-and-email-verification.md`) resuelven "Verificación de correo, Recuperación de contraseña" de `DATABASE_ARCHITECTURE.md` §4.B › Autenticación y cuenta — `email_verified` es la primera columna que `users` gana desde v0.3. `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia.
 
 ---
 
@@ -224,7 +256,7 @@ Versiones anteriores de este documento (hasta v0.2) registraban aquí una contra
 
 | Dominio funcional confirmado | Entidades candidatas (a ratificar) | Nota |
 |---|---|---|
-| **Autenticación y cuenta** | `oauth_accounts` (login con Google), `email_verifications`, `password_resets`, `account_status`/desactivación | El registro persistente aún no existe en backend |
+| **Autenticación y cuenta** | `oauth_accounts` (login con Google), ~~`email_verifications`, `password_resets`~~ — **ratificadas v0.9** como `email_verification_tokens`/`password_reset_tokens` (ver §3/§5, `ADR-009-password-reset-and-email-verification.md`), `account_status`/desactivación | Login con Google y desactivación de cuenta siguen sin ratificar |
 | **Perfil** | Columnas en `users`: `avatar_url`, `bio` (`username`/`phone`/`country_code`/`birth_date` ya ratificadas, ver §3/§5) | Pendiente de ADR propio — no cubiertas por `ADR-002` ni `ADR-003` |
 | **Configuración** | `user_settings` (privacidad, seguridad, preferencias), `notification_preferences`, `blocked_users`, gestión de datos | — |
 | **Contenido** | ~~`posts`~~ — **ratificada v0.4** (solo texto, ver §3/§5); `media` (fotos/videos/reels), reglas de `visibility` siguen candidatas | La ruta `/feed` en el Frontend ya consume `posts` real (`feature/frontend-feed-posts-integration`, PR #39) — nota anterior de "sigue mostrando `mockCapsules`" quedó desactualizada, corregida aquí (`API_CONTRACT.md`) |
@@ -242,4 +274,4 @@ Versiones anteriores de este documento (hasta v0.2) registraban aquí una contra
 
 ## 9. Cierre
 
-Este ERD **no modifica** backend, Frontend, Handbook ni instala dependencias: documenta el modelo conceptual ratificado (`users`, `posts`, `likes`, `comments`, `follows`, `notifications`) y registra explícitamente todo lo pendiente. Crecerá a medida que el alcance funcional confirmado se traduzca en decisiones de persistencia ratificadas en `DATABASE_ARCHITECTURE.md` (ADR, `HB-001` §11–12), no antes.
+Este ERD **no modifica** backend, Frontend, Handbook ni instala dependencias: documenta el modelo conceptual ratificado (`users`, `posts`, `likes`, `comments`, `follows`, `notifications`, `password_reset_tokens`, `email_verification_tokens`) y registra explícitamente todo lo pendiente. Crecerá a medida que el alcance funcional confirmado se traduzca en decisiones de persistencia ratificadas en `DATABASE_ARCHITECTURE.md` (ADR, `HB-001` §11–12), no antes.

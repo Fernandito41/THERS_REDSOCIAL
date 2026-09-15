@@ -1,5 +1,36 @@
 import os
 import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# `flask db ...` (Flask-Migrate) ya cargaba backend/.env solo -- el CLI de
+# Flask detecta python-dotenv instalado y llama a load_dotenv() internamente
+# antes de ejecutar cualquier comando. `python run.py` (el punto de entrada
+# real de THERS, CLAUDE.md §11) es un script Python plano que nunca pasa por
+# ese CLI, así que nunca cargaba `.env` -- cualquier variable definida
+# únicamente ahí (p. ej. RESEND_API_KEY) nunca llegaba a os.environ al
+# arrancar así, aunque `flask db upgrade` sí la viera. Se llama acá,
+# explícitamente, para que ambos caminos de arranque (y pytest, y gunicorn)
+# se comporten igual.
+#
+# Ruta explícita a backend/.env (no el default de find_dotenv(), que busca
+# hacia arriba desde el CWD/el archivo que llama) -- así funciona igual sin
+# importar desde qué directorio se invoque `python run.py`. `override=False`
+# (el default) significa que una variable ya presente en el entorno real
+# (p. ej. inyectada por Render en producción, o fijada explícitamente antes
+# de este import por backend/tests/conftest.py) nunca se pisa con lo que
+# diga `.env` -- load_dotenv() solo completa lo que falte.
+#
+# THERS_SKIP_DOTENV: escape hatch exclusivo para
+# tests/test_config_jwt_secret.py, que arranca subprocesos aislados
+# justamente para simular un entorno SIN JWT_SECRET_KEY (fail-fast, HB-001
+# §19.1/§20) -- sin este flag, esos subprocesos igual encontrarían el
+# `backend/.env` real de quien corre los tests (siempre en la misma ruta,
+# sin importar el cwd del subproceso) y el escenario que intentan simular
+# dejaría de ser reproducible. Nadie más debe definir esta variable.
+if not os.environ.get("THERS_SKIP_DOTENV"):
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 _DEV_FALLBACK_JWT_SECRET_KEY = "dev-only-insecure-key-CHANGE-ME"
 
@@ -78,3 +109,34 @@ class Config:
             "usar la persistencia real.",
             file=sys.stderr,
         )
+
+    # Correo electrónico vía Resend (ADR-009-password-reset-and-email-verification.md).
+    # Sin RESEND_API_KEY, infrastructure/email/ nunca instancia un
+    # ResendEmailSender real -- usa un NullEmailSender que solo registra el
+    # intento por log, sin fallar (mismo criterio explícito-nunca-silencioso
+    # que ALLOW_INSECURE_JWT_DEV_FALLBACK arriba, pero sin necesitar una
+    # variable extra para "permitirlo": no enviar emails de verdad en
+    # desarrollo local es un fallback razonable por defecto, a diferencia de
+    # firmar JWTs con una clave pública).
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+
+    if not RESEND_API_KEY:
+        print(
+            "[config] RESEND_API_KEY no está definida; los correos "
+            "(recuperación de contraseña, verificación de email) no se "
+            "enviarán de verdad -- se usará un EmailSender nulo que solo "
+            "registra el intento por log. Definir RESEND_API_KEY en "
+            "backend/.env para probar el envío real con Resend.",
+            file=sys.stderr,
+        )
+
+    # Dirección "from" de los correos enviados por THERS. "onboarding@resend.dev"
+    # es el valor que la propia documentación de onboarding de Resend ofrece
+    # para probar envíos sin verificar un dominio propio -- válido como
+    # fallback de desarrollo, no para un entorno real (ver backend/.env.example).
+    EMAIL_FROM = os.environ.get("EMAIL_FROM", "onboarding@resend.dev")
+
+    # Origen del Frontend -- usado para construir los enlaces de recuperación
+    # de contraseña/verificación de email que van dentro de esos correos
+    # (nunca hardcodeados en la plantilla, ver application/email/templates.py).
+    FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")

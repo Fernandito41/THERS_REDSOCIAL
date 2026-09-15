@@ -152,9 +152,7 @@
       "backToLogin": "Back to log in",
       "errorPasswordRequired": "Enter a new password.",
       "errorPasswordTooShort": "Use at least 8 characters.",
-      "errorConfirmPasswordMismatch": "Passwords don't match.",
-      "inProgressTitle": "Feature in progress",
-      "inProgressToast": "The Backend team is finishing the password reset flow. This form already validates your data and is ready to connect as soon as the endpoint is available."
+      "errorConfirmPasswordMismatch": "Passwords don't match."
     },
 
     "passwordStrength": {

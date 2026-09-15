@@ -47,6 +47,16 @@ class User(db.Model):
     # porque esa cambia con cualquier campo, no solo con `username`.
     username_changed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    # Verificación de email (ADR-009-password-reset-and-email-verification.md).
+    # DEFAULT false en el servidor -- toda cuenta existente antes de esta
+    # migración queda sin verificar (no hay backfill que pueda "adivinar" que
+    # un email histórico es válido). `email_verified` es la única columna que
+    # POST /api/verify-email puede escribir; nunca se acepta desde ningún
+    # body (mismo principio anti mass-assignment que el resto de `users`).
+    email_verified = db.Column(
+        db.Boolean, nullable=False, server_default=text("false")
+    )
+
     # CITEXT (case-insensitive text, extensión de PostgreSQL) en vez de VARCHAR:
     # el UNIQUE sobre email ignora mayúsculas/minúsculas a nivel de motor, sin
     # normalizar manualmente en la capa de aplicación. Requiere
@@ -330,3 +340,85 @@ class Notification(db.Model):
 
     def __repr__(self):
         return f"<Notification recipient_id={self.recipient_id} type={self.type!r}>"
+
+
+class PasswordResetToken(db.Model):
+    __tablename__ = "password_reset_tokens"
+
+    # Séptima entidad del alcance objetivo del producto en pasar a
+    # ratificada (ADR-009-password-reset-and-email-verification.md) -- token
+    # de un solo uso para POST /api/reset-password. Solo se persiste el hash
+    # SHA-256 del token (domain/auth/token_generator.py), nunca el valor
+    # crudo que viaja en el enlace del correo.
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # UNIQUE además de índice: colisión con 256 bits de entropía es
+    # estadísticamente imposible, pero la constraint es defensa en
+    # profundidad gratuita, mismo criterio que uq_likes_post_user (ADR-005).
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    # NULL = no usado todavía. Se fija una sola vez al consumir el token
+    # (mark_used) -- nunca se revierte a NULL.
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    __table_args__ = (
+        db.Index("ix_password_reset_tokens_user_id_created_at", "user_id", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<PasswordResetToken user_id={self.user_id}>"
+
+
+class EmailVerificationToken(db.Model):
+    __tablename__ = "email_verification_tokens"
+
+    # Octava entidad del alcance objetivo del producto en pasar a ratificada
+    # (ADR-009-password-reset-and-email-verification.md) -- misma forma que
+    # PasswordResetToken, tabla separada porque su política (TTL, cooldown de
+    # reenvío) es propia (ADR-009 §Opciones consideradas).
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    __table_args__ = (
+        db.Index("ix_email_verification_tokens_user_id_created_at", "user_id", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<EmailVerificationToken user_id={self.user_id}>"

@@ -72,6 +72,23 @@ export function AuthProvider({ children }) {
     return loggedInUser;
   };
 
+  // "Continuar con Google" (ADR-012-google-sign-in.md) -- mismo contrato de
+  // respuesta que login() (`{token, user}`), así que reutiliza exactamente
+  // el mismo manejo de sesión. `credential` es el ID Token que Google
+  // Identity Services le entregó a GoogleSignInButton.jsx, reenviado tal
+  // cual -- este contexto nunca lo interpreta, solo lo reenvía al backend,
+  // que es quien lo verifica de verdad.
+  const loginWithGoogle = async (credential) => {
+    const res = await api.post("/auth/google", { credential });
+    const loggedInUser = withUsername(res.data.user);
+
+    localStorage.setItem(TOKEN_KEY, res.data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(loggedInUser));
+    setUser(loggedInUser);
+
+    return loggedInUser;
+  };
+
   // El registro no inicia sesión (el backend no lo hace -- API_CONTRACT.md §4.1
   // solo documenta 201 con el `user` creado, sin `token`), por eso no toca el
   // estado de sesión de este contexto.
@@ -108,6 +125,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     isLoading,
     login,
+    loginWithGoogle,
     register,
     logout,
     loadCurrentUser,

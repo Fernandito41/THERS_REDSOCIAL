@@ -1,19 +1,42 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { IoInformationCircleOutline } from "react-icons/io5";
 import { Link } from "react-router-dom";
 import collage from "@/assets/collage.png";
 import logo from "@/assets/logo_oficial.jpeg";
-import { useOAuthNotice } from "@features/auth";
+import { useAuth, useOAuthNotice } from "@features/auth";
+import { getErrorMessage } from "@shared/lib/api";
 import { Footer } from "@shared/components/Footer";
+import { useToast } from "@shared/components/Toast";
 import LanguageSwitcher from "@shared/components/LanguageSwitcher";
 import { useLanguage } from "@shared/i18n";
+import GoogleSignInButton from "../components/GoogleSignInButton";
 
 export default function AuthPage() {
   const navigate = useNavigate();
+  const { loginWithGoogle } = useAuth();
   const { notice, notify } = useOAuthNotice();
+  const toast = useToast();
   const { t } = useLanguage();
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+
+  // "Continuar con Google" desde la landing (ADR-012-google-sign-in.md) --
+  // mismo patrón exacto que Login.jsx/Register.jsx: es la misma operación
+  // sin importar desde qué pantalla se dispare.
+  const handleGoogleCredential = async (credential) => {
+    if (isGoogleSubmitting) return;
+    setIsGoogleSubmitting(true);
+    try {
+      const googleUser = await loginWithGoogle(credential);
+      navigate(googleUser.profile_completed ? "/feed" : "/complete-profile");
+    } catch (error) {
+      console.error(error);
+      toast.error(getErrorMessage(error, t), { title: t("auth.landing.title") });
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-white relative">
@@ -61,14 +84,10 @@ export default function AuthPage() {
             {t("auth.landing.subtitle")}
           </h2>
 
-          <button
-            type="button"
-            onClick={() => notify("google")}
-            className="w-full flex items-center justify-center gap-3 border py-3 rounded-full font-semibold"
-          >
-            <FcGoogle size={20} />
-            {t("auth.oauthGoogleRegister")}
-          </button>
+          <GoogleSignInButton
+            onCredential={handleGoogleCredential}
+            disabled={isGoogleSubmitting}
+          />
 
           <button
             type="button"
@@ -82,9 +101,8 @@ export default function AuthPage() {
           {notice && (
             <p className="flex items-start gap-1.5 text-xs text-muted bg-line rounded-lg px-3 py-2 mt-3">
               <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
-              {t("auth.oauthNoticeShort", {
-                provider: notice === "google" ? t("auth.providerGoogle") : t("auth.providerApple"),
-              })}
+              {/* Solo Apple puede disparar este aviso ahora -- ver useOAuthNotice.js */}
+              {t("auth.oauthNoticeShort", { provider: t("auth.providerApple") })}
             </p>
           )}
 

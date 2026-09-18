@@ -25,6 +25,15 @@ gunicorn==23.0.0
 # `requests` como dependencia transitiva (no se agrega por separado).
 resend==2.45.0
 
+# Librería oficial de Google para verificar ID Tokens de OAuth 2.0/OpenID
+# Connect (ADR-012-google-sign-in.md) -- el único punto del backend que la
+# importa es infrastructure/auth/google_id_token_verifier.py
+# (BACKEND_ARCHITECTURE.md §17, mismo principio que confina `resend` a
+# infrastructure/email/). Verifica firma/issuer/audience/expiración
+# criptográficamente contra las claves públicas de Google -- nunca se
+# decodifica el token "a mano" ni se confía en su payload sin validar.
+google-auth==2.58.0
+
 # `flask db ...` (Flask-Migrate) ya cargaba backend/.env solo, vía el
 # auto-load interno del CLI de Flask (detecta python-dotenv instalado). Un
 # script plano como `python run.py` -- el punto de entrada real de THERS,

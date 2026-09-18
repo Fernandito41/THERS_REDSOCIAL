@@ -2,7 +2,10 @@ export { default as AuthPage } from "./pages/AuthPage";
 export { default as Login } from "./pages/Login";
 export { default as Register } from "./pages/Register";
 export { default as ForgotPassword } from "./pages/ForgotPassword";
+export { default as VerifyResetCode } from "./pages/VerifyResetCode";
 export { default as ResetPassword } from "./pages/ResetPassword";
+export { default as VerifyRegistrationCode } from "./pages/VerifyRegistrationCode";
+export { default as CompleteProfile } from "./pages/CompleteProfile";
 export { AuthProvider, useAuth, getStoredToken } from "./context/AuthContext";
 export { useOAuthNotice } from "./hooks/useOAuthNotice";
 // Regla de username reutilizada fuera de auth (Perfil: EditProfileModal) para

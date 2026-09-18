@@ -13,6 +13,17 @@
 # followers_count/following_count, no requiere una consulta agregada aparte)
 # -- una cuenta recién registrada siempre es `False` (DEFAULT false en la
 # columna), coherente con que registrarse no verifica el email por sí solo.
+#
+# profile_completed/has_password (ADR-012-google-sign-in.md): una cuenta
+# creada vía "Continuar con Google" puede tener `phone`/`country_code`/
+# `birth_date` en `NULL` (Google no los entrega) y ningún `password_hash` --
+# `.isoformat()` sobre `birth_date` se guarda con un chequeo explícito para
+# no romper con `None`. `profile_completed` es lo que el Frontend usa para
+# decidir si redirige a "Complete your profile" (mismo patrón que
+# `email_verified` ya usa para redirigir a la verificación de registro).
+# `has_password` (derivado, no persiste como tal) le permite al Frontend
+# distinguir "cambiar contraseña" de "fijar tu primera contraseña" sin
+# adivinarlo -- nunca se expone `password_hash` en sí.
 
 
 def to_public_user(user, followers_count=0, following_count=0):
@@ -23,8 +34,10 @@ def to_public_user(user, followers_count=0, following_count=0):
         "name": user.name,
         "phone": user.phone,
         "country_code": user.country_code,
-        "birth_date": user.birth_date.isoformat(),
+        "birth_date": user.birth_date.isoformat() if user.birth_date else None,
         "followers_count": followers_count,
         "following_count": following_count,
         "email_verified": user.email_verified,
+        "profile_completed": user.profile_completed,
+        "has_password": user.password_hash is not None,
     }

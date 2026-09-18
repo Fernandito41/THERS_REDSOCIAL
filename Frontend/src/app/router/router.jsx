@@ -1,6 +1,15 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import { AuthPage, Login, Register, ForgotPassword, ResetPassword } from "@features/auth";
+import {
+  AuthPage,
+  Login,
+  Register,
+  ForgotPassword,
+  VerifyResetCode,
+  ResetPassword,
+  VerifyRegistrationCode,
+  CompleteProfile,
+} from "@features/auth";
 import { Terms, Privacy, Cookies } from "@features/legal";
 import {
   Information,
@@ -27,13 +36,19 @@ export default function AppRouter() {
         <Route path="/" element={<AuthPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-registration-code" element={<VerifyRegistrationCode />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/verify-reset-code" element={<VerifyResetCode />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* THERS -- shell con navegación propia (rail/FAB) + páginas anidadas.
             ProtectedRoute es la única responsable de decidir si hay sesión;
             AppShell ya no redirige por su cuenta. */}
         <Route element={<ProtectedRoute />}>
+          {/* Fuera de AppShell a propósito -- ADR-012-google-sign-in.md,
+              FASE 18: onboarding de una cuenta con perfil incompleto, no
+              una página de la app en sí (sin rail/FAB de navegación). */}
+          <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route element={<AppShell />}>
             <Route path="/feed" element={<Home />} />
             <Route path="/discover" element={<Discover />} />

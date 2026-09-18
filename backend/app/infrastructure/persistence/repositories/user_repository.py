@@ -23,7 +23,18 @@ _USERNAME_UNIQUE_CONSTRAINT = "uq_users_username"
 
 
 class SQLAlchemyUserRepository(UserRepository):
-    def create(self, name, username, email, phone, country_code, birth_date, password_hash):
+    def create(
+        self,
+        name,
+        username,
+        email,
+        phone=None,
+        country_code=None,
+        birth_date=None,
+        password_hash=None,
+        email_verified=False,
+        profile_completed=True,
+    ):
         user = User(
             name=name,
             username=username,
@@ -32,6 +43,8 @@ class SQLAlchemyUserRepository(UserRepository):
             country_code=country_code,
             birth_date=birth_date,
             password_hash=password_hash,
+            email_verified=email_verified,
+            profile_completed=profile_completed,
         )
         db.session.add(user)
         try:

@@ -1,3 +1,8 @@
+/* Tokens del nuevo diseño -- fuente de verdad única de color/tipografía/
+   espaciado/layout. Va antes de @tailwind base para que las variables
+   existan cuando Tailwind resuelva `var(--th-*)`. */
+@import "./shared/design/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

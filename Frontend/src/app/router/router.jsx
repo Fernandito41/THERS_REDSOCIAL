@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import {
   AuthPage,
@@ -23,7 +23,18 @@ import {
   ImportContacts,
 } from "@features/public";
 import { HelpLayout, HelpCenter, HelpCategoryPage, HelpArticlePage, HelpSearchPage } from "@features/help";
-import { Home, Discover, Messages, Notifications, Profile, Settings } from "@features/feed";
+import {
+  Home,
+  Search,
+  Videos,
+  Capsules,
+  Radar,
+  Messages,
+  Notifications,
+  Profile,
+  SettingsLayout,
+  SettingsSectionPage,
+} from "@features/feed";
 import AppShell from "@/app/layout/AppShell";
 import PublicLayout from "@/app/layout/PublicLayout";
 import ProtectedRoute from "./ProtectedRoute";
@@ -51,11 +62,30 @@ export default function AppRouter() {
           <Route path="/complete-profile" element={<CompleteProfile />} />
           <Route element={<AppShell />}>
             <Route path="/feed" element={<Home />} />
-            <Route path="/discover" element={<Discover />} />
+
+            {/* Los siete destinos de la sidebar de referencia
+                (docs/THERS_REFERENCE_MANIFEST.md §5) tienen todos una URL
+                real: el archivo maestro §6.3 prohíbe dejar un enlace de
+                navegación sin destino. */}
+            <Route path="/search" element={<Search />} />
+            <Route path="/videos" element={<Videos />} />
+            <Route path="/capsules" element={<Capsules />} />
+            <Route path="/radar" element={<Radar />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/profile" element={<Profile />} />
-            <Route path="/settings" element={<Settings />} />
+            {/* Configuración: las 12 secciones son rutas reales, cada una
+                con su URL propia para poder enlazarla y recargarla
+                (archivo maestro §6.3). */}
+            <Route path="/settings" element={<SettingsLayout />}>
+              <Route index element={<Navigate to="/settings/profile" replace />} />
+              <Route path=":section" element={<SettingsSectionPage />} />
+            </Route>
+
+            {/* /discover era la ruta anterior de esta misma superficie. Se
+                redirige en vez de mantener dos rutas equivalentes (archivo
+                maestro §11: "no dejes dos rutas nueva y vieja sin motivo"). */}
+            <Route path="/discover" element={<Navigate to="/search" replace />} />
           </Route>
         </Route>
 

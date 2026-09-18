@@ -24,3 +24,9 @@ coverage/
 # Obsidian (vault local para navegar docs/, no contenido del proyecto)
 docs/.obsidian/
 docs/*.canvas
+
+# Material de referencia de diseño y capturas de QA visual: uso local para
+# trabajar el rediseño (docs/THERS_UI_INTEGRATION.md), no documentación
+# oficial versionada -- se dejan fuera para no inflar el repo con binarios.
+docs/desing-reference/
+docs/qa/

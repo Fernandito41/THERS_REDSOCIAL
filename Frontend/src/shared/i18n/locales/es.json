@@ -22,7 +22,17 @@
     "help": "Centro de ayuda",
     "lightMode": "Modo claro",
     "darkMode": "Modo oscuro",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "ariaPrimary": "Destinos principales",
+    "ariaMobile": "Navegación inferior",
+    "videos": "Videos",
+    "capsules": "Cápsulas",
+    "radar": "Ubicación",
+    "create": "Crear",
+    "hasUnread": "Tienes elementos sin leer",
+    "openMenu": "Abrir menú de navegación",
+    "closeMenu": "Cerrar menú de navegación",
+    "messagesUnread": "Mensajes, {{count}} sin leer"
   },
   "auth": {
     "close": "Cerrar",
@@ -35,7 +45,6 @@
     "oauthNoticeShort": "{{provider}} todavía no está configurado en el backend de THERS.",
     "showPassword": "Mostrar contraseña",
     "hidePassword": "Ocultar contraseña",
-
     "landing": {
       "heroImageAlt": "Collage redes sociales",
       "heroTitle": "Conecta con el mundo",
@@ -51,7 +60,6 @@
       "acceptSuffix": ", incluido el",
       "cookiesLink": "uso de cookies"
     },
-
     "login": {
       "titlePrefix": "Inicia sesión en",
       "subtitle": "Bienvenido de nuevo",
@@ -70,7 +78,6 @@
       "toastErrorTitle": "No pudimos iniciar sesión",
       "emailNotVerified": "Tu correo electrónico todavía no ha sido verificado. Ingresá el código que te enviamos, o pedí uno nuevo."
     },
-
     "register": {
       "featureShareTitle": "Comparte",
       "featureShareDetail": "Momentos y Cápsulas que reflejan quién sos, sin filtros forzados.",
@@ -116,7 +123,6 @@
       "errorPasswordTooShort": "Usá al menos 8 caracteres.",
       "errorConfirmPasswordMismatch": "Las contraseñas no coinciden."
     },
-
     "forgotPassword": {
       "title": "Recuperar contraseña",
       "subtitle": "Te ayudamos a volver a tu cuenta.",
@@ -128,7 +134,6 @@
       "errorEmailRequired": "Ingresá tu correo electrónico.",
       "errorEmailInvalid": "Ingresá un correo electrónico válido."
     },
-
     "resetPassword": {
       "invalidLinkTitle": "Sesión de recuperación inválida",
       "invalidLinkSubtitle": "Esta autorización no es válida o expiró.",
@@ -194,7 +199,13 @@
 
     "passwordStrength": {
       "label": "Seguridad de la contraseña",
-      "levels": ["Muy débil", "Débil", "Media", "Fuerte", "Muy fuerte"],
+      "levels": [
+        "Muy débil",
+        "Débil",
+        "Media",
+        "Fuerte",
+        "Muy fuerte"
+      ],
       "requirements": {
         "length": "Al menos 8 caracteres",
         "uppercase": "Una letra mayúscula",
@@ -203,12 +214,10 @@
         "special": "Un carácter especial (!@#$%...)"
       }
     },
-
     "phoneField": {
       "label": "Número de teléfono",
       "countryCodeLabel": "Código de país"
     },
-
     "birthDateField": {
       "label": "Fecha de nacimiento",
       "selectDate": "Seleccionar fecha",
@@ -219,10 +228,30 @@
       "tooltipLabel": "Por qué pedimos tu fecha de nacimiento",
       "tooltipBody": "Usamos tu fecha de nacimiento para mostrarte una experiencia más adecuada para tu edad y para ayudar a que la comunidad de THERS siga siendo un lugar seguro. Esta fecha se guarda en la configuración de tu cuenta y no se muestra públicamente en tu perfil.",
       "tooltipPrivacyLink": "Ver Política de Privacidad",
-      "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
-      "weekdays": ["L", "M", "M", "J", "V", "S", "D"]
+      "months": [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre"
+      ],
+      "weekdays": [
+        "L",
+        "M",
+        "M",
+        "J",
+        "V",
+        "S",
+        "D"
+      ]
     },
-
     "trustNote": {
       "title": "Tu información está protegida.",
       "body": "Usamos tus datos para proteger tu cuenta, ayudarte a recuperar el acceso y mejorar tu experiencia en THERS."
@@ -250,6 +279,20 @@
     "languageHelp": "Elegí el idioma en el que querés usar THERS.",
     "privacySection": "Privacidad y seguridad",
     "privacyPending": "Todavía no hay backend para gestionar contraseña, sesiones activas ni privacidad de la cuenta — esta sección queda pendiente hasta que exista esa API.",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "nav": {
+      "profile": "Editar perfil",
+      "privacy": "Privacidad",
+      "security": "Seguridad y contraseña",
+      "subscription": "Suscripción y verificación",
+      "tools": "Herramientas y Resonancias",
+      "notifications": "Notificaciones",
+      "audio": "Audio y reproducción",
+      "links": "Enlaces y Redes",
+      "data": "Descarga de datos",
+      "blocked": "Cuentas bloqueadas y restringidas",
+      "permissions": "Permisos y aplicaciones",
+      "content": "Preferencias de contenido y feed"
+    }
   }
 }

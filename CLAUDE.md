@@ -45,7 +45,7 @@ Cuatro documentos, todos en `docs/architecture/`, todos con el mismo formato y e
 |---|---|---|---|
 | `BACKEND_ARCHITECTURE.md` | 0.7 | Pendiente de ratificación formal (`HB-001` §11–12) | Capas del backend, flujo de una petición, autenticación, configuración, seguridad |
 | `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md` + `DATABASE_ERD_OBJETIVO.md` | 0.5 / 0.1 / 0.2 | Pendiente de ratificación formal | Modelo de datos en tres capas: implementado (`users`, incluidas columnas de perfil), objetivo del producto (candidatas sin modelado ratificado), pendiente de decisión |
-| `FRONTEND_ARCHITECTURE.md` | 0.2 | Pendiente de ratificación formal | Stack, estructura, estado, routing, frontera con el backend, seguridad del Frontend del producto |
+| `FRONTEND_ARCHITECTURE.md` | 0.4 | Pendiente de ratificación formal | Stack, estructura, estado, routing, frontera con el backend, seguridad y Design System (§13) del Frontend del producto |
 | `API_CONTRACT.md` | 0.3 | Pendiente de ratificación formal | Catálogo de endpoints, formato de request/response/error, autenticación — única fuente del contrato HTTP entre `Frontend/` y `backend/` |
 
 Ninguno de los cuatro es todavía un documento oficial ratificado en el sentido de `HB-001` §11–12: son la mejor fuente disponible para su dominio, con las decisiones sin respaldo marcadas explícitamente como `PENDIENTE DE APROBACIÓN` dentro de cada uno. No copian contenido entre sí — cada decisión vive en un único documento y los demás la referencian.
@@ -90,10 +90,10 @@ Ningún cambio de arquitectura o diseño se decide de forma aislada dentro de un
 - `JWT_SECRET_KEY` se lee de variable de entorno (`backend/.env.example` documenta la variable; `backend/.gitignore` protege un `.env` real) — la gestión de secretos en un entorno desplegado sigue pendiente.
 
 ### Frontend (producto — `Frontend/`)
-- Fuente: `FRONTEND_ARCHITECTURE.md` (§3.1) — propuesta v0.2, pendiente de ratificación.
-- Organización por `features/` (`auth`, `legal`), cada una con `hooks/`, `pages/`, `index.js` como punto de entrada; `shared/` para código transversal; `app/router/` para el arranque de la aplicación.
+- Fuente: `FRONTEND_ARCHITECTURE.md` (§3.1) — propuesta v0.4, pendiente de ratificación.
+- Organización por `features/` (`auth`, `legal`, `feed`), cada una con `hooks/`, `pages/`, `index.js` como punto de entrada; `shared/` para código transversal; `app/router/` para el arranque de la aplicación.
 - `VITE_API_URL` se lee de variable de entorno (`Frontend/.env.example` documenta la variable; `Frontend/.gitignore` protege un `.env` real) — con fallback advertido al valor de desarrollo local si no está definida.
-- **No existe un Design System ratificado para este Frontend.** `DS-001` §1.2 declara textualmente que no aplica al producto — no extrapolar sus tokens sin que el equipo lo decida como cambio de gobernanza.
+- **Sigue sin existir un Design System ratificado por el Comité Técnico para este Frontend** (`DS-001` §1.2 confirma que no aplica al producto). Desde `FRONTEND_ARCHITECTURE.md` v0.4 hay un segundo set de tokens (`Frontend/src/shared/design/tokens.css`, prefijo `th-`, documentado en `docs/THERS_DESIGN_SYSTEM.md`) para el shell rediseñado — autorizado por el propietario del proyecto vía `THERS_IMPLEMENTACION_MAESTRA_CLAUDE.md`, no por el proceso de `HB-001` §11–12. Convive con los tokens de v0.3 (`canvas`/`surface`/`ink`/`pulse`/`ember`, en uso en `auth/help/public/legal`); ninguno reemplaza al otro todavía. No extrapolar ni ampliar ninguno de los dos sin que el equipo lo ratifique.
 - Stack confirmado (`Frontend/package.json`): React 19, React Router 7, Tailwind v3 (no v4 — distinto del Handbook), Axios, react-icons.
 - Alias de imports (`@`, `@features`, `@shared`, `@assets`) definidos en `vite.config.js` y ya en uso — documentados en `FRONTEND_ARCHITECTURE.md` §20.
 
@@ -104,7 +104,7 @@ Ningún cambio de arquitectura o diseño se decide de forma aislada dentro de un
 
 ### API (Frontend ↔ Backend)
 - Fuente: `API_CONTRACT.md` (§3.1) — propuesta v0.1, pendiente de ratificación.
-- Endpoints implementados: `POST /api/register`, `POST /api/login` y `GET /api/users/me` (primer endpoint protegido, `@jwt_required()`, ver `ADR-002-user-profile-fields.md`). El Frontend (`Register.jsx`) ya recolecta los campos que `POST /api/register` requiere pero todavía no los envía — esa integración sigue pendiente, no asumir que ya está conectada.
+- Endpoints implementados: `POST /api/register`, `POST /api/login`, `GET`/`PATCH /api/users/me` (`ADR-002-user-profile-fields.md`, `ADR-003-profile-update-contract.md`), `POST`/`GET /api/posts` (`ADR-004-posts-minimal-model.md`), `POST`/`DELETE /api/posts/<id>/like` (`ADR-005-likes-minimal-model.md`), `POST`/`GET /api/posts/<id>/comments` (`ADR-006-comments-minimal-model.md`) y `POST`/`DELETE /api/users/<id>/follow` (`ADR-007-follows-minimal-model.md`) — catálogo completo en `API_CONTRACT.md` §4 (v0.12). El Frontend ya consume todos estos endpoints end-to-end (`Register.jsx`/`AuthContext.jsx`, `Profile.jsx`, `CapsuleCard.jsx`, feed) — corrección respecto a una nota anterior de este archivo que daba esa integración por pendiente; `API_CONTRACT.md` changelog v0.4/v0.9–v0.12 documenta cada conexión real.
 - Todo endpoint nuevo se documenta en `API_CONTRACT.md` el mismo día del PR (`HB-001` §15.1).
 
 ### DevOps
@@ -163,7 +163,7 @@ Fuente: `HB-001` §7–9. Reglas vinculantes:
 | **Frontend (producto)** | React 19 + Vite + Tailwind v3. Fuente: `FRONTEND_ARCHITECTURE.md`. Sin Design System propio ratificado — no asumir tokens de `DS-001` (es del Handbook). Seguir la organización por `features/` ya existente y los alias de import ya definidos en `vite.config.js`. |
 | **Backend** | Python + Flask + API REST + JWT. Fuente: `BACKEND_ARCHITECTURE.md`. Estructura de capas consolidada pero no ratificada — mantenerla por consistencia, no como contrato cerrado. Seguridad: documentada en `BACKEND_ARCHITECTURE.md` §16 (no hay documento transversal de seguridad dedicado); `JWT_SECRET_KEY` ya se lee de entorno, sin gestión de secretos de producción todavía. |
 | **Database** | PostgreSQL. Fuente: `DATABASE_ARCHITECTURE.md`. Solo `users` está implementado y ratificado; el resto del alcance funcional es candidato u objetivo, no esquema decidido — no inventar convención sin confirmarlo. |
-| **API** | Fuente única del contrato HTTP: `API_CONTRACT.md`. `POST /api/register`, `POST /api/login` y `GET /api/users/me` están implementados. |
+| **API** | Fuente única del contrato HTTP: `API_CONTRACT.md` (§4, v0.12). Auth (`register`/`login`/`GET`+`PATCH /api/users/me`), posts, likes, comments y follows están implementados y ya consumidos end-to-end por el Frontend. |
 | **DevOps** | Sin documentación oficial (Docker, CI/CD, deploy, SSL, dominios, monitoreo). Tratar cualquier tarea de esta área como territorio no especificado. |
 | **Handbook** | Código implementado (Release Candidate, Módulo 10); ver matiz de ratificación documental en §3.2. Toda decisión visual/estructural pasa por `ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001` en ese orden de precedencia. |
 
@@ -175,7 +175,7 @@ Fuente: `HB-001` §7–9. Reglas vinculantes:
 - **Estructura de archivos:** organización por dominio funcional (`features/<dominio>/{hooks,pages}` + `index.js`), no por tipo de archivo.
 - **Imports:** el Handbook usa el alias `@ui` → `handbook/src/components/ui` (`vite.config.js`). El Frontend del producto usa los alias `@`, `@features`, `@shared`, `@assets`, definidos en `Frontend/vite.config.js` y documentados en `FRONTEND_ARCHITECTURE.md` §20 — usarlos en vez de rutas relativas para código nuevo dentro de `src/`.
 - **Componentes:** en el Handbook, todo componente interactivo implementa el set completo de estados (`default/hover/focus-visible/disabled` según aplique — `PV-001` Parte 6 §8). En el Frontend del producto no hay un catálogo equivalente documentado.
-- **APIs:** `API_CONTRACT.md` (§3.1) es la fuente única del contrato HTTP — no es una especificación OpenAPI/Swagger, es un catálogo ligero. `POST /api/register`, `POST /api/login` y `GET /api/users/me` están implementados. Documentar cada endpoint nuevo en ese documento el mismo día del PR (`HB-001` §15.1), no retroactivamente.
+- **APIs:** `API_CONTRACT.md` (§3.1) es la fuente única del contrato HTTP — no es una especificación OpenAPI/Swagger, es un catálogo ligero. Auth, posts, likes, comments y follows están implementados (§4 de ese documento, v0.12) y ya consumidos por el Frontend. Documentar cada endpoint nuevo en ese documento el mismo día del PR (`HB-001` §15.1), no retroactivamente.
 - **Variables de entorno:** nunca se sube `.env` ni credenciales al repositorio (`HB-001` §20, regla innegociable). `backend/.env.example` documenta `JWT_SECRET_KEY` y `DATABASE_URL` — no hay todavía variables de entorno del lado del Frontend más allá de `VITE_API_URL`.
 - **Testing:** `pytest` está en uso real en `backend/` (`requirements-dev.txt`, `backend/tests/`, ver `BACKEND_ARCHITECTURE.md` §15) — elegido pragmáticamente, sin ratificación formal del Comité Técnico como estándar del proyecto. `Frontend/`/`handbook/` siguen sin ningún framework de testing configurado en su `package.json`. No asumir Jest/Vitest sin confirmarlo primero.
 
@@ -263,7 +263,7 @@ Si `/docs` no tiene información suficiente, **no inventar la decisión**: seña
 - **DevOps completo** (Docker, CI/CD, deploy, SSL, dominios, monitoreo) — `HB-001` §0 confirma que no está escrito aún.
 - **Persistencia real de datos — implementada.** Driver (`psycopg` v3), ORM (SQLAlchemy) y migraciones (Flask-Migrate/Alembic) están en uso real contra PostgreSQL 16 (Docker Compose); `register`/`login`/`GET /api/users/me` operan sobre la tabla `users` real, ya sin ninguna credencial hardcodeada en código. Ratificación formal por el Comité Técnico de estas decisiones sigue pendiente (`BACKEND_ARCHITECTURE.md` §20).
 - **Esquema de base de datos más allá de `users`** — `users` ya incluye `username`/`phone`/`country_code`/`birth_date` (ratificadas por `ADR-002-user-profile-fields.md`); el resto del alcance funcional del producto sigue registrado como candidato u objetivo en `DATABASE_ARCHITECTURE.md` §4.B, sin modelado ratificado.
-- **Design System del Frontend del producto** — no existe; `DS-001` §1.2 confirma textualmente que es exclusivo del Handbook.
+- **Design System del Frontend del producto** — sigue sin ratificación del Comité Técnico (`DS-001` §1.2 confirma que `DS-001` es exclusivo del Handbook). Desde `FRONTEND_ARCHITECTURE.md` v0.4 existe un segundo set de tokens propio (`tokens.css` / `docs/THERS_DESIGN_SYSTEM.md`) autorizado por el propietario del proyecto, no por el equipo — ver `FRONTEND_ARCHITECTURE.md` §13.
 - **Especificación de API completa** — `API_CONTRACT.md` existe (§3.1) pero es un catálogo ligero, no OpenAPI/Swagger, y documenta explícitamente varios puntos como pendientes (formato de error estándar, versionado, paginación, convención de endpoints protegidos).
 - **Variables de entorno requeridas** — `backend/.env.example` documenta `JWT_SECRET_KEY` y `DATABASE_URL`; `Frontend/.env.example` documenta `VITE_API_URL`. No hay todavía una lista oficial completa más allá de estas tres.
 - **Estrategia de testing** — `pytest` en uso real (`backend/requirements-dev.txt`, `backend/tests/`), elegido pragmáticamente sin ratificación formal del Comité Técnico como framework oficial del proyecto (`BACKEND_ARCHITECTURE.md` §20, ítem 12); sin documento de estrategia más allá de eso.

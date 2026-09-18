@@ -22,7 +22,17 @@
     "help": "Help Center",
     "lightMode": "Light mode",
     "darkMode": "Dark mode",
-    "logout": "Log out"
+    "logout": "Log out",
+    "ariaPrimary": "Primary destinations",
+    "ariaMobile": "Bottom navigation",
+    "videos": "Videos",
+    "capsules": "Capsules",
+    "radar": "Location",
+    "create": "Create",
+    "hasUnread": "You have unread items",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "messagesUnread": "Messages, {{count}} unread"
   },
   "auth": {
     "close": "Close",
@@ -35,7 +45,6 @@
     "oauthNoticeShort": "{{provider}} isn't set up on THERS' backend yet.",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
-
     "landing": {
       "heroImageAlt": "Social network collage",
       "heroTitle": "Connect with the world",
@@ -51,7 +60,6 @@
       "acceptSuffix": ", including the",
       "cookiesLink": "use of cookies"
     },
-
     "login": {
       "titlePrefix": "Log in to",
       "subtitle": "Welcome back",
@@ -70,7 +78,6 @@
       "toastErrorTitle": "We couldn't log you in",
       "emailNotVerified": "Your email hasn't been verified yet. Enter the code we sent you, or request a new one."
     },
-
     "register": {
       "featureShareTitle": "Share",
       "featureShareDetail": "Moments and Capsules that reflect who you are, without forced filters.",
@@ -116,7 +123,6 @@
       "errorPasswordTooShort": "Use at least 8 characters.",
       "errorConfirmPasswordMismatch": "Passwords don't match."
     },
-
     "forgotPassword": {
       "title": "Recover password",
       "subtitle": "We'll help you get back into your account.",
@@ -128,7 +134,6 @@
       "errorEmailRequired": "Enter your email address.",
       "errorEmailInvalid": "Enter a valid email address."
     },
-
     "resetPassword": {
       "invalidLinkTitle": "Invalid recovery session",
       "invalidLinkSubtitle": "This authorization isn't valid or has expired.",
@@ -194,7 +199,13 @@
 
     "passwordStrength": {
       "label": "Password strength",
-      "levels": ["Very weak", "Weak", "Medium", "Strong", "Very strong"],
+      "levels": [
+        "Very weak",
+        "Weak",
+        "Medium",
+        "Strong",
+        "Very strong"
+      ],
       "requirements": {
         "length": "At least 8 characters",
         "uppercase": "One uppercase letter",
@@ -203,12 +214,10 @@
         "special": "One special character (!@#$%...)"
       }
     },
-
     "phoneField": {
       "label": "Phone number",
       "countryCodeLabel": "Country code"
     },
-
     "birthDateField": {
       "label": "Date of birth",
       "selectDate": "Select date",
@@ -219,10 +228,30 @@
       "tooltipLabel": "Why we ask for your date of birth",
       "tooltipBody": "We use your date of birth to show you an experience more suited to your age and to help keep the THERS community a safe place. This date is stored in your account settings and never shown publicly on your profile.",
       "tooltipPrivacyLink": "View Privacy Policy",
-      "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-      "weekdays": ["M", "T", "W", "T", "F", "S", "S"]
+      "months": [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December"
+      ],
+      "weekdays": [
+        "M",
+        "T",
+        "W",
+        "T",
+        "F",
+        "S",
+        "S"
+      ]
     },
-
     "trustNote": {
       "title": "Your information is protected.",
       "body": "We use your data to protect your account, help you recover access, and improve your experience on THERS."
@@ -250,6 +279,20 @@
     "languageHelp": "Choose the language you want to use THERS in.",
     "privacySection": "Privacy & security",
     "privacyPending": "There's no backend yet to manage your password, active sessions, or account privacy — this section stays pending until that API exists.",
-    "logout": "Log out"
+    "logout": "Log out",
+    "nav": {
+      "profile": "Edit profile",
+      "privacy": "Privacy",
+      "security": "Security and password",
+      "subscription": "Subscription and verification",
+      "tools": "Tools and Resonances",
+      "notifications": "Notifications",
+      "audio": "Audio and playback",
+      "links": "Links and Networks",
+      "data": "Data download",
+      "blocked": "Blocked and restricted accounts",
+      "permissions": "Permissions and apps",
+      "content": "Content and feed preferences"
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IoChatbubbleOutline, IoHeart, IoHeartOutline, IoSend } from "react-icons/io5";
+import Icon from "@shared/components/Icon";
 import Avatar from "@shared/components/Avatar";
 import Spinner from "@shared/components/Spinner";
 import { useToast } from "@shared/components/Toast";
@@ -7,28 +7,26 @@ import { useLanguage } from "@shared/i18n";
 import { getErrorMessage } from "@shared/lib/api";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 
-// Tratamiento dedicado para posts reales de solo texto (GET/POST /api/posts,
-// ADR-004-posts-minimal-model.md) -- sin imagen/mood/hashtags/ubicación (no
-// existen en el contrato). Likes, comentarios y seguir al autor sí son
-// reales:
-// - El botón de like (`likes_count`/`liked_by_me`, GET/POST/DELETE
-//   /api/posts, ADR-005-likes-minimal-model.md) usa el mismo ícono
-//   (IoHeart/IoHeartOutline) y color (ember-500) que el resto de la UI ya
-//   usa para "me gusta" (ProfileTabs.jsx, Notifications.jsx).
-// - El panel de comentarios (`comments_count`, GET/POST
-//   /api/posts/<id>/comments, ADR-006-comments-minimal-model.md) se carga
-//   bajo demanda -- no tiene sentido traer el hilo completo de cada post
-//   del feed de antemano, solo el del que el usuario realmente abre.
-// - El control "Seguir"/"Siguiendo" (`author.is_followed_by_me`, GET/POST/
-//   DELETE /api/users/<id>/follow, ADR-007-follows-minimal-model.md) solo
-//   se muestra sobre autores de posts reales -- es la única fuente de
-//   usuarios reales visibles hoy en la UI, el panel de sugerencias de
-//   Home.jsx sigue siendo mock (ADR-007 §No objetivos).
-// Tipografía más grande que ocupa el espacio que dejaría una imagen, sobre
-// superficie plana: la identidad monocroma del perfil
-// (Frontend/src/assets/ideas_perfil.jpeg) deja las tarjetas sin el degradé
-// morado que tenían antes, usando solo tokens de tailwind.config.js
-// (surface/canvas/line, sombra soft/lift).
+// Tarjeta de publicación del stream — sección 4 de REF-FEED-01.
+//
+// Composición de la referencia: cabecera (avatar, nombre, distintivo,
+// control de seguir, handle · tiempo, menú), cuerpo de texto, chip de
+// ubicación y barra social con favorite / chat_bubble / bookmark_add / share.
+// Superficie blanca, borde 1px, radio 16px, padding 24px.
+//
+// QUÉ ES REAL Y QUÉ NO (archivo maestro §8.1 y §9.4):
+//  · Like (favorite): REAL — POST/DELETE /api/posts/<id>/like, ADR-005.
+//    Actualización optimista con rollback, gestionada por AppShell.
+//  · Comentarios (chat_bubble): REAL — GET/POST /api/posts/<id>/comments,
+//    ADR-006. El hilo se pide bajo demanda al abrir el panel, no de antemano.
+//  · Seguir al autor: REAL — POST/DELETE /api/users/<id>/follow, ADR-007.
+//  · Guardar (bookmark_add) y compartir (share): SIN ENDPOINT. Se dibujan
+//    como en la referencia pero deshabilitados y con explicación accesible;
+//    no se simula que funcionen.
+//  · Distintivo «verified»: NO se reproduce. El contrato no expone
+//    verificación y el archivo maestro §8.4 prohíbe otorgarla por fixture.
+//  · Chip de ubicación: NO se reproduce. `post` no tiene campo de lugar
+//    (ADR-004); inventarlo sería fabricar un dato.
 export default function CapsuleCard({
   capsule,
   currentUserId,
@@ -82,121 +80,147 @@ export default function CapsuleCard({
   };
 
   return (
-    <article className="bg-surface dark:bg-surface-dark border border-line dark:border-line-dark rounded-[28px] shadow-soft hover:shadow-lift transition-shadow overflow-hidden animate-capsule-in motion-reduce:animate-none">
-      <div className="flex items-center gap-3 px-6 pt-6">
-        <Avatar name={capsule.author.name} size="w-11 h-11" />
+    <article className="flex flex-col gap-4 rounded-th-card border border-th-border bg-th-surface p-6 shadow-th-card transition-colors hover:border-th-border-strong">
+      <header className="flex items-start gap-3">
+        <Avatar name={capsule.author.name} size="w-10 h-10" />
+
         <div className="min-w-0 flex-1">
-          <p className="text-ink dark:text-ink-dark font-semibold text-sm leading-tight truncate">
-            {capsule.author.name}
-          </p>
-          <p className="text-muted dark:text-muted-dark text-xs mt-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-label-lg font-bold text-th-fg-strong">
+              {capsule.author.name}
+            </p>
+
+            {capsule.author.id !== currentUserId && (
+              <button
+                type="button"
+                onClick={() => onToggleFollowAuthor?.(capsule.author.id)}
+                aria-pressed={capsule.author.is_followed_by_me}
+                className={`shrink-0 rounded-th-pill border px-2.5 py-0.5 text-label-md font-bold transition-colors th-focus-ring ${
+                  capsule.author.is_followed_by_me
+                    ? "border-th-border bg-th-surface-subtle text-th-fg-muted hover:bg-th-surface-raised"
+                    : "border-th-brand bg-th-brand text-th-on-brand hover:bg-th-brand-hover"
+                }`}
+              >
+                {capsule.author.is_followed_by_me ? "Siguiendo" : "Seguir"}
+              </button>
+            )}
+          </div>
+
+          <p className="mt-0.5 truncate text-body-sm text-th-fg-muted">
             @{capsule.author.username} · {formatRelativeTime(capsule.created_at)}
           </p>
         </div>
+      </header>
 
-        {capsule.author.id !== currentUserId && (
-          <button
-            type="button"
-            onClick={() => onToggleFollowAuthor?.(capsule.author.id)}
-            aria-pressed={capsule.author.is_followed_by_me}
-            className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold border transition ${
-              capsule.author.is_followed_by_me
-                ? "bg-canvas dark:bg-canvas-dark border-line dark:border-line-dark text-muted hover:bg-line dark:hover:bg-line-dark"
-                : "bg-pulse-600 border-pulse-600 text-white hover:bg-pulse-700"
-            }`}
-          >
-            {capsule.author.is_followed_by_me ? "Siguiendo" : "Seguir"}
-          </button>
-        )}
+      <p className="whitespace-pre-wrap break-words text-body-lg text-th-fg">{capsule.content}</p>
+
+      <div className="flex flex-wrap items-center gap-1 border-t border-th-border-subtle pt-3">
+        <button
+          type="button"
+          onClick={() => onToggleLike?.(capsule.id)}
+          aria-pressed={capsule.liked_by_me}
+          aria-label={capsule.liked_by_me ? "Quitar me gusta" : "Me gusta"}
+          className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-th-pill px-3 py-1.5 text-label-lg transition-colors th-focus-ring ${
+            capsule.liked_by_me
+              ? "text-th-danger-accent"
+              : "text-th-fg-muted hover:bg-th-surface-subtle hover:text-th-danger-accent"
+          }`}
+        >
+          <Icon name="favorite" size={20} fill={capsule.liked_by_me ? 1 : 0} />
+          {capsule.likes_count > 0 && <span>{capsule.likes_count}</span>}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleToggleComments}
+          aria-expanded={isOpen}
+          aria-label="Comentarios"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-th-pill px-3 py-1.5 text-label-lg text-th-fg-muted transition-colors th-focus-ring hover:bg-th-surface-subtle hover:text-th-brand"
+        >
+          <Icon name="chat_bubble" size={20} />
+          {capsule.comments_count > 0 && <span>{capsule.comments_count}</span>}
+        </button>
+
+        {/* Presentes en la referencia, sin endpoint que los respalde. */}
+        <PendingAction id={`save-${capsule.id}`} icon="bookmark_add" label="Guardar" />
+        <PendingAction id={`share-${capsule.id}`} icon="share" label="Compartir" />
       </div>
 
-      <div className="px-6 pt-4 pb-3">
-        <p className="text-ink dark:text-ink-dark text-lg sm:text-xl font-medium leading-snug whitespace-pre-wrap break-words">
-          {capsule.content}
-        </p>
-      </div>
+      {isOpen && (
+        <div className="flex flex-col gap-4 border-t border-th-border-subtle pt-4">
+          {loading ? (
+            <div className="flex items-center gap-2 py-2 text-th-fg-muted" role="status">
+              <Spinner size={16} />
+              <span className="text-body-sm">Cargando comentarios...</span>
+            </div>
+          ) : comments && comments.length === 0 ? (
+            <p className="text-body-sm text-th-fg-muted">
+              Todavía no hay comentarios. Sé el primero en comentar.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {comments?.map((comment) => (
+                <li key={comment.id} className="flex items-start gap-2.5">
+                  <Avatar name={comment.author.name} size="w-7 h-7" />
+                  <div className="min-w-0 flex-1 rounded-th-card bg-th-surface-subtle px-3.5 py-2">
+                    <p className="text-label-md font-bold text-th-fg-strong">
+                      {comment.author.name}{" "}
+                      <span className="font-normal text-th-fg-muted">
+                        · {formatRelativeTime(comment.created_at)}
+                      </span>
+                    </p>
+                    <p className="whitespace-pre-wrap break-words text-body-sm text-th-fg">
+                      {comment.content}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
 
-      <div className="px-6 pb-6">
-        <div className="flex items-center gap-1 -ml-3">
-          <button
-            type="button"
-            onClick={() => onToggleLike?.(capsule.id)}
-            aria-pressed={capsule.liked_by_me}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition ${
-              capsule.liked_by_me
-                ? "text-ember-500"
-                : "text-muted dark:text-muted-dark hover:text-ember-500"
-            }`}
-          >
-            {capsule.liked_by_me ? <IoHeart size={19} /> : <IoHeartOutline size={19} />}
-            {capsule.likes_count > 0 && <span>{capsule.likes_count}</span>}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleToggleComments}
-            aria-expanded={isOpen}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-muted dark:text-muted-dark hover:text-pulse-600 dark:hover:text-pulse-300 transition"
-          >
-            <IoChatbubbleOutline size={19} />
-            {capsule.comments_count > 0 && <span>{capsule.comments_count}</span>}
-          </button>
+          <form onSubmit={handleSubmit} className="flex items-center gap-2">
+            <label htmlFor={`comment-${capsule.id}`} className="sr-only">
+              Escribir un comentario
+            </label>
+            <input
+              id={`comment-${capsule.id}`}
+              type="text"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Escribí un comentario..."
+              disabled={posting}
+              maxLength={1000}
+              className="min-h-[44px] flex-1 rounded-th-pill border border-th-border bg-th-surface-subtle px-4 py-2 text-body-sm text-th-fg placeholder:text-th-fg-muted transition-colors th-focus-ring disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={!draft.trim() || posting}
+              aria-label="Publicar comentario"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-th-pill bg-th-brand text-th-on-brand transition-colors th-focus-ring hover:bg-th-brand-hover disabled:opacity-40 disabled:hover:bg-th-brand"
+            >
+              {posting ? <Spinner size={16} /> : <Icon name="send" size={18} />}
+            </button>
+          </form>
         </div>
-
-        {isOpen && (
-          <div className="mt-3 pt-4 border-t border-line dark:border-line-dark space-y-4">
-            {loading ? (
-              <div className="flex items-center gap-2 text-muted dark:text-muted-dark py-2">
-                <Spinner size={16} />
-                <span className="text-sm">Cargando comentarios...</span>
-              </div>
-            ) : comments && comments.length === 0 ? (
-              <p className="text-sm text-muted dark:text-muted-dark">
-                Todavía no hay comentarios. Sé el primero en comentar.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {comments?.map((comment) => (
-                  <li key={comment.id} className="flex items-start gap-2.5">
-                    <Avatar name={comment.author.name} size="w-7 h-7" />
-                    <div className="min-w-0 flex-1 bg-canvas dark:bg-canvas-dark rounded-2xl px-3.5 py-2">
-                      <p className="text-xs font-semibold text-ink dark:text-ink-dark">
-                        {comment.author.name}{" "}
-                        <span className="font-normal text-muted dark:text-muted-dark">
-                          · {formatRelativeTime(comment.created_at)}
-                        </span>
-                      </p>
-                      <p className="text-sm text-ink dark:text-ink-dark whitespace-pre-wrap break-words">
-                        {comment.content}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <form onSubmit={handleSubmit} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="Escribí un comentario..."
-                disabled={posting}
-                maxLength={1000}
-                className="flex-1 bg-canvas dark:bg-canvas-dark border border-line dark:border-line-dark rounded-full px-4 py-2 text-sm text-ink dark:text-ink-dark placeholder-muted focus:outline-none focus:ring-2 focus:ring-pulse-500 disabled:opacity-60"
-              />
-              <button
-                type="submit"
-                disabled={!draft.trim() || posting}
-                aria-label="Publicar comentario"
-                className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-pulse-600 hover:bg-pulse-700 disabled:opacity-40 disabled:hover:bg-pulse-600 text-white transition"
-              >
-                {posting ? <Spinner size={16} /> : <IoSend size={15} />}
-              </button>
-            </form>
-          </div>
-        )}
-      </div>
+      )}
     </article>
+  );
+}
+
+/** Acción dibujada en la referencia que todavía no tiene soporte de servidor. */
+function PendingAction({ id, icon, label }) {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-describedby={`${id}-hint`}
+      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-th-pill px-3 py-1.5 text-label-lg text-th-fg-subtle opacity-60"
+    >
+      <Icon name={icon} size={20} />
+      <span className="sr-only">{label}</span>
+      <span id={`${id}-hint`} className="sr-only">
+        {label}: todavía no disponible, falta soporte en el servidor
+      </span>
+    </button>
   );
 }

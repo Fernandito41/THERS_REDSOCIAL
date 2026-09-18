@@ -1,25 +1,26 @@
 import { useRef } from "react";
-import {
-  IoBookmarkOutline,
-  IoChatbubbleOutline,
-  IoGridOutline,
-  IoHeartOutline,
-  IoImagesOutline,
-} from "react-icons/io5";
 
-// Barra de secciones del perfil (identidad de referencia:
-// Frontend/src/assets/ideas_perfil.jpeg). Patrón ARIA de tabs completo:
-// role=tablist/tab/tabpanel, aria-selected, tabindex móvil y navegación con
-// flechas/Home/End -- no basta con `aria-selected` sobre botones sueltos.
-// La sección activa vive en la URL (?tab=), así que un perfil abierto en
-// "Guardados" se puede compartir y recargar sin perder el estado.
+// Barra de secciones del perfil — sección 4 de REF-PROFILE-01.
+//
+// La referencia define TRES pestañas: Publicaciones, Destacadas y Me gusta,
+// cada una con su contador, subrayado violeta en la activa y el contador de
+// la activa en violeta suave. Se adopta ese conjunto: sustituye a las cinco
+// anteriores (Publicaciones/Respuestas/Media/Guardados/Me gusta), que no
+// venían de ninguna referencia recibida.
+//
+// CONTADORES: solo se dibuja el de Publicaciones, que es real (se cuenta
+// sobre GET /api/posts). Destacadas y Me gusta no tienen endpoint: mostrar un
+// número —incluido un 0— afirmaría un dato que nadie ha consultado. El panel
+// de cada una explica su estado.
+//
+// Patrón ARIA completo: role=tablist/tab/tabpanel, aria-selected, tabindex
+// móvil y navegación con flechas/Home/End. La sección activa vive en la URL
+// (?tab=) para poder compartir y recargar el perfil en la misma pestaña.
 
 export const PROFILE_TABS = [
-  { id: "posts", label: "Publicaciones", Icon: IoGridOutline },
-  { id: "replies", label: "Respuestas", Icon: IoChatbubbleOutline },
-  { id: "media", label: "Media", Icon: IoImagesOutline },
-  { id: "saved", label: "Guardados", Icon: IoBookmarkOutline },
-  { id: "likes", label: "Me gusta", Icon: IoHeartOutline },
+  { id: "posts", label: "Publicaciones", icon: "grid_view", counted: true },
+  { id: "featured", label: "Destacadas", icon: "star", counted: false },
+  { id: "likes", label: "Me gusta", icon: "favorite", counted: false },
 ];
 
 export const DEFAULT_TAB = PROFILE_TABS[0].id;
@@ -28,7 +29,7 @@ export function isProfileTab(value) {
   return PROFILE_TABS.some((tab) => tab.id === value);
 }
 
-export default function ProfileTabs({ active, onChange }) {
+export default function ProfileTabs({ active, onChange, counts = {} }) {
   const refs = useRef({});
 
   const focusTab = (id) => {
@@ -58,9 +59,9 @@ export default function ProfileTabs({ active, onChange }) {
       role="tablist"
       aria-label="Secciones del perfil"
       onKeyDown={handleKeyDown}
-      className="no-scrollbar flex gap-1 overflow-x-auto border-t border-line px-2 dark:border-line-dark"
+      className="th-scrollbar-none flex gap-1 overflow-x-auto border-b border-th-border"
     >
-      {PROFILE_TABS.map(({ id, label, Icon }) => {
+      {PROFILE_TABS.map(({ id, label, counted }) => {
         const selected = id === active;
         return (
           <button
@@ -75,22 +76,24 @@ export default function ProfileTabs({ active, onChange }) {
             aria-controls={`profile-panel-${id}`}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(id)}
-            className={`relative flex h-12 shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap px-3.5 text-sm transition-colors sm:px-4 ${
+            className={`relative flex min-h-[48px] shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 text-label-lg transition-colors th-focus-ring ${
               selected
-                ? "font-semibold text-ink dark:text-ink-dark"
-                : "font-medium text-muted hover:text-ink dark:text-muted-dark dark:hover:text-ink-dark"
+                ? "border-th-brand font-bold text-th-brand-fg"
+                : "border-transparent font-semibold text-th-fg-muted hover:text-th-fg-strong"
             }`}
           >
-            <Icon size={17} aria-hidden="true" />
             {label}
-            {/* Indicador de sección activa: además del color, un subrayado --
-                el color por sí solo no puede ser el único indicador. */}
-            <span
-              aria-hidden="true"
-              className={`absolute inset-x-2 bottom-0 h-[3px] rounded-full bg-ink transition-opacity dark:bg-ink-dark ${
-                selected ? "opacity-100" : "opacity-0"
-              }`}
-            />
+            {counted && (
+              <span
+                className={`rounded-th-pill px-2 py-0.5 text-label-md font-bold tabular-nums ${
+                  selected
+                    ? "bg-th-brand-soft-strong text-th-brand-fg"
+                    : "bg-th-surface-raised text-th-fg-muted"
+                }`}
+              >
+                {(counts[id] ?? 0).toLocaleString("es")}
+              </span>
+            )}
           </button>
         );
       })}

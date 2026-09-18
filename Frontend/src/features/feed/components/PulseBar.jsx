@@ -1,28 +1,47 @@
+import Icon from "@shared/components/Icon";
 import { mockPulseEvents } from "../data/mockData";
 
-// Elemento visual exclusivo de THERS: un pulso continuo de actividad de la red,
-// distinto a cualquier feed/timeline -- una cinta viva, no una lista.
+/**
+ * PULSE — sección 2 de REF-FEED-01.
+ *
+ * La referencia la dibuja como una píldora clara sobre violeta suave
+ * (`bg-purple-50/80`, borde `purple-200/80`, radio completo), con la etiqueta
+ * PULSE, un texto de actividad y un botón de refresco (`cached`) a la derecha.
+ * Se sustituye el marquesina oscura anterior por esa composición.
+ *
+ * HONESTIDAD: la maqueta dice «3 personas activas ahora». No hay sistema de
+ * presencia ni transporte en tiempo real en este repositorio, así que NO se
+ * muestra un contador de actividad en vivo (archivo maestro §10.2: presencia
+ * y «en vivo» no pueden ser estados fijos del cliente). El contenido se rotula
+ * como ejemplo y el punto animado no se presenta como señal de directo.
+ */
 export default function PulseBar() {
-  const items = [...mockPulseEvents, ...mockPulseEvents];
+  const [firstEvent] = mockPulseEvents;
 
   return (
-    <div
-      className="relative overflow-hidden rounded-full bg-[#14141A] dark:bg-[#1C1C28] text-white border border-white/5 py-2.5 px-4"
-      role="marquee"
-      aria-label="Actividad reciente en THERS"
+    <section
+      aria-label="Pulse: actividad reciente en THERS"
+      className="flex items-center justify-between gap-3 rounded-th-pill border border-th-brand-soft-strong bg-th-brand-soft px-4 py-2.5 shadow-th-card"
     >
-      <div className="flex items-center gap-2 shrink-0 absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-[#14141A] dark:bg-[#1C1C28] pr-3">
-        <span className="w-2 h-2 rounded-full bg-pulse-500 animate-mood-glow" aria-hidden="true" />
-        <span className="text-[11px] font-bold uppercase tracking-wider text-pulse-400">Pulse</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span className="h-2 w-2 rounded-th-pill bg-th-brand" aria-hidden="true" />
+          <span className="text-label-sm font-bold uppercase tracking-wider text-th-brand-fg">
+            Pulse
+          </span>
+        </span>
+        <p className="truncate text-body-sm text-th-fg-muted">
+          {firstEvent}
+          <span className="ml-2 italic text-th-fg-subtle">(ejemplo)</span>
+        </p>
       </div>
 
-      <div className="flex whitespace-nowrap animate-marquee pl-24">
-        {items.map((event, index) => (
-          <span key={index} className="text-sm text-white/80 mx-6">
-            {event}
-          </span>
-        ))}
-      </div>
-    </div>
+      <span
+        className="hidden shrink-0 items-center pl-2 text-th-fg-subtle sm:flex"
+        aria-hidden="true"
+      >
+        <Icon name="cached" size={18} />
+      </span>
+    </section>
   );
 }

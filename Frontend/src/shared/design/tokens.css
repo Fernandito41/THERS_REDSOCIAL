@@ -1,0 +1,422 @@
+/* =========================================================================
+   THERS — Tokens de diseño
+   =========================================================================
+   FUENTE DE VERDAD ÚNICA de color, tipografía, espaciado, radios, sombras,
+   capas y layout del nuevo diseño. `tailwind.config.js` NO redefine estos
+   valores: los consume con `var(--th-*)`. No hay una tercera copia en JSON.
+   (THERS_IMPLEMENTACION_MAESTRA_CLAUDE.md §11: "define una fuente de verdad
+   ... no tres copias que divergen".)
+
+   Referencias: docs/THERS_REFERENCE_MANIFEST.md
+   Tokens resueltos y su procedencia: docs/THERS_DESIGN_SYSTEM.md
+
+   -------------------------------------------------------------------------
+   POR QUÉ HAY DOS FAMILIAS DE NEUTRALES
+   -------------------------------------------------------------------------
+   Las 24 pantallas de referencia no comparten un sistema visual único. Se
+   reparten en dos generaciones medibles (manifest §2):
+
+     · Familia "luminous" — usa los tokens semánticos de DESIGN.md
+       (#131b2e sobre #faf8ff, primary #630ed4). Sidebar 256px.
+       13 pantallas: 9 de Configuración + 4 de Mensajes.
+
+     · Familia "social" — usa utilidades slate/purple de Tailwind
+       (#0f172a sobre #f8fafc, acento #7c3aed). Sidebar 288px.
+       11 pantallas: Feed, Buscar, Radar x2, Perfiles x3 + 3 de Configuración.
+
+   Ambas son evidencia legítima, así que no se "normaliza" una contra la
+   otra. Los ROLES semánticos son los mismos; solo cambian sus valores según
+   la variante de shell activa (`data-th-shell` en la raíz del shell). Eso
+   permite un único AppShell con variantes nombradas en vez de tres copias
+   del shell (archivo maestro §3.1).
+   ========================================================================= */
+
+:root {
+  /* ---------------------------------------------------------------------
+     1. PALETA BASE — valores crudos
+     Se conservan AMBOS violetas y AMBAS familias de neutrales como tokens
+     base aunque una variante no use todos (archivo maestro §5.2).
+     --------------------------------------------------------------------- */
+
+  /* Marca — violeta profundo (DESIGN.md `primary`) */
+  --th-violet-deep: #630ed4;
+  --th-violet-tint: #732ee4; /* DESIGN.md surface-tint */
+
+  /* Marca — violeta por defecto (DESIGN.md `primary-container`) */
+  --th-violet-500: #7c3aed;
+  --th-violet-600: #6d28d9;
+  --th-violet-700: #7e22ce; /* purple-700, el hover literal del Feed */
+  --th-violet-100: #f3e8ff;
+  --th-violet-50: #faf5ff;
+  --th-violet-soft: #ede0ff; /* DESIGN.md on-primary-container */
+  --th-violet-dim: #d2bbff; /* DESIGN.md inverse-primary */
+
+  /* Neutrales — familia Luminous (DESIGN.md) */
+  --th-lum-bg: #faf8ff;
+  --th-lum-low: #f2f3ff;
+  --th-lum-container: #eaedff;
+  --th-lum-high: #e2e7ff;
+  --th-lum-highest: #dae2fd;
+  --th-lum-dim: #d2d9f4;
+  --th-lum-fg: #131b2e;
+  --th-lum-fg-variant: #4a4455;
+  --th-lum-outline: #7b7487;
+  --th-lum-outline-variant: #ccc3d8;
+  --th-lum-inverse: #283044;
+
+  /* Neutrales — familia Slate (Tailwind por defecto, tal como la aplican
+     los prototipos sociales) */
+  --th-slate-50: #f8fafc;
+  --th-slate-100: #f1f5f9;
+  --th-slate-200: #e2e8f0;
+  --th-slate-300: #cbd5e1;
+  --th-slate-400: #94a3b8;
+  --th-slate-500: #64748b;
+  --th-slate-600: #475569;
+  --th-slate-800: #1e293b;
+  --th-slate-900: #0f172a;
+
+  --th-white: #ffffff;
+
+  /* Semánticos — comunes a ambas familias */
+  --th-success-accent: #10b981;
+  --th-success-fg: #047857;
+  --th-success-surface: #ecfdf5;
+  --th-warning-accent: #f59e0b;
+  /* Bordes semánticos propios: `border-th-warning-accent/40` no genera CSS,
+     por el mismo motivo que `bg-th-surface/90` (ver arriba). */
+  --th-warning-border: #fcd34d;
+  --th-danger-border: #fca5a5;
+  --th-warning-fg: #92400e;
+  --th-warning-surface: #fffbeb;
+  --th-danger-accent: #dc2626;
+  --th-danger-fg: #991b1b;
+  --th-danger-surface: #fef2f2;
+
+  /* ---------------------------------------------------------------------
+     2. TIPOGRAFÍA
+     Escala del cuerpo de DESIGN.md (archivo maestro §5.4). En px para
+     conservar la equivalencia nominal exacta con la referencia; el proyecto
+     no fija un tamaño raíz propio, así que no hay conversión que preservar.
+     --------------------------------------------------------------------- */
+  --th-font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+
+  --th-text-headline-xl: 40px;
+  --th-leading-headline-xl: 48px;
+  --th-tracking-headline-xl: -0.03em;
+
+  --th-text-headline-lg: 32px;
+  --th-leading-headline-lg: 40px;
+  --th-tracking-headline-lg: -0.025em;
+
+  --th-text-headline-md: 24px;
+  --th-leading-headline-md: 32px;
+  --th-tracking-headline-md: -0.02em;
+
+  --th-text-headline-sm: 20px;
+  --th-leading-headline-sm: 28px;
+  --th-tracking-headline-sm: -0.015em;
+
+  --th-text-body-lg: 17px;
+  --th-leading-body-lg: 26px;
+  --th-tracking-body-lg: -0.01em;
+
+  --th-text-body-md: 15px;
+  --th-leading-body-md: 23px;
+
+  --th-text-body-sm: 13px;
+  --th-leading-body-sm: 19px;
+  --th-tracking-body-sm: 0.005em;
+
+  --th-text-label-lg: 14px;
+  --th-leading-label-lg: 20px;
+  --th-tracking-label-lg: -0.005em;
+
+  --th-text-label-md: 12px;
+  --th-leading-label-md: 16px;
+  --th-tracking-label-md: 0.01em;
+
+  --th-text-label-sm: 11px;
+  --th-leading-label-sm: 14px;
+  --th-tracking-label-sm: 0.03em;
+
+  /* ---------------------------------------------------------------------
+     3. LAYOUT
+     Anchos medidos en los propios HTML de referencia, no inventados.
+     --------------------------------------------------------------------- */
+  --th-sidebar-social: 288px; /* w-72 — Feed, Buscar, Radar, Perfiles */
+  --th-sidebar-luminous: 256px; /* w-64 — Configuración, Mensajes */
+  --th-sidebar-compact: 72px; /* rail compacto en tablet */
+  --th-topbar-h: 64px; /* h-16 en las 24 pantallas */
+  --th-bottomnav-h: 64px;
+
+  /* `xl:max-w-[700px]` es el valor literal de REF-FEED-01. El archivo
+     maestro §6.1 propone 680px como respaldo; la referencia manda. */
+  --th-feed-max: 700px;
+  --th-rail-w: 340px;
+  --th-msg-list-w: 340px;
+  --th-msg-context-w: 320px;
+
+  /* Ancho efectivo de la sidebar del shell activo. Cada variante lo
+     redefine; header y contenido se desplazan SIEMPRE con esta variable,
+     nunca con un left/padding suelto (archivo maestro §6.1). */
+  --th-sidebar-w: var(--th-sidebar-social);
+
+  /* ---------------------------------------------------------------------
+     4. ESPACIADO — múltiplos de 4px, nombres inequívocos
+     --------------------------------------------------------------------- */
+  --th-space-1: 4px;
+  --th-space-2: 8px;
+  --th-space-3: 12px;
+  --th-space-4: 16px;
+  --th-space-6: 24px;
+  --th-space-8: 32px;
+  --th-space-10: 40px;
+  --th-gutter: 24px;
+  --th-gutter-mobile: 16px;
+  --th-margin: 32px;
+  --th-margin-mobile: 16px;
+
+  /* ---------------------------------------------------------------------
+     5. RADIOS — por rol, no por valor suelto
+     `rounded-lg` vale 8px en los prototipos y 16px en DESIGN.md; se resuelve
+     por valor computado y se asigna un rol (archivo maestro §3.2).
+     --------------------------------------------------------------------- */
+  --th-radius-xs: 4px;
+  --th-radius-sm: 8px;
+  --th-radius-input: 12px;
+  --th-radius-card: 16px;
+  --th-radius-dialog: 24px;
+  --th-radius-pill: 9999px;
+
+  /* ---------------------------------------------------------------------
+     6. SOMBRAS — del cuerpo de DESIGN.md
+     --------------------------------------------------------------------- */
+  --th-shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.03),
+    0 1px 2px -1px rgb(15 23 42 / 0.02);
+  --th-shadow-hover: 0 10px 25px -5px rgb(15 23 42 / 0.05),
+    0 8px 10px -6px rgb(15 23 42 / 0.02);
+  --th-shadow-overlay: 0 20px 30px -10px rgb(15 23 42 / 0.08),
+    0 1px 3px rgb(15 23 42 / 0.05);
+  --th-shadow-focus-soft: 0 0 0 3px rgb(124 58 237 / 0.15);
+  --th-shadow-compose: 0 8px 20px -4px rgb(124 58 237 / 0.35);
+
+  /* ---------------------------------------------------------------------
+     7. CAPAS — escala central. Nunca z-index:999999 para tapar un bug.
+     --------------------------------------------------------------------- */
+  --th-z-content: 0;
+  --th-z-sticky: 10;
+  --th-z-nav: 20;
+  --th-z-backdrop: 30;
+  --th-z-modal: 40;
+  --th-z-toast: 50;
+
+  /* ---------------------------------------------------------------------
+     8. MOVIMIENTO — respaldo del archivo maestro §5.6
+     --------------------------------------------------------------------- */
+  --th-motion-feedback: 120ms;
+  --th-motion-control: 180ms;
+  --th-motion-overlay: 240ms;
+  --th-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ===========================================================================
+   9. ROLES SEMÁNTICOS POR VARIANTE DE SHELL
+   Mismos nombres de rol, distintos valores. Un componente escribe
+   `bg-th-surface` una sola vez y queda correcto en las dos familias.
+   =========================================================================== */
+
+/* Variante SOCIAL — Feed, Buscar, Videos, Cápsulas, Radar, Perfiles.
+   Canónica: REF-FEED-01, REF-SEARCH-01, REF-RADAR-01/02, REF-PROFILE-01/02/03 */
+:root,
+[data-th-shell="social"] {
+  --th-sidebar-w: var(--th-sidebar-social);
+
+  --th-bg: var(--th-slate-50);
+  --th-bg-subtle: var(--th-slate-100);
+  --th-surface: var(--th-white);
+  --th-surface-subtle: var(--th-slate-50);
+  --th-surface-raised: var(--th-slate-100);
+  /* Superficie translúcida para barras fijas con desenfoque.
+     NO se puede escribir `bg-th-surface/90`: Tailwind no sabe aplicar un
+     modificador de opacidad sobre un color que es `var(--x)` con un hex
+     dentro, y la clase se descarta en silencio (no falla el build). Por eso
+     la translucidez es un token propio. */
+  --th-surface-translucent: rgb(255 255 255 / 0.9);
+
+  --th-fg: var(--th-slate-900);
+  --th-fg-strong: var(--th-slate-900);
+  --th-fg-muted: var(--th-slate-500);
+  --th-fg-subtle: var(--th-slate-400);
+  --th-fg-inverse: var(--th-white);
+
+  --th-border: var(--th-slate-200);
+  --th-border-subtle: var(--th-slate-100);
+  --th-border-strong: var(--th-slate-300);
+
+  /* El Feed sobrescribe `primary` a #7C3AED y usa purple-700 como hover.
+     Se reproduce tal cual, no se sustituye por un violeta global. */
+  --th-brand: var(--th-violet-500);
+  --th-brand-hover: var(--th-violet-700);
+  --th-brand-fg: var(--th-violet-700);
+  --th-brand-soft: var(--th-violet-50);
+  --th-brand-soft-strong: var(--th-violet-100);
+  --th-on-brand: var(--th-white);
+}
+
+/* Variante LUMINOUS — Configuración y Mensajes.
+   Canónica: REF-SET-01..08/12, REF-MSG-01/02/04/05 */
+[data-th-shell="settings"],
+[data-th-shell="messages"] {
+  --th-sidebar-w: var(--th-sidebar-luminous);
+
+  --th-bg: var(--th-lum-bg);
+  --th-bg-subtle: var(--th-lum-low);
+  --th-surface: var(--th-white);
+  --th-surface-subtle: var(--th-lum-low);
+  --th-surface-raised: var(--th-lum-container);
+  --th-surface-translucent: rgb(255 255 255 / 0.9);
+
+  --th-fg: var(--th-lum-fg);
+  --th-fg-strong: var(--th-lum-fg);
+  --th-fg-muted: var(--th-lum-fg-variant);
+  --th-fg-subtle: var(--th-lum-outline);
+  --th-fg-inverse: var(--th-white);
+
+  --th-border: var(--th-lum-outline-variant);
+  --th-border-subtle: var(--th-lum-high);
+  --th-border-strong: var(--th-lum-outline);
+
+  --th-brand: var(--th-violet-deep);
+  --th-brand-hover: var(--th-violet-500);
+  --th-brand-fg: var(--th-violet-deep);
+  --th-brand-soft: var(--th-lum-low);
+  --th-brand-soft-strong: var(--th-violet-soft);
+  --th-on-brand: var(--th-white);
+}
+
+/* ===========================================================================
+   9.1 VARIANTES OSCURAS
+   El oscuro es el modo de origen de THERS (`shared/hooks/useTheme.js`,
+   `.dark` en <html>): Login/Register ya usan #0f0f11/#18181b/#27272A fijos
+   (tailwind.config.js, tokens canvas/surface/line). Se reutilizan esos
+   mismos valores acá en vez de inventar una segunda paleta oscura -- la
+   identidad oscura de THERS ya estaba decidida, este bloque solo la
+   conecta con los roles semánticos del shell nuevo. Sin esto, alternar el
+   tema no tenía ningún efecto sobre Feed/Perfil/Buscar/Configuración: solo
+   existían los valores de :root de arriba, que son siempre claros.
+   =========================================================================== */
+.dark,
+.dark [data-th-shell="social"] {
+  --th-bg: #0f0f11;
+  --th-bg-subtle: #18181b;
+  --th-surface: #18181b;
+  --th-surface-subtle: #202024;
+  --th-surface-raised: #27272a;
+  --th-surface-translucent: rgb(24 24 27 / 0.9);
+
+  --th-fg: #ffffff;
+  --th-fg-strong: #ffffff;
+  --th-fg-muted: #9ca3af;
+  --th-fg-subtle: #71717a;
+  --th-fg-inverse: #14141a;
+
+  --th-border: #27272a;
+  --th-border-subtle: #1f1f23;
+  --th-border-strong: #3f3f46;
+
+  --th-brand: var(--th-violet-500);
+  --th-brand-hover: var(--th-violet-700);
+  /* violet-dim = "inverse-primary" de DESIGN.md -- pensado para texto de
+     marca sobre superficies oscuras, no el violet-700 del modo claro. */
+  --th-brand-fg: var(--th-violet-dim);
+  --th-brand-soft: rgb(124 58 237 / 0.16);
+  --th-brand-soft-strong: rgb(124 58 237 / 0.28);
+  --th-on-brand: #ffffff;
+
+  --th-success-surface: rgb(16 185 129 / 0.14);
+  --th-warning-surface: rgb(245 158 11 / 0.14);
+  --th-danger-surface: rgb(220 38 38 / 0.16);
+}
+
+/* Luminous oscuro (Configuración, Mensajes): mismo criterio, tono violeta en
+   vez del neutro de "social" para conservar la identidad que la distingue
+   en modo claro (--th-violet-deep como marca). */
+.dark [data-th-shell="settings"],
+.dark [data-th-shell="messages"] {
+  --th-bg: #17131f;
+  --th-bg-subtle: #1d1826;
+  --th-surface: #1d1826;
+  --th-surface-subtle: #241e30;
+  --th-surface-raised: #2c2438;
+  --th-surface-translucent: rgb(29 24 38 / 0.9);
+
+  --th-fg: #f4f1fb;
+  --th-fg-strong: #ffffff;
+  --th-fg-muted: #b6acc9;
+  --th-fg-subtle: #8b7fa3;
+  --th-fg-inverse: #131b2e;
+
+  --th-border: #362c46;
+  --th-border-subtle: #2c2438;
+  --th-border-strong: #453a58;
+
+  --th-brand: var(--th-violet-tint);
+  --th-brand-hover: var(--th-violet-500);
+  --th-brand-fg: var(--th-violet-dim);
+  --th-brand-soft: rgb(115 46 228 / 0.18);
+  --th-brand-soft-strong: rgb(115 46 228 / 0.3);
+  --th-on-brand: #ffffff;
+}
+
+/* ===========================================================================
+   10. BASE TIPOGRÁFICA E ICONOGRAFÍA
+   =========================================================================== */
+
+/* Material Symbols Outlined: los prototipos lo cargan como icon font. Se
+   mantiene la silueta original en vez de sustituirlo por otra librería
+   (archivo maestro §5.7). El <Icon> de shared/components lo envuelve. */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined", sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-variation-settings: "FILL" var(--th-icon-fill, 0), "wght" var(--th-icon-wght, 400),
+    "GRAD" 0, "opsz" 24;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* Scrollbar oculta SOLO donde la referencia la oculta (carruseles
+   horizontales). No es un reset global: el archivo maestro §6.4 prohíbe
+   copiar la regla `::-webkit-scrollbar{display:none}` global del prototipo. */
+.th-scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.th-scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* El halo violeta por sí solo no basta como indicador de foco (archivo
+   maestro §5.6): se acompaña de un outline con contraste propio. */
+.th-focus-ring:focus-visible {
+  outline: 2px solid var(--th-brand);
+  outline-offset: 2px;
+  box-shadow: var(--th-shadow-focus-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --th-motion-feedback: 0ms;
+    --th-motion-control: 0ms;
+    --th-motion-overlay: 0ms;
+  }
+}

@@ -11,12 +11,30 @@ from abc import ABC, abstractmethod
 
 class UserRepository(ABC):
     @abstractmethod
-    def create(self, name, username, email, phone, country_code, birth_date, password_hash):
+    def create(
+        self,
+        name,
+        username,
+        email,
+        phone=None,
+        country_code=None,
+        birth_date=None,
+        password_hash=None,
+        email_verified=False,
+        profile_completed=True,
+    ):
         """Crea un usuario y devuelve el registro creado (con `id` generado
         por PostgreSQL). Debe lanzar `EmailAlreadyExistsError` si el email ya
         existe, o `UsernameAlreadyExistsError` si el username ya existe
         (ambas en domain/auth/exceptions.py; columnas de perfil agregadas en
-        ADR-002 — docs/architecture/ADR-002-user-profile-fields.md)."""
+        ADR-002 — docs/architecture/ADR-002-user-profile-fields.md).
+
+        `phone`/`country_code`/`birth_date`/`password_hash` son opcionales
+        desde ADR-012-google-sign-in.md -- una cuenta creada vía Google no
+        los tiene. `register_use_case.py` (registro tradicional) siempre los
+        pasa (ya validados en la route); `google_auth_use_case.py` los deja
+        en `None` y pasa `email_verified=True`/`profile_completed=False`
+        explícitamente."""
 
     @abstractmethod
     def find_by_email(self, email):

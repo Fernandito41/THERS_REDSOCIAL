@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { IoInformationCircleOutline } from "react-icons/io5";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
@@ -9,21 +9,22 @@ import AuthCard from "../components/AuthCard";
 import PasswordField from "../components/PasswordField";
 import PasswordStrength from "../components/PasswordStrength";
 
-// POST /api/reset-password (ADR-009-password-reset-and-email-verification.md,
-// API_CONTRACT.md §4.8) -- endpoint público, sin JWT: la identidad la aporta
-// el token, no una sesión iniciada en este navegador. El token se lee de la
-// URL (?token=...) y viaja tal cual en el body -- nunca se decodifica ni se
-// valida su forma en el Frontend, eso es responsabilidad exclusiva del
-// backend. Los errores (token inválido/expirado/ya usado, contraseñas que no
-// coinciden, contraseña demasiado corta) llegan todos como 400 con el mismo
-// formato {"msg": "..."} que el resto de la API -- getErrorMessage() ya sabe
-// mostrar ese mensaje tal cual (shared/lib/api.js), sin necesitar un caso
-// especial por cada tipo de error del token (el backend deliberadamente no
-// distingue "expiró" de "ya se usó" de "no existe", ADR-009 §Seguridad).
+// POST /api/reset-password (ADR-010-password-reset-otp-flow.md,
+// API_CONTRACT.md §4.8, reemplaza el flujo de enlace de
+// ADR-009-password-reset-and-email-verification.md) -- endpoint público,
+// sin JWT: la identidad la aporta la autorización temporal, no una sesión
+// iniciada en este navegador. Esa autorización llega por router state desde
+// VerifyResetCode.jsx (nunca por la URL, a diferencia del ?token= anterior)
+// -- si falta (navegación directa a esta URL, o F5, que descarta el state
+// de React Router), no hay forma de continuar: se ofrece volver a pedir un
+// código nuevo. Los errores (autorización inválida/expirada/ya usada,
+// contraseñas que no coinciden, contraseña demasiado corta) llegan todos
+// como 400 con el mismo formato {"msg": "..."} que el resto de la API --
+// getErrorMessage() ya sabe mostrar ese mensaje tal cual (shared/lib/api.js).
 export default function ResetPassword() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get("token");
+  const location = useLocation();
+  const resetAuthorization = location.state?.resetAuthorization;
   const toast = useToast();
   const { t } = useLanguage();
 
@@ -48,7 +49,7 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isSubmitting || !token || !validate()) return;
+    if (isSubmitting || !resetAuthorization || !validate()) return;
 
     setIsSubmitting(true);
 
@@ -57,7 +58,7 @@ export default function ResetPassword() {
       // resto de llamadas a `api` en este proyecto (nunca se manda el
       // objeto `form` completo tal cual, aunque hoy coincida 1:1).
       await api.post("/reset-password", {
-        token,
+        reset_authorization: resetAuthorization,
         password: form.password,
         confirm_password: form.confirmPassword,
       });
@@ -69,7 +70,7 @@ export default function ResetPassword() {
     }
   };
 
-  if (!token) {
+  if (!resetAuthorization) {
     return (
       <AuthCard title={t("auth.resetPassword.invalidLinkTitle")} subtitle={t("auth.resetPassword.invalidLinkSubtitle")}>
         <p

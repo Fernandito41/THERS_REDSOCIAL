@@ -14,6 +14,7 @@ from flask_jwt_extended import decode_token
 
 from app.extensions import db
 from app.infrastructure.persistence.models import User
+from tests.conftest import mark_email_verified
 
 VALID_PASSWORD = "secretpass"
 
@@ -62,8 +63,14 @@ class TestRegister:
             assert user.password_hash.startswith("scrypt:")
 
     def test_register_duplicate_email_returns_409(self, client):
+        # Duplicado real (409) solo aplica a una cuenta YA verificada --
+        # ADR-011-mandatory-email-verification.md §Decisión: reintentar un
+        # registro nunca verificado actualiza la misma fila en vez de
+        # rechazarla (ver TestDuplicateAccountsAndRetry en
+        # tests/test_registration.py).
         first = _register(client, email="dup@example.com", username="dup_one")
         assert first.status_code == 201
+        mark_email_verified(first.get_json()["user"]["id"])
 
         second = _register(client, name="Otra Persona", email="dup@example.com", username="dup_two")
 
@@ -73,6 +80,7 @@ class TestRegister:
     def test_register_duplicate_email_is_case_insensitive(self, client):
         first = _register(client, email="ada@example.com")
         assert first.status_code == 201
+        mark_email_verified(first.get_json()["user"]["id"])
 
         second = _register(client, email="ADA@EXAMPLE.COM", username="ada_two")
 
@@ -154,7 +162,10 @@ class TestRegister:
 
 class TestLogin:
     def test_login_with_correct_credentials_returns_token(self, client):
-        _register(client, email="ada@example.com", password="secretpass", confirm_password="secretpass")
+        register_response = _register(
+            client, email="ada@example.com", password="secretpass", confirm_password="secretpass"
+        )
+        mark_email_verified(register_response.get_json()["user"]["id"])
 
         response = client.post(
             "/api/login", json={"email": "ada@example.com", "password": "secretpass"}
@@ -167,7 +178,10 @@ class TestLogin:
         assert body["user"]["username"] == "ada_lovelace"
 
     def test_login_email_is_case_insensitive(self, client):
-        _register(client, email="ada@example.com", password="secretpass", confirm_password="secretpass")
+        register_response = _register(
+            client, email="ada@example.com", password="secretpass", confirm_password="secretpass"
+        )
+        mark_email_verified(register_response.get_json()["user"]["id"])
 
         response = client.post(
             "/api/login", json={"email": "ADA@EXAMPLE.COM", "password": "secretpass"}
@@ -180,6 +194,7 @@ class TestLogin:
             client, email="ada@example.com", password="secretpass", confirm_password="secretpass"
         )
         user_id = register_response.get_json()["user"]["id"]
+        mark_email_verified(user_id)
 
         login_response = client.post(
             "/api/login", json={"email": "ada@example.com", "password": "secretpass"}

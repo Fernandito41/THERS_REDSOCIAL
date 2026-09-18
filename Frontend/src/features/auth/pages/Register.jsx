@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import {
   IoArrowBack,
@@ -17,6 +16,7 @@ import Spinner from "@shared/components/Spinner";
 import AmbientGlow from "@shared/components/AmbientGlow";
 import Logo from "@shared/components/Logo";
 import LanguageSwitcher from "@shared/components/LanguageSwitcher";
+import GoogleSignInButton from "../components/GoogleSignInButton";
 import TextField from "../components/TextField";
 import PasswordField from "../components/PasswordField";
 import PasswordStrength from "../components/PasswordStrength";
@@ -28,10 +28,30 @@ import { calculateAge, isValidISODate, MIN_AGE_YEARS } from "../lib/dateUtils";
 
 export default function Register() {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const { notice, notify } = useOAuthNotice();
   const toast = useToast();
   const { t } = useLanguage();
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+
+  // "Continuar con Google" desde Register (ADR-012-google-sign-in.md, FASE
+  // 17) -- es la misma operación que en Login.jsx (crea o vincula la
+  // cuenta y ya devuelve un JWT, `loginWithGoogle` cubre ambos casos): no
+  // hace falta un `register` distinto para este camino, Google nunca pasa
+  // por el formulario tradicional.
+  const handleGoogleCredential = async (credential) => {
+    if (isGoogleSubmitting) return;
+    setIsGoogleSubmitting(true);
+    try {
+      const googleUser = await loginWithGoogle(credential);
+      navigate(googleUser.profile_completed ? "/feed" : "/complete-profile");
+    } catch (error) {
+      console.error(error);
+      toast.error(getErrorMessage(error, t), { title: t("auth.register.toastErrorTitle") });
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  };
 
   const FEATURE_HIGHLIGHTS = [
     { title: t("auth.register.featureShareTitle"), detail: t("auth.register.featureShareDetail") },
@@ -113,8 +133,12 @@ export default function Register() {
         password: form.password,
         confirm_password: form.confirmPassword,
       });
+      // La cuenta se crea sin verificar (ADR-011-mandatory-email-verification.md
+      // §Decisión) -- todavía no puede iniciar sesión. `email` viaja por
+      // router state (nunca en la URL, mismo criterio que ForgotPassword.jsx)
+      // hacia la pantalla que pide el código de 6 dígitos enviado por correo.
       toast.success(t("auth.register.toastSuccess"));
-      navigate("/login");
+      navigate("/verify-registration-code", { state: { email: form.email.trim() } });
     } catch (error) {
       console.error(error);
       toast.error(getErrorMessage(error, t), { title: t("auth.register.toastErrorTitle") });
@@ -209,16 +233,13 @@ export default function Register() {
             </p>
           </header>
 
-          {/* GOOGLE / APPLE -- sin backend real todavía, ver useOAuthNotice */}
+          {/* GOOGLE -- ADR-012-google-sign-in.md, botón real. APPLE sigue sin
+              backend real, ver useOAuthNotice */}
           <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => notify("google")}
-              className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 active:scale-[0.99] transition"
-            >
-              <FcGoogle size={20} />
-              {t("auth.oauthGoogleRegister")}
-            </button>
+            <GoogleSignInButton
+              onCredential={handleGoogleCredential}
+              disabled={isGoogleSubmitting}
+            />
 
             <button
               type="button"
@@ -236,9 +257,9 @@ export default function Register() {
               className="flex items-start gap-1.5 text-xs text-muted-dark bg-black/30 rounded-lg px-3 py-2 mt-3 animate-float-in"
             >
               <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
-              {t("auth.oauthNoticeRegister", {
-                provider: notice === "google" ? t("auth.providerGoogle") : t("auth.providerApple"),
-              })}
+              {/* Solo Apple puede disparar este aviso ahora -- ver
+                  useOAuthNotice.js */}
+              {t("auth.oauthNoticeRegister", { provider: t("auth.providerApple") })}
             </p>
           )}
 

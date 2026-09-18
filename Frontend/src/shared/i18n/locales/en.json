@@ -27,11 +27,8 @@
   "auth": {
     "close": "Close",
     "or": "or",
-    "providerGoogle": "Google",
     "providerApple": "Apple",
-    "oauthGoogleRegister": "Sign up with Google",
     "oauthAppleRegister": "Sign up with Apple",
-    "oauthGoogleLogin": "Log in with Google",
     "oauthAppleLogin": "Log in with Apple",
     "oauthNoticeLogin": "{{provider}} isn't set up on THERS' backend yet — you can't log in that way for now.",
     "oauthNoticeRegister": "{{provider}} isn't set up on THERS' backend yet — you can't sign up that way for now.",
@@ -70,7 +67,8 @@
       "errorEmailRequired": "Enter your email address.",
       "errorEmailInvalid": "Enter a valid email address.",
       "errorPasswordRequired": "Enter your password.",
-      "toastErrorTitle": "We couldn't log you in"
+      "toastErrorTitle": "We couldn't log you in",
+      "emailNotVerified": "Your email hasn't been verified yet. Enter the code we sent you, or request a new one."
     },
 
     "register": {
@@ -122,23 +120,20 @@
     "forgotPassword": {
       "title": "Recover password",
       "subtitle": "We'll help you get back into your account.",
-      "intro": "Enter the email address linked to your account and we'll help you recover access.",
+      "intro": "Enter the email address linked to your account and we'll send you a verification code.",
       "emailLabel": "Email address",
-      "submit": "Send recovery link",
+      "submit": "Send code",
       "submitting": "Sending...",
       "backToLogin": "Back to log in",
       "errorEmailRequired": "Enter your email address.",
-      "errorEmailInvalid": "Enter a valid email address.",
-      "inProgressTitle": "Feature in progress",
-      "inProgressToast": "The Backend team is finishing the recovery email delivery. We can't send you the link yet, but this screen is already set up to connect as soon as it's available.",
-      "inProgressNotice": "Password recovery by email is still being built on THERS' Backend. We can't send you the link yet, but you'll soon be able to recover your account from here."
+      "errorEmailInvalid": "Enter a valid email address."
     },
 
     "resetPassword": {
-      "invalidLinkTitle": "Invalid link",
-      "invalidLinkSubtitle": "This recovery link isn't valid or has expired.",
-      "invalidLinkNotice": "Request a new link from the password recovery screen.",
-      "requestNewLink": "Request new link",
+      "invalidLinkTitle": "Invalid recovery session",
+      "invalidLinkSubtitle": "This authorization isn't valid or has expired.",
+      "invalidLinkNotice": "Request a new code from the password recovery screen.",
+      "requestNewLink": "Request new code",
       "successTitle": "Password updated",
       "successSubtitle": "You can now log in with your new password.",
       "successMessage": "Your password was updated successfully.",
@@ -153,6 +148,48 @@
       "errorPasswordRequired": "Enter a new password.",
       "errorPasswordTooShort": "Use at least 8 characters.",
       "errorConfirmPasswordMismatch": "Passwords don't match."
+    },
+
+    "verifyResetCode": {
+      "title": "Verify your code",
+      "subtitle": "We sent a 6-digit code to {{email}}",
+      "verify": "Verify",
+      "verifying": "Verifying...",
+      "noCodeReceived": "Didn't receive the code?",
+      "resend": "Resend code",
+      "resendIn": "Resend code in {{time}}",
+      "resendSuccess": "We sent you a new code.",
+      "missingEmailTitle": "Invalid recovery session",
+      "missingEmailSubtitle": "We couldn't find an active recovery request.",
+      "missingEmailNotice": "Request a new code from the password recovery screen."
+    },
+
+    "verifyRegistrationCode": {
+      "title": "Verify your email",
+      "subtitle": "We sent a 6-digit code to {{email}}",
+      "verify": "Verify",
+      "verifying": "Verifying...",
+      "verifySuccess": "Your email was verified successfully. You can log in now.",
+      "noCodeReceived": "Didn't receive the code?",
+      "resend": "Resend code",
+      "resendIn": "Resend code in {{time}}",
+      "resendSuccess": "We sent you a new code.",
+      "backToLogin": "Back to log in",
+      "missingEmailTitle": "Verification unavailable",
+      "missingEmailSubtitle": "We couldn't find a pending registration to verify.",
+      "missingEmailNotice": "Register again, or log in if you already verified your email before.",
+      "backToRegister": "Back to register"
+    },
+
+    "completeProfile": {
+      "title": "Complete your profile",
+      "subtitle": "We need a few more details to finish setting up your account.",
+      "usernamePlaceholder": "Choose your username",
+      "submit": "Complete account",
+      "submitting": "Saving...",
+      "toastSuccess": "Your profile is complete. Welcome to THERS!",
+      "toastErrorTitle": "We couldn't complete your profile",
+      "logoutAria": "Log out"
     },
 
     "passwordStrength": {

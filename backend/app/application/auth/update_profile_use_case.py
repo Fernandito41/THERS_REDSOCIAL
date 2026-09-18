@@ -10,6 +10,13 @@
 # - cooldown de 30 días entre cambios de username (domain/auth/username_policy.py).
 # No conoce Flask ni SQLAlchemy -- mismo patrón de inyección de repositorio
 # que register_use_case/login_use_case/get_current_user_use_case.
+#
+# ADR-012-google-sign-in.md: este mismo endpoint es, sin ningún cambio de
+# contrato, la pantalla "Complete your profile" de una cuenta creada vía
+# Google (`phone`/`country_code`/`birth_date` en `NULL`, `profile_completed
+# = false`) -- se reutiliza en vez de crear un endpoint nuevo. Cuando la
+# actualización deja los tres campos completos, `profile_completed` pasa a
+# `true` acá mismo, en la misma escritura (nunca se vuelve a `false`).
 
 from datetime import datetime, timezone
 
@@ -36,6 +43,13 @@ def update_profile(user_id, fields, user_repository, follow_repository):
             raise UsernameChangeNotAllowedError()
         else:
             update_fields["username_changed_at"] = datetime.now(timezone.utc)
+
+    if not user.profile_completed:
+        effective_phone = update_fields.get("phone", user.phone)
+        effective_country_code = update_fields.get("country_code", user.country_code)
+        effective_birth_date = update_fields.get("birth_date", user.birth_date)
+        if effective_phone and effective_country_code and effective_birth_date:
+            update_fields["profile_completed"] = True
 
     # followers_count/following_count (ADR-007) no cambian con este PATCH --
     # se recalculan igual en ambas salidas tempranas y en la final, para que

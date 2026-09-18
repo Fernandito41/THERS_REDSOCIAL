@@ -34,6 +34,15 @@ export function getErrorMessage(error, t) {
     return t("errors.invalidCredentials");
   }
 
+  if (status === 403) {
+    // Cubre, entre otros, POST /api/login con una cuenta todavía sin
+    // verificar (ADR-011-mandatory-email-verification.md) -- Login.jsx ya
+    // distingue ese caso específico por su cuerpo (`email_verified: false`)
+    // para redirigir a la pantalla de verificación en vez de mostrar este
+    // mensaje genérico, así que este branch solo cubre cualquier otro 403.
+    return (data && data.msg) || t("errors.unexpected");
+  }
+
   if (status === 409) {
     return (data && data.msg) || t("errors.emailInUse");
   }

@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.13 |
+| Versión | 0.16 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -29,6 +29,12 @@
 > **v0.10 — comentarios planos sobre posts, `comments` (`ADR-006-comments-minimal-model.md`):** la candidata combinada "Comentarios + Respuestas a comentarios" (§4.B › Interacciones) se resuelve **solo a medias** — pasa a **implementada** (§4.A, §5.4) únicamente su mitad plana: comentar un post, sin hilos de respuestas (`parent_comment_id` sigue sin ratificar). Nueva tabla `comments`: `post_id`/`author_id` (FKs a `posts`/`users`, ambas `ON DELETE CASCADE`), `content` (texto, máximo 1000 caracteres), con `updated_at`+trigger (mismo patrón de auditoría que `posts`, aunque sin edición todavía). Nuevo índice compuesto `ix_comments_post_id_created_at` (§8), justificado por `GET /api/posts/<id>/comments`. Tercera y cuarta relación real entre entidades (§6): `comments.post_id → posts.id`, `comments.author_id → users.id`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 93 pruebas).
 >
 > **v0.11 — seguir/dejar de seguir, `follows` (`ADR-007-follows-minimal-model.md`):** "Seguir, Dejar de seguir, Seguidores, Seguidos" (§4.B › Relaciones sociales) pasa de candidata objetivo a **implementada** (§4.A, §5.5). Nueva tabla `follows`: `follower_id`/`followed_id` (FKs a `users`, ambas `ON DELETE CASCADE`), `UNIQUE (follower_id, followed_id)` (`uq_follows_follower_followed`), **primera `CHECK` constraint del esquema** (`ck_follows_no_self_follow`: `follower_id <> followed_id`), sin `updated_at` (mismo criterio que `likes`). Primera relación auto-referencial (`users`↔`users`) del modelo. Nuevo índice `ix_follows_followed_id` (§8) — a diferencia de `likes`, sí hace falta un segundo índice porque `followers_count` filtra por la columna no líder de la `UNIQUE`. Quinta y sexta relación real entre entidades (§6): `follows.follower_id → users.id`, `follows.followed_id → users.id`. `users` gana `followers_count`/`following_count` calculados (no columnas propias) expuestos en `GET`/`PATCH /api/users/me`; `posts.author` gana `is_followed_by_me` calculado, expuesto en `GET`/`POST /api/posts`. El feed **sigue sin filtrar por seguidos** — deliberadamente fuera de este ADR (§No objetivos). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 124 pruebas).
+>
+> **v0.16 — "Continuar con Google" (`ADR-012-google-sign-in.md`):** "Login con Google" (§4.B › Autenticación y cuenta) pasa de `PENDIENTE DE DECISIÓN` a **implementada** (§4.A, §5.9) — nueva tabla `user_identities` (`user_id`, `provider`, `provider_subject`, `UNIQUE (provider, provider_subject)`), separada de `users` para no acoplar el esquema a un proveedor específico. `users` relaja `phone`/`country_code`/`birth_date`/`password_hash` a `NULLABLE` (Google no entrega los primeros tres; una cuenta Google-only no tiene contraseña local) y gana `profile_completed` (`BOOLEAN DEFAULT true`) — el registro tradicional sigue exigiendo esos campos igual que siempre a nivel de aplicación, así que nunca quedan en `NULL` para una cuenta creada así. Decimotercera relación del esquema: `user_identities.user_id → users.id`, `ON DELETE CASCADE`. Nuevos índices `uq_user_identities_provider_subject`/`ix_user_identities_user_id` (§8). Migración `b1e5d8a4f3c7` (altera `users`, crea `user_identities`; downgrade revierte ambos). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 242 pruebas).
+>
+> **v0.15 — verificación obligatoria de email al registrarse, por código OTP de 6 dígitos (`ADR-011-mandatory-email-verification.md`, reemplaza el modelo de enlace de v0.13 para esta entidad):** `email_verification_tokens` se reconstruye (no se duplica), mismo patrón que `password_reset_tokens` en v0.14 -- pierde `token_hash` (SHA-256), gana `code_hash` (scrypt), `attempts` (§5.8). Nuevo índice único **parcial** `uq_email_verification_tokens_active_user` (`user_id`, `WHERE used_at IS NULL`), reemplaza a `uq_email_verification_tokens_token_hash` de v0.13 — garantiza a nivel de motor que nunca hay más de un código activo por usuario. `password_reset_tokens` **no cambia** — sigue exactamente como en v0.14. Migración `a7d3f6c1e8b9` (recrea la tabla; downgrade restaura la forma de v0.13). Sin columnas de autorización temporal (a diferencia de `password_reset_tokens`) — verificar el código es la acción final, no hay un paso sensible posterior que proteger. Estructuralmente separada de `password_reset_tokens`: un código de una tabla nunca verifica el propósito de la otra (`ADR-011` §Decisión, purpose separation). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 212 pruebas).
+>
+> **v0.14 — recuperación de contraseña por código OTP de 6 dígitos (`ADR-010-password-reset-otp-flow.md`, reemplaza el modelo de enlace de v0.13 para esta entidad):** `password_reset_tokens` se reconstruye (no se duplica) -- pierde `token_hash` (SHA-256), gana `code_hash` (scrypt, mismo algoritmo que `password_hash`), `attempts`, `verified_at`, `reset_authorization_hash`/`_expires_at` (§5.7). Primer índice único **parcial** del esquema: `uq_password_reset_tokens_active_user` (`user_id`, `WHERE used_at IS NULL`) — garantiza a nivel de motor que nunca hay más de una solicitud activa por usuario, incluso ante dos "Reenviar código" simultáneos. `email_verification_tokens` **no cambia** — sigue exactamente como en v0.13. Migración `f4b8c92a1d67` (recrea la tabla; downgrade restaura la forma de v0.13). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 189 pruebas).
 >
 > **v0.13 — recuperación de contraseña y verificación de email (`ADR-009-password-reset-and-email-verification.md`):** "Verificación de correo, Recuperación de contraseña" (§4.B › Autenticación y cuenta) pasa de `PENDIENTE DE DECISIÓN` a **implementada** (§4.A, §5.7, §5.8) — se resuelve como tokens de un solo uso respaldados por tabla (la opción que esa misma sección ya anticipaba). `users` gana `email_verified` (`BOOLEAN`, `DEFAULT false`). Dos tablas nuevas: `password_reset_tokens` y `email_verification_tokens`, misma forma (`user_id`, `token_hash` — SHA-256 del token crudo, nunca el valor en claro —, `expires_at`, `used_at`, `created_at`), separadas porque su política (TTL de 30 min vs. 24 h, cooldown, invalidación al usarse) difiere. Novena y décima entidad del alcance objetivo del producto en pasar a ratificadas. Nuevos índices `ix_password_reset_tokens_user_id_created_at`/`ix_email_verification_tokens_user_id_created_at` (§8). Tres migraciones nuevas y consecutivas: `b8d4f2a917c3` (columna), `c1f6a83d2e59`/`d3a9c47b1f68` (tablas). Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 175 pruebas).
 >
@@ -119,8 +125,9 @@ Se distingue entre:
 | `comments` | **IMPLEMENTADA — v0.10** (ratificada por `ADR-006-comments-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts/<id>/comments`, agregada en `GET`/`POST /api/posts`) | Tercera entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su mitad plana. Modelo: `post_id`+`author_id` (FKs) y `content` (texto, máximo 1000 caracteres) — sin `parent_comment_id`, sin hilos de respuestas |
 | `follows` | **IMPLEMENTADA — v0.11** (ratificada por `ADR-007-follows-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/users/<id>/follow`, agregada en `GET`/`PATCH /api/users/me` y en `GET`/`POST /api/posts`) | Cuarta entidad de la capa objetivo (§4.B, "Relaciones sociales") en pasar a implementada. Modelo: `follower_id`+`followed_id` (FKs, `UNIQUE` compuesta, primera `CHECK` del esquema) — sin listar seguidores/seguidos, sin personalizar el feed |
 | `notifications` | **IMPLEMENTADA — v0.12** (ratificada por `ADR-008-notifications-minimal-model.md`; definición formal en §5; en uso real por `GET /api/notifications`/`PATCH /api/notifications/<id>/read`, generada como efecto secundario de `POST /api/posts/<id>/like`, `POST /api/posts/<id>/comments` y `POST /api/users/<id>/follow`) | Quinta entidad de la capa objetivo (§4.B, "Notificaciones") en pasar a implementada, solo para los tipos `like`/`comment`/`follow`. Modelo: `recipient_id`+`actor_id` (FKs a `users`), `type` (discriminador), `post_id` (FK a `posts`, nullable), `read_at` (nullable) — sin respuestas/menciones/mensajes, sin push/email, sin preferencias configurables |
-| `password_reset_tokens` | **IMPLEMENTADA — v0.13** (ratificada por `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/forgot-password`/`POST /api/reset-password`) | Sexta entidad de la capa objetivo (§4.B, "Autenticación y cuenta") en pasar a implementada. Modelo: `user_id` (FK a `users`), `token_hash` (SHA-256 del token crudo, `UNIQUE`), `expires_at`, `used_at` (nullable) — token de un solo uso, expira en 30 minutos, se invalida junto con cualquier otro pendiente al completar un reset exitoso |
-| `email_verification_tokens` | **IMPLEMENTADA — v0.13** (ratificada por `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/send-verification-email`/`POST /api/verify-email`) | Séptima entidad de la capa objetivo (§4.B, "Autenticación y cuenta") en pasar a implementada. Misma forma que `password_reset_tokens`, TTL de 24 horas en vez de 30 minutos |
+| `password_reset_tokens` | **IMPLEMENTADA — v0.14** (reescrita por `ADR-010-password-reset-otp-flow.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/forgot-password`/`POST /api/verify-reset-code`/`POST /api/reset-password`) | Sexta entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `verified_at` (nullable), `reset_authorization_hash`/`_expires_at` (nullable), `used_at` (nullable) — código de un solo uso (10 min), autorización temporal de propósito específico tras verificarlo (10 min), máximo 5 intentos, a lo sumo una solicitud activa por usuario (índice único parcial) |
+| `email_verification_tokens` | **IMPLEMENTADA — v0.15** (reescrita por `ADR-011-mandatory-email-verification.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/register`/`POST /api/verify-registration-code`/`POST /api/resend-registration-code`) | Séptima entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `used_at` (nullable) — código de un solo uso (10 min), máximo 5 intentos, a lo sumo un código activo por usuario (índice único parcial); sin columnas de autorización temporal, a diferencia de `password_reset_tokens` — verificar el código ya es la acción final |
+| `user_identities` | **IMPLEMENTADA — v0.16** (ratificada por `ADR-012-google-sign-in.md`; definición formal en §5.9; en uso real por `POST /api/auth/google`) | Octava entidad de la capa objetivo (§4.B, "Autenticación y cuenta", candidata `oauth_accounts`). Modelo: `user_id` (FK a `users`), `provider` (string libre, `"google"` hoy), `provider_subject` (el claim `sub`, único junto con `provider`) — un usuario puede tener varias identidades vinculadas a la vez (account linking); preparada para Apple/Microsoft sin otra migración de `users` |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -141,7 +148,7 @@ Estados usados en esta capa:
 | Requisito funcional | Forma candidata de persistencia | Estado | Por qué aún requiere decisión |
 |---|---|---|---|
 | Registro, Login, Cerrar sesión | Operan sobre `users` (ya ratificada) — son **comportamientos**, no tablas nuevas | OBJETIVO | El registro persistente reemplaza la validación hardcodeada; depende de implementar `users` |
-| Login con Google | Entidad `oauth_accounts` **o** columnas de proveedor en `users` | PENDIENTE DE DECISIÓN | La forma (entidad separada vs columnas) no está decidida |
+| Login con Google | ~~Entidad `oauth_accounts` **o** columnas de proveedor en `users`~~ — **resuelto en v0.16** (`ADR-012-google-sign-in.md`, ver §4.A/§5.9): entidad separada, `user_identities` | IMPLEMENTADA | — |
 | Verificación de correo, Recuperación de contraseña | ~~Tabla(s) de tokens de un solo uso~~ — **resuelto en v0.13** (`ADR-009-password-reset-and-email-verification.md`, ver §4.A/§5.7/§5.8): dos tablas, `password_reset_tokens`/`email_verification_tokens` | IMPLEMENTADA | — |
 | Cambio de contraseña | Comportamiento sobre `users`; historial opcional (ver Seguridad) | PENDIENTE DE DECISIÓN | Persistir historial es opcional y depende de requisitos de auditoría |
 | Gestión / desactivación / eliminación de cuenta | Columna de estado (`status`/`deleted_at`, borrado lógico) **vs** borrado físico | PENDIENTE DE DECISIÓN | La política de borrado (lógico vs físico) no está decidida |
@@ -243,12 +250,13 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 | `id` | **UUID** | No | Clave primaria. `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` — el valor se genera **en PostgreSQL** (`gen_random_uuid()`, función nativa desde PostgreSQL 13, no requiere `pgcrypto`/`uuid-ossp`), no en Python. Implementado en `app/infrastructure/persistence/models.py` (`sqlalchemy.dialects.postgresql.UUID(as_uuid=True)`, `server_default=text("gen_random_uuid()")`) y en la migración `a1b2c3d4e5f6_create_users_table.py` |
 | `name` | `VARCHAR(120)` | No | Campo `name` recolectado en `Register.jsx`; devuelto por el backend |
 | `username` | `VARCHAR(30)`, **UNIQUE** (`uq_users_username`) | No | **v0.5 (`ADR-002`).** Campo `username` recolectado en `Register.jsx`; formato `^[a-zA-Z0-9_]{3,20}$` validado en `domain/auth/validators.py`. A diferencia de `email`, **no** usa `CITEXT` — comparación case-sensitive, decisión explícita (`ADR-002` §3): ningún flujo hoy (login sigue siendo por email) requiere case-insensitivity para username |
-| `phone` | `VARCHAR(20)` | No | **v0.5 (`ADR-002`).** Campo `phone` recolectado en `Register.jsx` (`PhoneField`); validación laxa de 7–15 dígitos tras limpiar separadores |
-| `country_code` | `VARCHAR(6)` | No | **v0.5 (`ADR-002`).** Campo `countryCode` recolectado en `Register.jsx` (`PhoneField`, p. ej. `+503`); formato `^\+[1-9]\d{0,3}$` |
-| `birth_date` | `DATE` | No | **v0.5 (`ADR-002`).** Campo `birthDate` recolectado en `Register.jsx` (`BirthDateField`, ISO `yyyy-mm-dd`); edad mínima 13 años validada en el backend (mismo placeholder que ya usaba el Frontend, `dateUtils.js` `MIN_AGE_YEARS`) |
-| `password_hash` | `TEXT` | No | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11) |
-| `username_changed_at` | `TIMESTAMPTZ` | **Sí** | **v0.6 (`ADR-003`).** Marca de tiempo del último cambio de `username` vía `PATCH /api/users/me`; `NULL` significa "nunca cambió su username". Sostiene la regla de cooldown de 30 días (`domain/auth/username_policy.py`) — no se reutiliza `updated_at` porque esa cambia con cualquier campo, no solo con `username`. Nunca se expone en la API pública (`API_CONTRACT.md` §5) |
-| `email_verified` | `BOOLEAN`, `DEFAULT false` | No | **v0.13 (`ADR-009-password-reset-and-email-verification.md`).** `false` en toda cuenta hasta completar `POST /api/verify-email` — sin backfill posible para cuentas creadas antes de esta migración. Solo esa ruta puede escribirla; nunca se acepta desde ningún body (`PATCH /api/users/me` no la incluye en su whitelist) |
+| `phone` | `VARCHAR(20)` | **Sí** desde v0.16 | **v0.5 (`ADR-002`).** Campo `phone` recolectado en `Register.jsx` (`PhoneField`); validación laxa de 7–15 dígitos tras limpiar separadores. **v0.16 (`ADR-012-google-sign-in.md`):** pasa a nullable — Google no lo entrega; el registro tradicional sigue exigiéndolo siempre a nivel de route, así que nunca queda en `NULL` para una cuenta creada así |
+| `country_code` | `VARCHAR(6)` | **Sí** desde v0.16 | **v0.5 (`ADR-002`).** Campo `countryCode` recolectado en `Register.jsx` (`PhoneField`, p. ej. `+503`); formato `^\+[1-9]\d{0,3}$`. **v0.16:** mismo motivo que `phone` — nullable, Google no lo entrega |
+| `birth_date` | `DATE` | **Sí** desde v0.16 | **v0.5 (`ADR-002`).** Campo `birthDate` recolectado en `Register.jsx` (`BirthDateField`, ISO `yyyy-mm-dd`); edad mínima 13 años validada en el backend (mismo placeholder que ya usaba el Frontend, `dateUtils.js` `MIN_AGE_YEARS`). **v0.16:** mismo motivo — nullable, Google no lo entrega |
+| `password_hash` | `TEXT` | **Sí** desde v0.16 | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11). **v0.16 (`ADR-012`):** pasa a nullable — una cuenta creada exclusivamente vía "Continuar con Google" no tiene contraseña local; `NULL` significa exactamente eso, nunca un valor inventado |
+| `username_changed_at` | `TIMESTAMPTZ` | **Sí** | **v0.6 (`ADR-003`).** Marca de tiempo del último cambio de `username` vía `PATCH /api/users/me`; `NULL` significa "nunca cambió su username". Sostiene la regla de cooldown de 30 días (`domain/auth/username_policy.py`) — no se reutiliza `updated_at` porque esa cambia con cualquier campo, no solo con `username`. Nunca se expone en la API pública (`API_CONTRACT.md` §5). **v0.16:** el username provisorio de una cuenta Google nunca toca esta columna (se queda en `NULL`) hasta que la persona elige uno propio en "Complete your profile" — esa primera elección real nunca choca con el cooldown |
+| `email_verified` | `BOOLEAN`, `DEFAULT false` | No | **v0.13 (`ADR-009-password-reset-and-email-verification.md`).** `false` en toda cuenta hasta completar la verificación (reescrito a OTP en `ADR-011`, v0.15). **v0.16 (`ADR-012`):** una cuenta creada vía Google nace en `true` directamente (la garantía de Google reemplaza al OTP); también puede pasar de `false` a `true` al vincular Google con una cuenta tradicional nunca verificada (account linking, `ADR-012` §Decisión) |
+| `profile_completed` | `BOOLEAN`, `DEFAULT true` | No | **v0.16 (`ADR-012-google-sign-in.md`).** `true` para toda cuenta existente antes de esta migración y para todo registro tradicional (siempre exige `phone`/`country_code`/`birth_date`); una cuenta nueva vía Google nace en `false` hasta completar esos tres campos vía `PATCH /api/users/me`. Nunca vuelve a `false` una vez en `true` |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Convención de auditoría (§7); estándar para toda entidad |
 | `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7). Un trigger de PostgreSQL (`set_updated_at`/`trg_users_updated_at`, ver migración) la actualiza en cada `UPDATE` — funciona igual vía ORM o SQL directo, no depende de que el código de aplicación la toque |
 
@@ -256,12 +264,12 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 **Claves foráneas (FK).** Ninguna en esta versión — `users` no depende de otra entidad todavía.
 
-**Relaciones.** `posts.author_id → users.id` (v0.7, ver §5.2/§6) — `users` es la entidad referenciada, nunca al revés. Cuando existan más entidades sociales (`follows`, etc.), seguirán el mismo patrón.
+**Relaciones.** `posts.author_id → users.id` (v0.7, ver §5.2/§6) — `users` es la entidad referenciada, nunca al revés. `user_identities.user_id → users.id` (v0.16, ver §5.9/§6) — mismo patrón. Cuando existan más entidades sociales (`follows`, etc.), seguirán el mismo patrón.
 
 **Constraints relevantes**
 - `email` **UNIQUE** (case-insensitive, vía `CITEXT`) y **NOT NULL** — el login identifica al usuario por email; dos cuentas no pueden compartirlo, ni siquiera con distinto casing. (Justifica también el índice de §8.)
 - `name` **NOT NULL** — el formulario lo exige (`isValid` requiere `name.trim()`).
-- `password_hash` **NOT NULL**.
+- `password_hash` **NOT NULL hasta v0.15, nullable desde v0.16** (`ADR-012-google-sign-in.md`) — ver tabla de arriba.
 
 **`confirm_password`** se valida en la route (`interfaces/routes/auth_routes.py`, debe coincidir con `password`) y **nunca se persiste** — no existe como columna de `users`, ni siquiera transitoriamente.
 
@@ -432,69 +440,107 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 ### 5.7 `password_reset_tokens`
 
-> Séptima entidad con definición formal (capa 4.A), ratificada por `ADR-009-password-reset-and-email-verification.md` — resuelve "Recuperación de contraseña" de §4.B › Autenticación y cuenta como tokens de un solo uso respaldados por tabla, la opción que esa misma sección ya anticipaba.
+> Séptima entidad con definición formal (capa 4.A). Ratificada originalmente por `ADR-009-password-reset-and-email-verification.md` (v0.13, flujo de enlace); **reconstruida** por `ADR-010-password-reset-otp-flow.md` (v0.14, flujo de código OTP) — la entidad es la misma, su modelo cambió por completo. Una sola fila cubre las tres etapas del ciclo de vida de una solicitud: creada (código emitido) → verificada (código correcto, autorización emitida) → usada (contraseña cambiada) — no hay una tabla por etapa (`ADR-010` §Decisión).
 
-**Propósito.** Un token de un solo uso que permite a un usuario establecer una nueva contraseña sin estar autenticado, emitido por `POST /api/forgot-password` y consumido por `POST /api/reset-password`.
+**Propósito.** Una solicitud de recuperación de contraseña: primero un código de 6 dígitos que el usuario recibe por correo y transcribe de vuelta (`POST /api/forgot-password` → `POST /api/verify-reset-code`), después la autorización temporal que esa verificación emite para el paso final (`POST /api/reset-password`).
 
 **Atributos principales**
 
 | Columna | Tipo (conceptual) | Nulo | Justificación / origen |
 |---|---|---|---|
 | `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` — mismo patrón que el resto de entidades |
-| `user_id` | **UUID**, FK → `users.id` | No | Dueño del token |
-| `token_hash` | `VARCHAR(64)`, **UNIQUE** | No | SHA-256 hexadecimal (64 caracteres) del token crudo (`domain/auth/token_generator.py`) — el valor crudo (256 bits de entropía) nunca se persiste, solo viaja en el enlace del correo |
-| `expires_at` | `TIMESTAMPTZ` | No | 30 minutos desde su creación (`domain/auth/token_policy.PASSWORD_RESET_TOKEN_TTL_MINUTES`) |
-| `used_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = no usado. Se fija una sola vez al consumirse (`reset_password_use_case.py`), nunca se revierte |
-| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Sostiene el cooldown anti-spam de `POST /api/forgot-password` (`has_recent_unused_token`) |
+| `user_id` | **UUID**, FK → `users.id` | No | Dueño de la solicitud |
+| `code_hash` | **TEXT** | No | Hash **scrypt** (`domain/auth/auth_service.hash_password`, el mismo algoritmo que `users.password_hash`) del código de 6 dígitos — nunca SHA-256: con solo `10^6` combinaciones, un hash rápido no protege nada ante una tabla filtrada (`ADR-010` §Opciones consideradas). `TEXT`, no una longitud fija corta: el formato de salida de scrypt no la tiene |
+| `attempts` | **INTEGER**, `DEFAULT 0` | No | Intentos de verificación fallidos contra esta solicitud (`ADR-010` §Seguridad) |
+| `expires_at` | `TIMESTAMPTZ` | No | Vigencia del código en sí — 10 minutos desde su creación (`domain/auth/token_policy.PASSWORD_RESET_CODE_TTL_MINUTES`) |
+| `verified_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = código todavía no verificado correctamente. Se fija una sola vez, junto con la autorización |
+| `reset_authorization_hash` | `VARCHAR(64)` | **Sí** | SHA-256 (`domain/auth/token_generator.hash_token`) de la autorización temporal emitida al verificar el código — a diferencia de `code_hash`, esta sí es alta entropía (256 bits), mismo criterio de hash rápido que ya usaba el token de enlace de v0.13 |
+| `reset_authorization_expires_at` | `TIMESTAMPTZ` | **Sí** | Vigencia de la autorización — 10 minutos desde la verificación (`PASSWORD_RESET_AUTHORIZATION_TTL_MINUTES`) |
+| `used_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = la contraseña todavía no se cambió con esta solicitud. Se fija una sola vez al consumirse (`reset_password_use_case.py`), nunca se revierte |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Sostiene el cooldown anti-spam de `POST /api/forgot-password`/"Reenviar código" (`has_recent_unused_code`) |
 
-**Sin `updated_at`.** Mismo criterio que `likes`/`follows`/`notifications`: un token se crea o se marca usado, nunca se edita de otro modo.
+**Sin `updated_at`.** Mismo criterio que `likes`/`follows`/`notifications`: una solicitud avanza de etapa (creada → verificada → usada) mediante columnas propias, nunca se "edita" en el sentido de un `PATCH` genérico.
 
 **Clave primaria (PK).** `id`.
 
 **Claves foráneas (FK).** `user_id → users.id`, `ON DELETE CASCADE` — mismo placeholder que el resto de entidades.
 
-**Relaciones.** `users (1) ←→ (N) password_reset_tokens` — un usuario puede tener varios tokens de recuperación a lo largo del tiempo (uno por cada `POST /api/forgot-password` fuera de cooldown).
+**Relaciones.** `users (1) ←→ (N) password_reset_tokens` — un usuario puede tener varias solicitudes a lo largo del tiempo (nunca más de una **activa** a la vez, ver constraint de abajo).
 
 **Constraints relevantes**
-- `user_id`/`token_hash`/`expires_at` **NOT NULL**.
-- `UNIQUE (token_hash)` (`uq_password_reset_tokens_token_hash`) — defensa en profundidad; una colisión con 256 bits de entropía es estadísticamente imposible, mismo criterio que justificó `uq_likes_post_user` (ADR-005).
-- **Sin `CHECK` de invalidación cruzada** — que un reset exitoso invalide otros tokens pendientes del mismo usuario (`invalidate_all_for_user`) es una regla de aplicación (`reset_password_use_case.py`), no una restricción de esquema: no hay una condición expresable como `CHECK` sobre una sola fila que la capture.
+- `user_id`/`code_hash`/`expires_at` **NOT NULL**.
+- **`uq_password_reset_tokens_active_user`** — índice único **parcial**: `UNIQUE (user_id) WHERE used_at IS NULL`. **Primer índice parcial del esquema de THERS.** Garantiza a nivel de motor que nunca hay más de una solicitud activa por usuario, incluso ante dos "Reenviar código" simultáneos (`ADR-010` §Opciones consideradas — condición de carrera) — el repositorio (`infrastructure/persistence/repositories/password_reset_repository.py`) invalida la solicitud activa previa e inserta la nueva; si dos requests concurrentes chocan contra este índice, la que pierde la carrera reintenta (hasta 3 veces) en vez de fallar.
+- **Sin `UNIQUE` sobre `code_hash`/`reset_authorization_hash`** (a diferencia de `token_hash` en v0.13) — dos solicitudes distintas del mismo o de distintos usuarios pueden, en teoría, terminar con el mismo código de 6 dígitos (espacio de solo `10^6` valores); el hash con salado de scrypt ya produce salidas distintas igual, pero la unicidad no es una invariante de negocio real acá como sí lo era con un token de 256 bits.
 
-**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-009` §Decisiones pendientes): limpieza periódica de tokens vencidos.
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-010` §Decisiones pendientes): limpieza periódica de solicitudes vencidas.
 
 ---
 
 ### 5.8 `email_verification_tokens`
 
-> Octava entidad con definición formal (capa 4.A), ratificada por `ADR-009-password-reset-and-email-verification.md` — misma forma que `password_reset_tokens` (§5.7), tabla separada porque su política (TTL de 24 horas, quién puede pedirlos, qué pasa al usarlos) es propia.
+> Octava entidad con definición formal (capa 4.A). Ratificada originalmente por `ADR-009-password-reset-and-email-verification.md` (v0.13, flujo de enlace, sin cambios en v0.14 — solo `password_reset_tokens`, §5.7, se reconstruyó entonces); **reconstruida** por `ADR-011-mandatory-email-verification.md` (v0.15, flujo de código OTP de 6 dígitos, mismo patrón que §5.7) — la entidad es la misma, su modelo cambió por completo. A diferencia de `password_reset_tokens`, verificar el código **es** la acción final: no hay columnas de autorización temporal, el propio acierto ya marca `users.email_verified = true`.
 
-**Propósito.** Un token de un solo uso que confirma que un usuario autenticado tiene acceso real a la dirección de correo de su cuenta, emitido por `POST /api/send-verification-email` y consumido por `POST /api/verify-email`.
+**Propósito.** Un código de verificación de 6 dígitos que confirma que quien se registró controla de verdad la dirección de correo indicada, emitido automáticamente por `POST /api/register` (y reenviado por `POST /api/resend-registration-code`) y consumido por `POST /api/verify-registration-code`.
 
 **Atributos principales**
 
 | Columna | Tipo (conceptual) | Nulo | Justificación / origen |
 |---|---|---|---|
-| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` |
-| `user_id` | **UUID**, FK → `users.id` | No | Dueño del token |
-| `token_hash` | `VARCHAR(64)`, **UNIQUE** | No | SHA-256 del token crudo — mismo criterio que `password_reset_tokens.token_hash` |
-| `expires_at` | `TIMESTAMPTZ` | No | 24 horas desde su creación (`domain/auth/token_policy.EMAIL_VERIFICATION_TOKEN_TTL_HOURS`) — más largo que el de recuperación porque verificar el email no es una acción sensible en sí misma |
-| `used_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = no usado |
-| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Sostiene el cooldown anti-spam de `POST /api/send-verification-email` |
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` — mismo patrón que el resto de entidades |
+| `user_id` | **UUID**, FK → `users.id` | No | Dueño del código |
+| `code_hash` | **TEXT** | No | Hash **scrypt** (`domain/auth/auth_service.hash_password`, mismo algoritmo que `users.password_hash` y que `password_reset_tokens.code_hash`) del código de 6 dígitos — nunca SHA-256, mismo motivo que §5.7 (`10^6` combinaciones, un hash rápido no protege nada ante una tabla filtrada) |
+| `attempts` | **INTEGER**, `DEFAULT 0` | No | Intentos de verificación fallidos contra este código (`ADR-011` §Seguridad) |
+| `expires_at` | `TIMESTAMPTZ` | No | Vigencia del código — 10 minutos desde su creación (`domain/auth/token_policy.REGISTRATION_CODE_TTL_MINUTES`) |
+| `used_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = el código todavía no se verificó correctamente. Se fija una sola vez al verificarse (`verify_registration_code_use_case.py`), nunca se revierte |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Sostiene el cooldown anti-spam de `POST /api/register`/`POST /api/resend-registration-code` (`has_recent_unused_code`) |
 
-**Sin `updated_at`.** Mismo criterio que `password_reset_tokens`.
+**Sin `updated_at`.** Mismo criterio que `password_reset_tokens` (§5.7).
 
 **Clave primaria (PK).** `id`.
 
 **Claves foráneas (FK).** `user_id → users.id`, `ON DELETE CASCADE`.
 
-**Relaciones.** `users (1) ←→ (N) email_verification_tokens`.
+**Relaciones.** `users (1) ←→ (N) email_verification_tokens` — un usuario puede tener varios códigos a lo largo del tiempo (nunca más de uno **activo** a la vez, ver constraint de abajo); incluye los reintentos de registro sobre una cuenta nunca verificada (`ADR-011` §Decisión, Estrategia A).
 
 **Constraints relevantes**
-- `user_id`/`token_hash`/`expires_at` **NOT NULL**.
-- `UNIQUE (token_hash)` (`uq_email_verification_tokens_token_hash`) — mismo criterio que `password_reset_tokens`.
-- **Sin invalidación cruzada al usarse** (a diferencia de `password_reset_tokens`) — verificar el email no vuelve inválido ningún otro token de verificación pendiente, no hay ningún efecto colateral de seguridad que proteger.
+- `user_id`/`code_hash`/`expires_at` **NOT NULL**.
+- **`uq_email_verification_tokens_active_user`** — índice único **parcial**: `UNIQUE (user_id) WHERE used_at IS NULL`. Mismo patrón que `uq_password_reset_tokens_active_user` (§5.7, primer índice parcial del esquema) — garantiza a nivel de motor que nunca hay más de un código activo por usuario, incluso ante dos "Reenviar código" simultáneos o un reintento de registro concurrente; el repositorio (`infrastructure/persistence/repositories/email_verification_repository.py`) invalida el código activo previo e inserta el nuevo, con el mismo reintento (hasta 3 veces) ante `IntegrityError` que `password_reset_repository.py`.
+- **Sin `UNIQUE` sobre `code_hash`** — mismo motivo que §5.7: espacio de solo `10^6` combinaciones, no es una invariante de negocio real.
+- **Tabla estructuralmente separada de `password_reset_tokens`** (`ADR-011` §Decisión, purpose separation) — no es un discriminador de tipo sobre una tabla compartida: un código de esta tabla nunca es una fila que `verify-reset-code` consulte, ni viceversa, así que el propósito de cada código queda separado por esquema, no solo por convención de aplicación.
 
-**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-009` §Decisiones pendientes): limpieza periódica de tokens vencidos.
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-011` §Decisiones pendientes): limpieza periódica de códigos vencidos/cuentas nunca verificadas.
+
+---
+
+### 5.9 `user_identities`
+
+> Novena entidad con definición formal (capa 4.A), ratificada por `ADR-012-google-sign-in.md`. Tabla separada de `users` (no columnas `google_sub`/`auth_provider` sueltas ahí) para que agregar Apple/Microsoft más adelante sea una fila nueva con otro `provider`, no una migración de esquema de `users`.
+
+**Propósito.** Vincula una identidad externa (hoy solo Google) a un usuario de THERS. Un usuario puede tener cero, una, o varias identidades vinculadas a la vez -- por ejemplo, password + Google al mismo tiempo (account linking, `ADR-012` §Decisión).
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` — mismo patrón que el resto de entidades |
+| `user_id` | **UUID**, FK → `users.id` | No | Usuario de THERS al que pertenece esta identidad |
+| `provider` | `VARCHAR(20)` | No | `"google"` hoy -- string libre, no `ENUM` de PostgreSQL, mismo criterio que `notifications.type` (`ADR-008`): discriminador validado en la aplicación |
+| `provider_subject` | `TEXT` | No | El claim `sub` del ID Token de Google (identificador estable de la cuenta) -- nunca el email, que en teoría podría cambiar sin que la cuenta de Google deje de ser la misma |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Auditoría de cuándo se vinculó esta identidad |
+
+**Sin `updated_at`.** Una identidad vinculada no se "edita" -- se crea o, en el futuro, se desvincula (funcionalidad todavía no implementada).
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `user_id → users.id`, `ON DELETE CASCADE`.
+
+**Relaciones.** `users (1) ←→ (N) user_identities` — un usuario puede tener varias identidades vinculadas; cada identidad pertenece a exactamente un usuario.
+
+**Constraints relevantes**
+- `user_id`/`provider`/`provider_subject` **NOT NULL**.
+- **`uq_user_identities_provider_subject`** — índice único: `UNIQUE (provider, provider_subject)`. Garantiza a nivel de motor que la misma cuenta de Google nunca termine vinculada a dos usuarios de THERS a la vez -- defensa de última línea contra la condición de carrera de dos requests simultáneas de `POST /api/auth/google` para una cuenta de Google que todavía no existía en THERS.
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-012` §Decisiones pendientes): endpoint para listar/desvincular identidades propias; soporte para Apple/Microsoft (la tabla ya está preparada, falta el adaptador correspondiente).
 
 ---
 
@@ -511,6 +557,8 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 **v0.12 — octava, novena y décima relación implementadas:** `notifications.recipient_id → users.id`, `notifications.actor_id → users.id` y `notifications.post_id → posts.id` (`ADR-008-notifications-minimal-model.md`, ver §5.6), todas `ON DELETE CASCADE`. Todo lo demás sigue siendo candidato (§4.B).
 
 **v0.13 — decimoprimera y decimosegunda relación implementadas:** `password_reset_tokens.user_id → users.id` (`ADR-009-password-reset-and-email-verification.md`, ver §5.7) y `email_verification_tokens.user_id → users.id` (ver §5.8), ambas `ON DELETE CASCADE`. Todo lo demás sigue siendo candidato (§4.B).
+
+**v0.16 — decimotercera relación implementada:** `user_identities.user_id → users.id` (`ADR-012-google-sign-in.md`, ver §5.9), `ON DELETE CASCADE`.
 
 Regla de diseño para cuando existan más entidades (para evitar decisiones improvisadas durante la implementación):
 - Las entidades dependientes referencian a `users` y/o `posts` (o a otras entidades ratificadas, cuando corresponda) con una FK.
@@ -549,10 +597,13 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 | `uq_follows_follower_followed` | `follows(follower_id, followed_id)`, `UNIQUE` | **v0.11 (`ADR-007`).** Impone la regla de negocio (no seguir dos veces al mismo usuario) y cubre `following_count`/`POST .../follow` por ser `follower_id` su columna líder. |
 | `ix_follows_followed_id` | `follows(followed_id)` | **v0.11 (`ADR-007`).** `followers_count` y "¿me sigue esta persona?" filtran por `followed_id` — a diferencia de `likes`, esta *no* es la columna líder de la `UNIQUE` de arriba, así que necesita su propio índice o escanearía la tabla completa. |
 | `ix_notifications_recipient_id_created_at` | `notifications(recipient_id, created_at)`, compuesto | **v0.12 (`ADR-008`).** `GET /api/notifications` filtra por `recipient_id` (siempre el usuario autenticado) y ordena por `created_at DESC` — la columna líder (`recipient_id`) cubre el filtro sin escanear la tabla completa, mismo patrón que `ix_comments_post_id_created_at`. |
-| `uq_password_reset_tokens_token_hash` | `password_reset_tokens(token_hash)`, `UNIQUE` | **v0.13 (`ADR-009`).** `find_valid_by_hash` busca por `token_hash` en cada `POST /api/reset-password` — la propia `UNIQUE` ya crea el índice que ese lookup necesita. |
-| `ix_password_reset_tokens_user_id_created_at` | `password_reset_tokens(user_id, created_at)`, compuesto | **v0.13 (`ADR-009`).** `has_recent_unused_token` filtra por `user_id` y compara `created_at` contra el cooldown — columna líder distinta de la de `token_hash`, necesita su propio índice. |
-| `uq_email_verification_tokens_token_hash` | `email_verification_tokens(token_hash)`, `UNIQUE` | **v0.13 (`ADR-009`).** Mismo criterio que `uq_password_reset_tokens_token_hash`, para `POST /api/verify-email`. |
-| `ix_email_verification_tokens_user_id_created_at` | `email_verification_tokens(user_id, created_at)`, compuesto | **v0.13 (`ADR-009`).** Mismo criterio que `ix_password_reset_tokens_user_id_created_at`, para el cooldown de `POST /api/send-verification-email`. |
+| `ix_password_reset_tokens_user_id_created_at` | `password_reset_tokens(user_id, created_at)`, compuesto | **v0.13 (`ADR-009`), sin cambios en v0.14.** `has_recent_unused_code` filtra por `user_id` y compara `created_at` contra el cooldown. |
+| `ix_password_reset_tokens_reset_authorization_hash` | `password_reset_tokens(reset_authorization_hash)` | **v0.14 (`ADR-010`).** `find_valid_by_reset_authorization_hash` busca por este hash en cada `POST /api/reset-password` — reemplaza al índice de `token_hash` de v0.13 (ese lookup ahora es sobre `reset_authorization_hash`, no sobre el código en sí, que ya no admite búsqueda directa por hash al estar salado con scrypt). |
+| `uq_password_reset_tokens_active_user` | `password_reset_tokens(user_id)`, `UNIQUE` **parcial** (`WHERE used_at IS NULL`) | **v0.14 (`ADR-010`).** Primer índice parcial del esquema — garantiza a lo sumo una solicitud activa por usuario, defensa de última línea contra la condición de carrera de dos "Reenviar código" simultáneos. |
+| `ix_email_verification_tokens_user_id_created_at` | `email_verification_tokens(user_id, created_at)`, compuesto | **v0.13 (`ADR-009`), sin cambios en v0.15.** Mismo criterio que `ix_password_reset_tokens_user_id_created_at`, para el cooldown de `POST /api/register`/`POST /api/resend-registration-code`. |
+| `uq_email_verification_tokens_active_user` | `email_verification_tokens(user_id)`, `UNIQUE` **parcial** (`WHERE used_at IS NULL`) | **v0.15 (`ADR-011`), reemplaza a `uq_email_verification_tokens_token_hash` de v0.13.** Mismo criterio que `uq_password_reset_tokens_active_user` — garantiza a lo sumo un código activo por usuario, defensa de última línea contra dos "Reenviar código" simultáneos o un reintento de registro concurrente. |
+| `uq_user_identities_provider_subject` | `user_identities(provider, provider_subject)`, `UNIQUE` | **v0.16 (`ADR-012`).** `POST /api/auth/google` busca por (`provider`, `provider_subject`) en cada intento -- garantiza además que la misma cuenta de Google nunca quede vinculada a dos usuarios de THERS a la vez. |
+| `ix_user_identities_user_id` | `user_identities(user_id)` | **v0.16 (`ADR-012`).** Lookup de "identidades de este usuario" -- no expuesto por ningún endpoint todavía, preparado para cuando lo esté (p. ej. listar/desvincular proveedores conectados). |
 
 **No se añaden más índices en esta versión.** La PK (`id`) de cada entidad ya está indexada por definición. Cualquier índice adicional (p. ej. `posts(author_id)`, si en el futuro se filtra el feed por autor) se justificará **cuando exista la consulta que lo pague**, no antes.
 
@@ -637,7 +688,7 @@ Decisiones que este documento **no toma** porque no están respaldadas por la do
 - **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo) — no aplica a `users` todavía, sigue pendiente para entidades futuras.
 
 ### Entidades candidatas del modelo objetivo
-La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. ~~`comments` (mitad plana)~~ — **resuelto en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4): solo comentar un post; sigue pendiente `parent_comment_id`/hilos de respuestas. ~~`follows`~~ — **resuelto en v0.11** (`ADR-007-follows-minimal-model.md`, ver §4.A/§5.5): seguir/dejar de seguir y contadores; sigue pendiente listar seguidores/seguidos. ~~`notifications`~~ — **resuelto en v0.12** (`ADR-008-notifications-minimal-model.md`, ver §4.A/§5.6): solo los tipos `like`/`comment`/`follow`; sigue pendiente todo lo demás (respuestas, menciones, mensajes, push/email, preferencias, "marcar todas como leídas", borrado). ~~`password_reset_tokens`/`email_verification_tokens`~~ — **resuelto en v0.13** (`ADR-009-password-reset-and-email-verification.md`, ver §4.A/§5.7/§5.8). Entre las candidatas que siguen sin ratificar: `oauth_accounts`, `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions` (forma general con tipos), `saves`, `mentions`, `hashtags` (+`post_hashtags`), `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `password_changes`, `security_events`.
+La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. ~~`comments` (mitad plana)~~ — **resuelto en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4): solo comentar un post; sigue pendiente `parent_comment_id`/hilos de respuestas. ~~`follows`~~ — **resuelto en v0.11** (`ADR-007-follows-minimal-model.md`, ver §4.A/§5.5): seguir/dejar de seguir y contadores; sigue pendiente listar seguidores/seguidos. ~~`notifications`~~ — **resuelto en v0.12** (`ADR-008-notifications-minimal-model.md`, ver §4.A/§5.6): solo los tipos `like`/`comment`/`follow`; sigue pendiente todo lo demás (respuestas, menciones, mensajes, push/email, preferencias, "marcar todas como leídas", borrado). ~~`password_reset_tokens`/`email_verification_tokens`~~ — **resuelto en v0.13** (`ADR-009-password-reset-and-email-verification.md`, ver §4.A/§5.7/§5.8); `password_reset_tokens` **reconstruida en v0.14** (`ADR-010-password-reset-otp-flow.md`, mismo §5.7 actualizado) y `email_verification_tokens` **reconstruida en v0.15** (`ADR-011-mandatory-email-verification.md`, mismo §5.8 actualizado), ambas para el mismo flujo de código OTP de 6 dígitos, sin afectar el estado "resuelto" de la candidata en sí. ~~`oauth_accounts`~~ — **resuelto en v0.16** (`ADR-012-google-sign-in.md`, ver §4.A/§5.9): entidad separada `user_identities`, preparada para más proveedores sin otra migración de `users`. Entre las candidatas que siguen sin ratificar: `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions` (forma general con tipos), `saves`, `mentions`, `hashtags` (+`post_hashtags`), `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `password_changes`, `security_events`.
 
 ### Operación
 - ~~Herramienta de migraciones~~ — **resuelto en código: Flask-Migrate/Alembic**, scaffolding en `backend/migrations/` (ver `BACKEND_ARCHITECTURE.md` §8); ratificación formal pendiente de confirmar. **Ubicación de la carpeta `database/`** sigue sin definir — las migraciones quedaron dentro de `backend/`, no en una carpeta `database/` separada.

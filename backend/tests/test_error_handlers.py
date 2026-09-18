@@ -14,6 +14,7 @@
 from app.infrastructure.persistence.repositories.user_repository import (
     SQLAlchemyUserRepository,
 )
+from tests.conftest import mark_email_verified
 
 VALID_PASSWORD = "secretpass"
 
@@ -34,7 +35,8 @@ def _register_payload(**overrides):
 
 
 def _register_and_login(client):
-    client.post("/api/register", json=_register_payload())
+    register_response = client.post("/api/register", json=_register_payload())
+    mark_email_verified(register_response.get_json()["user"]["id"])
     res = client.post(
         "/api/login",
         json={"email": "grace@example.com", "password": VALID_PASSWORD},

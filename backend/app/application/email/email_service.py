@@ -21,9 +21,9 @@
 # usuario no existe -- no es este servicio el que decide ocultar nada.
 
 from app.application.email.templates import (
-    email_verification_email,
     password_changed_email,
-    password_reset_email,
+    password_reset_code_email,
+    registration_code_email,
 )
 
 
@@ -31,14 +31,14 @@ class EmailService:
     def __init__(self, email_sender):
         self._email_sender = email_sender
 
-    def send_password_reset_email(self, to_email, name, reset_link, ttl_minutes):
-        subject, html = password_reset_email(name, reset_link, ttl_minutes)
+    def send_password_reset_code_email(self, to_email, name, code, ttl_minutes):
+        subject, html = password_reset_code_email(name, code, ttl_minutes)
         self._email_sender.send(to_email, subject, html)
 
     def send_password_changed_email(self, to_email, name):
         subject, html = password_changed_email(name)
         self._email_sender.send(to_email, subject, html)
 
-    def send_verification_email(self, to_email, name, verify_link, ttl_hours):
-        subject, html = email_verification_email(name, verify_link, ttl_hours)
+    def send_registration_code_email(self, to_email, name, code, ttl_minutes):
+        subject, html = registration_code_email(name, code, ttl_minutes)
         self._email_sender.send(to_email, subject, html)

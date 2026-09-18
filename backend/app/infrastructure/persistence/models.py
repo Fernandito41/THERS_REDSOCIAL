@@ -35,9 +35,16 @@ class User(db.Model):
     # ningún flujo (login sigue siendo por email) requiere comparación
     # case-insensitive de username -- ver ADR-002 §3.
     username = db.Column(db.String(30), unique=True, nullable=False)
-    phone = db.Column(db.String(20), nullable=False)
-    country_code = db.Column(db.String(6), nullable=False)
-    birth_date = db.Column(db.Date, nullable=False)
+
+    # Nullable desde ADR-012-google-sign-in.md: Google no entrega teléfono ni
+    # fecha de nacimiento -- una cuenta creada por "Continuar con Google" nace
+    # sin estos tres (ver `profile_completed` más abajo). El registro
+    # tradicional (`register_use_case.py`) sigue exigiéndolos siempre, a
+    # nivel de route (`is_valid_phone`/`parse_birth_date`), así que para esas
+    # cuentas nunca quedan en `NULL` en la práctica.
+    phone = db.Column(db.String(20), nullable=True)
+    country_code = db.Column(db.String(6), nullable=True)
+    birth_date = db.Column(db.Date, nullable=True)
 
     # Soporta la regla de cooldown de cambio de username (ADR-003 —
     # docs/architecture/ADR-003-profile-update-contract.md §Evolución
@@ -57,6 +64,19 @@ class User(db.Model):
         db.Boolean, nullable=False, server_default=text("false")
     )
 
+    # Onboarding con Google (ADR-012-google-sign-in.md §Decisión): una cuenta
+    # nueva creada por "Continuar con Google" recibe un JWT válido de
+    # inmediato (la identidad ya está autenticada), pero nace con
+    # `phone`/`country_code`/`birth_date` en `NULL` y un `username`
+    # provisorio -- `profile_completed=false` hasta que la persona los
+    # complete vía `PATCH /api/users/me` (reutilizado, ADR-003, sin endpoint
+    # nuevo). El registro tradicional los exige todos desde el inicio, así
+    # que siempre nace en `true` (`DEFAULT true` a nivel de columna). Nunca
+    # se vuelve a `false` una vez en `true`.
+    profile_completed = db.Column(
+        db.Boolean, nullable=False, server_default=text("true")
+    )
+
     # CITEXT (case-insensitive text, extensión de PostgreSQL) en vez de VARCHAR:
     # el UNIQUE sobre email ignora mayúsculas/minúsculas a nivel de motor, sin
     # normalizar manualmente en la capa de aplicación. Requiere
@@ -66,7 +86,20 @@ class User(db.Model):
     # TEXT en vez de VARCHAR(255): el hash (scrypt vía werkzeug.security) no
     # tiene una longitud máxima fija que valga la pena restringir a nivel de
     # esquema.
-    password_hash = db.Column(db.Text, nullable=False)
+    #
+    # Nullable desde ADR-012-google-sign-in.md: una cuenta creada
+    # exclusivamente vía "Continuar con Google" no tiene contraseña local --
+    # `NULL` significa exactamente eso, nunca una contraseña vacía/falsa ni
+    # un valor inventado (`"GOOGLE_USER"` u otro). `login_use_case.py` trata
+    # `password_hash IS NULL` como credenciales inválidas (mismo mensaje
+    # genérico que cualquier otro fallo de login, sin revelar que la cuenta
+    # es Google-only). El flujo de recuperación de contraseña
+    # (`forgot-password`/`verify-reset-code`/`reset-password`, ADR-010) deja
+    # de ser solo "recuperación" para esta cuenta -- se reutiliza tal cual
+    # para fijar la primera contraseña ("Set password"), sin cambios de
+    # código: un `UPDATE password_hash` funciona igual si el valor previo
+    # era `NULL`.
+    password_hash = db.Column(db.Text, nullable=True)
 
     # DEFAULT now() en la base de datos. `updated_at` se mantiene actualizado
     # por un trigger de PostgreSQL (set_updated_at, ver migración), no por
@@ -346,10 +379,11 @@ class PasswordResetToken(db.Model):
     __tablename__ = "password_reset_tokens"
 
     # Séptima entidad del alcance objetivo del producto en pasar a
-    # ratificada (ADR-009-password-reset-and-email-verification.md) -- token
-    # de un solo uso para POST /api/reset-password. Solo se persiste el hash
-    # SHA-256 del token (domain/auth/token_generator.py), nunca el valor
-    # crudo que viaja en el enlace del correo.
+    # ratificada (ADR-009-password-reset-and-email-verification.md),
+    # rediseñada en ADR-010-password-reset-otp-flow.md: pasa de un enlace
+    # con token en la URL a un código OTP de 6 dígitos. Una sola fila cubre
+    # las tres etapas del ciclo de vida (creada -> verificada -> usada) --
+    # no hay una tabla separada por etapa (ADR-010 §Decisión).
 
     id = db.Column(
         PG_UUID(as_uuid=True),
@@ -363,15 +397,39 @@ class PasswordResetToken(db.Model):
         nullable=False,
     )
 
-    # UNIQUE además de índice: colisión con 256 bits de entropía es
-    # estadísticamente imposible, pero la constraint es defensa en
-    # profundidad gratuita, mismo criterio que uq_likes_post_user (ADR-005).
-    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    # Hash del código OTP de 6 dígitos -- con `werkzeug.security.generate_password_hash`
+    # (scrypt, domain/auth/auth_service.hash_password), NO con el SHA-256
+    # rápido de `token_generator.hash_token()`: un código de solo 10^6
+    # combinaciones necesita un hash lento para que una fuga de esta tabla
+    # no permita fuerza bruta offline instantánea (ADR-010 §Seguridad). TEXT
+    # porque el formato de salida de scrypt (algoritmo$parámetros$salt$hash)
+    # no tiene una longitud fija corta como el SHA-256 hexadecimal anterior.
+    code_hash = db.Column(db.Text, nullable=False)
 
+    # Cuántas veces se probó un código incorrecto contra esta solicitud
+    # (ADR-010 §Seguridad) -- alcanzar PASSWORD_RESET_MAX_ATTEMPTS
+    # (domain/auth/token_policy.py) vuelve la solicitud inutilizable sin
+    # borrarla ni revelarlo distinto de un código simplemente incorrecto.
+    attempts = db.Column(db.Integer, nullable=False, server_default=text("0"))
+
+    # Vigencia del código OTP en sí (10 minutos desde su creación).
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
 
-    # NULL = no usado todavía. Se fija una sola vez al consumir el token
-    # (mark_used) -- nunca se revierte a NULL.
+    # NULL = el código todavía no se verificó correctamente. Se fija una
+    # sola vez, junto con la autorización temporal de abajo (mark_verified).
+    verified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Autorización temporal emitida tras verificar el código -- el token
+    # opaco que el Frontend usa en POST /api/reset-password sin tener que
+    # reintroducir el OTP. SHA-256 (token_generator.hash_token()): a
+    # diferencia del OTP, este token sí tiene 256 bits de entropía propios,
+    # el mismo criterio que ya usaba el token de enlace de ADR-009.
+    reset_authorization_hash = db.Column(db.String(64), nullable=True)
+    reset_authorization_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # NULL = la contraseña todavía no se cambió con esta solicitud. Se fija
+    # una sola vez, al completar POST /api/reset-password -- nunca se
+    # revierte a NULL.
     used_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     created_at = db.Column(
@@ -380,6 +438,21 @@ class PasswordResetToken(db.Model):
 
     __table_args__ = (
         db.Index("ix_password_reset_tokens_user_id_created_at", "user_id", "created_at"),
+        db.Index(
+            "ix_password_reset_tokens_reset_authorization_hash", "reset_authorization_hash"
+        ),
+        # Único índice parcial del esquema: a lo sumo una solicitud sin usar
+        # por usuario en todo momento (ADR-010 §Opciones consideradas) --
+        # última línea de defensa contra la condición de carrera de dos
+        # "Reenviar código" simultáneos (ver
+        # infrastructure/persistence/repositories/password_reset_repository.py
+        # para el manejo de la excepción que esto puede producir).
+        db.Index(
+            "uq_password_reset_tokens_active_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("used_at IS NULL"),
+        ),
     )
 
     def __repr__(self):
@@ -390,9 +463,14 @@ class EmailVerificationToken(db.Model):
     __tablename__ = "email_verification_tokens"
 
     # Octava entidad del alcance objetivo del producto en pasar a ratificada
-    # (ADR-009-password-reset-and-email-verification.md) -- misma forma que
-    # PasswordResetToken, tabla separada porque su política (TTL, cooldown de
-    # reenvío) es propia (ADR-009 §Opciones consideradas).
+    # (ADR-009-password-reset-and-email-verification.md), reconstruida por
+    # ADR-011-mandatory-email-verification.md: pasa de un enlace con token
+    # de 256 bits a un código OTP de 6 dígitos, mismo patrón que
+    # PasswordResetToken (ADR-010-password-reset-otp-flow.md) -- sin las
+    # columnas de autorización temporal, que ahí no hacen falta: verificar
+    # el email es de una sola etapa (el propio acierto ya marca
+    # `email_verified = true`, no hay una acción sensible posterior que
+    # proteger con un paso extra).
 
     id = db.Column(
         PG_UUID(as_uuid=True),
@@ -406,7 +484,15 @@ class EmailVerificationToken(db.Model):
         nullable=False,
     )
 
-    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    # Hash scrypt del código de 6 dígitos (domain/auth/auth_service.hash_password)
+    # -- no SHA-256: mismo motivo que PasswordResetToken.code_hash (ADR-010
+    # §Opciones consideradas), un código de solo 10^6 combinaciones necesita
+    # un hash lento para que una fuga de esta tabla no permita fuerza bruta
+    # offline instantánea.
+    code_hash = db.Column(db.Text, nullable=False)
+
+    # Intentos de verificación fallidos contra este código (ADR-011 §Seguridad).
+    attempts = db.Column(db.Integer, nullable=False, server_default=text("0"))
 
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
 
@@ -418,7 +504,77 @@ class EmailVerificationToken(db.Model):
 
     __table_args__ = (
         db.Index("ix_email_verification_tokens_user_id_created_at", "user_id", "created_at"),
+        # Único índice parcial de esta entidad (mismo patrón que
+        # PasswordResetToken, ADR-010 §Opciones consideradas): a lo sumo un
+        # código activo por usuario, defensa de última línea contra dos
+        # "Reenviar código" simultáneos.
+        db.Index(
+            "uq_email_verification_tokens_active_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("used_at IS NULL"),
+        ),
     )
 
     def __repr__(self):
         return f"<EmailVerificationToken user_id={self.user_id}>"
+
+
+class UserIdentity(db.Model):
+    __tablename__ = "user_identities"
+
+    # Novena entidad del alcance objetivo del producto en pasar a ratificada
+    # (ADR-012-google-sign-in.md). Vincula una identidad de un proveedor
+    # externo (hoy solo "google") a un usuario de THERS -- tabla separada
+    # de `users`, no columnas `google_sub`/`auth_provider` sueltas ahí, para
+    # que agregar Apple/Microsoft más adelante sea una fila nueva con otro
+    # `provider`, no una migración de esquema de `users` (§Opciones
+    # consideradas del ADR). Un usuario puede tener cero, una, o varias
+    # identidades vinculadas (p. ej. password + Google al mismo tiempo,
+    # FASE 9 de la tarea origen -- account linking).
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # String libre, no ENUM de PostgreSQL -- mismo criterio que
+    # `notifications.type` (ADR-008-notifications-minimal-model.md):
+    # discriminador validado en la aplicación (domain/auth/google_identity.py
+    # y quien lo llame), no a nivel de motor.
+    provider = db.Column(db.String(20), nullable=False)
+
+    # El claim `sub` del ID Token de Google (identificador estable de la
+    # cuenta, FASE 6 de la tarea origen) -- nunca el email, que en teoría
+    # podría cambiar sin que la cuenta de Google deje de ser la misma.
+    provider_subject = db.Column(db.Text, nullable=False)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    __table_args__ = (
+        # Garantiza a nivel de motor que la misma identidad externa
+        # (`provider`, `provider_subject`) nunca termine vinculada a dos
+        # usuarios de THERS a la vez -- defensa de última línea contra la
+        # condición de carrera de dos requests simultáneas de
+        # `POST /api/auth/google` para una cuenta de Google que todavía no
+        # existía en THERS (ADR-012 §Seguridad).
+        db.Index(
+            "uq_user_identities_provider_subject",
+            "provider",
+            "provider_subject",
+            unique=True,
+        ),
+        db.Index("ix_user_identities_user_id", "user_id"),
+    )
+
+    def __repr__(self):
+        return f"<UserIdentity provider={self.provider!r} user_id={self.user_id}>"

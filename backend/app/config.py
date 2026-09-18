@@ -140,3 +140,25 @@ class Config:
     # de contraseña/verificación de email que van dentro de esos correos
     # (nunca hardcodeados en la plantilla, ver application/email/templates.py).
     FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+
+    # "Continuar con Google" (ADR-012-google-sign-in.md). El Client ID NO es
+    # secreto -- es el mismo valor que el Frontend usa para inicializar
+    # Google Identity Services (VITE_GOOGLE_CLIENT_ID, ver
+    # Frontend/.env.example) -- acá se usa exclusivamente como el `aud`
+    # exacto que infrastructure/auth/google_id_token_verifier.py exige en
+    # cada ID Token, para nunca aceptar uno emitido para otra aplicación.
+    # Sin esta variable, POST /api/auth/google no puede verificar ningún
+    # token real -- no hay un fallback de desarrollo razonable (a
+    # diferencia de RESEND_API_KEY): no existe un "Client ID de prueba"
+    # universal, cada proyecto de Google Cloud tiene el suyo.
+    GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+
+    if not GOOGLE_CLIENT_ID:
+        print(
+            "[config] GOOGLE_CLIENT_ID no está definida; POST /api/auth/google "
+            "arrancará pero rechazará cualquier credencial real (ningún ID "
+            "Token válido puede tener `aud` vacía). Definir GOOGLE_CLIENT_ID "
+            "en backend/.env con el Client ID de OAuth creado en Google Cloud "
+            "Console para probar Google Sign-In de verdad.",
+            file=sys.stderr,
+        )

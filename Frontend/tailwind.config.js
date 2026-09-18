@@ -68,11 +68,139 @@ export default {
           600: "#d97706",
           700: "#b45309",
         },
+        // "th" = tokens del NUEVO diseño (src/shared/design/tokens.css).
+        // Este bloque NO redefine ningún valor: solo apunta a las variables
+        // CSS, que son la fuente de verdad única (THERS_IMPLEMENTACION_
+        // MAESTRA_CLAUDE.md §11). Los roles se resuelven según la variante
+        // de shell activa (data-th-shell), así que `bg-th-surface` es
+        // correcto tanto en Feed como en Configuración sin duplicar clases.
+        //
+        // Convive con los tokens anteriores (canvas/surface/ink/muted/line/
+        // pulse/ember): esos siguen en uso en auth, help, public y legal, y
+        // no se tocan.
+        th: {
+          bg: "var(--th-bg)",
+          "bg-subtle": "var(--th-bg-subtle)",
+          surface: "var(--th-surface)",
+          "surface-subtle": "var(--th-surface-subtle)",
+          "surface-raised": "var(--th-surface-raised)",
+          "surface-translucent": "var(--th-surface-translucent)",
+
+          fg: "var(--th-fg)",
+          "fg-strong": "var(--th-fg-strong)",
+          "fg-muted": "var(--th-fg-muted)",
+          "fg-subtle": "var(--th-fg-subtle)",
+          "fg-inverse": "var(--th-fg-inverse)",
+
+          border: "var(--th-border)",
+          "border-subtle": "var(--th-border-subtle)",
+          "border-strong": "var(--th-border-strong)",
+
+          brand: "var(--th-brand)",
+          "brand-hover": "var(--th-brand-hover)",
+          "brand-fg": "var(--th-brand-fg)",
+          "brand-soft": "var(--th-brand-soft)",
+          "brand-soft-strong": "var(--th-brand-soft-strong)",
+          "on-brand": "var(--th-on-brand)",
+
+          "success-accent": "var(--th-success-accent)",
+          "success-fg": "var(--th-success-fg)",
+          "success-surface": "var(--th-success-surface)",
+          "warning-accent": "var(--th-warning-accent)",
+          "warning-border": "var(--th-warning-border)",
+          "danger-border": "var(--th-danger-border)",
+          "warning-fg": "var(--th-warning-fg)",
+          "warning-surface": "var(--th-warning-surface)",
+          "danger-accent": "var(--th-danger-accent)",
+          "danger-fg": "var(--th-danger-fg)",
+          "danger-surface": "var(--th-danger-surface)",
+        },
+      },
+      fontFamily: {
+        // Plus Jakarta Sans está en las 24 referencias (manifest §2).
+        jakarta: "var(--th-font-sans)",
+      },
+      fontSize: {
+        // Escala del cuerpo de DESIGN.md (archivo maestro §5.4).
+        "headline-xl": [
+          "var(--th-text-headline-xl)",
+          { lineHeight: "var(--th-leading-headline-xl)", letterSpacing: "var(--th-tracking-headline-xl)", fontWeight: "800" },
+        ],
+        "headline-lg": [
+          "var(--th-text-headline-lg)",
+          { lineHeight: "var(--th-leading-headline-lg)", letterSpacing: "var(--th-tracking-headline-lg)", fontWeight: "700" },
+        ],
+        "headline-md": [
+          "var(--th-text-headline-md)",
+          { lineHeight: "var(--th-leading-headline-md)", letterSpacing: "var(--th-tracking-headline-md)", fontWeight: "700" },
+        ],
+        "headline-sm": [
+          "var(--th-text-headline-sm)",
+          { lineHeight: "var(--th-leading-headline-sm)", letterSpacing: "var(--th-tracking-headline-sm)", fontWeight: "600" },
+        ],
+        "body-lg": [
+          "var(--th-text-body-lg)",
+          { lineHeight: "var(--th-leading-body-lg)", letterSpacing: "var(--th-tracking-body-lg)" },
+        ],
+        "body-md": ["var(--th-text-body-md)", { lineHeight: "var(--th-leading-body-md)" }],
+        "body-sm": [
+          "var(--th-text-body-sm)",
+          { lineHeight: "var(--th-leading-body-sm)", letterSpacing: "var(--th-tracking-body-sm)" },
+        ],
+        "label-lg": [
+          "var(--th-text-label-lg)",
+          { lineHeight: "var(--th-leading-label-lg)", letterSpacing: "var(--th-tracking-label-lg)", fontWeight: "600" },
+        ],
+        "label-md": [
+          "var(--th-text-label-md)",
+          { lineHeight: "var(--th-leading-label-md)", letterSpacing: "var(--th-tracking-label-md)", fontWeight: "600" },
+        ],
+        "label-sm": [
+          "var(--th-text-label-sm)",
+          { lineHeight: "var(--th-leading-label-sm)", letterSpacing: "var(--th-tracking-label-sm)", fontWeight: "700" },
+        ],
+      },
+      spacing: {
+        "th-sidebar": "var(--th-sidebar-w)",
+        "th-topbar": "var(--th-topbar-h)",
+        "th-bottomnav": "var(--th-bottomnav-h)",
+        "th-gutter": "var(--th-gutter)",
+        "th-margin": "var(--th-margin)",
+      },
+      maxWidth: {
+        "th-feed": "var(--th-feed-max)",
+        "th-rail": "var(--th-rail-w)",
+      },
+      width: {
+        "th-sidebar": "var(--th-sidebar-w)",
+        "th-rail": "var(--th-rail-w)",
+        "th-msg-list": "var(--th-msg-list-w)",
+        "th-msg-context": "var(--th-msg-context-w)",
+      },
+      borderRadius: {
+        "th-xs": "var(--th-radius-xs)",
+        "th-sm": "var(--th-radius-sm)",
+        "th-input": "var(--th-radius-input)",
+        "th-card": "var(--th-radius-card)",
+        "th-dialog": "var(--th-radius-dialog)",
+        "th-pill": "var(--th-radius-pill)",
+      },
+      zIndex: {
+        "th-sticky": "var(--th-z-sticky)",
+        "th-nav": "var(--th-z-nav)",
+        "th-backdrop": "var(--th-z-backdrop)",
+        "th-modal": "var(--th-z-modal)",
+        "th-toast": "var(--th-z-toast)",
       },
       boxShadow: {
         soft: "0 1px 2px rgba(0,0,0,0.06), 0 12px 28px -14px rgba(0,0,0,0.18)",
         lift: "0 24px 48px -18px rgba(147,51,234,0.35)",
         glow: "0 0 0 4px rgba(147,51,234,0.16)",
+        "th-card": "var(--th-shadow-card)",
+        "th-hover": "var(--th-shadow-hover)",
+        "th-overlay": "var(--th-shadow-overlay)",
+        "th-focus": "var(--th-shadow-focus-soft)",
+        "th-compose": "var(--th-shadow-compose)",
       },
       keyframes: {
         marquee: {

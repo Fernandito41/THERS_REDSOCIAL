@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/FRONTEND_ARCHITECTURE.md` |
-| Versión | 0.3 (Propuesta) |
+| Versión | 0.4 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `HB-001` (Manual de Organización), `REPOSITORY_STRUCTURE.md` §3/§5, `BACKEND_ARCHITECTURE.md`, `DATABASE_ARCHITECTURE.md`, `API_CONTRACT.md`, `CLAUDE.md`, código real de `Frontend/` |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -13,6 +13,8 @@
 > **v0.2 — introducción de `VITE_API_URL`:** se resolvió la Open Architectural Decision #3 (§24) — `shared/lib/api.js` dejó de tener la URL de la API hardcodeada en un único valor.
 >
 > **v0.3 — reescritura integral (auditoría documental de THERS).** Esta versión reemplaza casi por completo la anterior, que describía una app de **2 features y 6 rutas, sin sesión real, sin i18n, sin manejo de errores más allá de `alert()`**. El código real, verificado archivo por archivo en esta auditoría, tiene hoy **5 features y 28 rutas**, sesión real contra los 4 endpoints del backend (`register`/`login`/`GET`/`PATCH /users/me`), rutas protegidas, un sistema de i18n completo (ES/EN), notificaciones `Toast`, dark mode, y lint ya cableado. Nada de esto estaba reflejado en `/docs` — es la misma clase de desincronización que ya se corrigió del lado del backend (`BACKEND_ARCHITECTURE.md`), aplicada aquí por primera vez al Frontend. Reflejado en prácticamente todas las secciones; el detalle de qué cambió respecto a v0.2 vive en cada sección, no se repite aquí.
+>
+> **v0.4 — segundo sistema de tokens (§13).** Registra `Frontend/src/shared/design/tokens.css` + `docs/THERS_DESIGN_SYSTEM.md`, el set de tokens `th-*` que el shell rediseñado (`app/layout/thers/`, `features/feed/`) usa en paralelo a los tokens de v0.3 — autorizado por el propietario del proyecto vía `THERS_IMPLEMENTACION_MAESTRA_CLAUDE.md`, todavía sin ratificación del equipo. No se toca ninguna otra sección.
 >
 > Este documento no implementa, refactoriza ni modifica código de `Frontend/` por iniciativa propia. Documenta lo que existe y señala, donde falta una decisión, el hueco explícito — nunca una arquitectura inventada.
 
@@ -250,10 +252,11 @@ Estado actual, ya real de punta a punta — reemplaza por completo la descripci�
 
 > ⚠️ Sección crítica — confirmado directamente en la fuente. `DS-001` §1.2 declara textualmente: **"No aplica al producto THERS en sí... si en el futuro se decide unificarlos, eso es una decisión de gobernanza (sección 16), no una consecuencia automática de este documento."**
 
-- **No existe ningún Design System ratificado para `Frontend/`.** Este documento no extrapola `DS-001` ni inventa uno nuevo.
-- **Estado real del código — v0.3, más avanzado que v0.2 pero todavía sin ratificar:** `tailwind.config.js` ya centraliza una paleta de tokens propia (`canvas`, `surface`, `ink`, `muted`, `line`, `pulse` — acento de marca —, `ember` — error/destructivo —, `success`, `warning`), sombras (`soft`/`lift`/`glow`) y animaciones (`marquee`, `capsule-in`, `pop-like`, `mood-glow`, `float-in`) — ya no son "valores hex sueltos en cada componente" como describía v0.2, son tokens reutilizados en `AppShell`, `Toast`, `PasswordStrength`, `Messages`, etc.
-- **Hallazgo — referencia colgante, sin resolver.** Dos comentarios dentro de `tailwind.config.js` citan explícitamente `PRODUCT_DESIGN_SYSTEM.md §2.3` como la fuente de esos tokens — **ese archivo no existe en ningún lugar del repositorio** (confirmado por búsqueda global en esta auditoría). O el documento nunca se creó, o se perdió antes de subirse. Es la señal más clara de que el equipo ya piensa en estos tokens como un sistema propio, sin que el documento que lo formalizaría exista todavía.
-- **`PENDIENTE DE APROBACIÓN`** (§24, ítem 4): formalizar `PRODUCT_DESIGN_SYSTEM.md` documentando los tokens ya en uso, quitar la referencia colgante del código, o proponer formalmente unificar con `DS-001` (`DS-001` §16) — cualquiera de las tres es una decisión que corresponde al equipo, no a este documento.
+- **Sigue sin existir ningún Design System ratificado por el Comité Técnico para `Frontend/`.** Este documento no extrapola `DS-001` ni inventa uno nuevo — solo registra lo que el código ya tiene.
+- **Tokens "clásicos" (v0.3) — sin cambios:** `tailwind.config.js` centraliza `canvas`, `surface`, `ink`, `muted`, `line`, `pulse` (acento de marca), `ember` (error/destructivo), `success`, `warning`, sombras (`soft`/`lift`/`glow`) y animaciones (`marquee`, `capsule-in`, `pop-like`, `mood-glow`, `float-in`). Siguen en uso en `auth/`, `help/`, `public/` y `legal/`. La referencia colgante a un `PRODUCT_DESIGN_SYSTEM.md` inexistente, señalada en v0.3, sigue sin resolverse.
+- **v0.4 — segundo sistema de tokens, prefijo `th-`, con documento propio.** `Frontend/src/shared/design/tokens.css` + `docs/THERS_DESIGN_SYSTEM.md` (ambos nuevos) definen un segundo set de tokens (color, tipografía, espaciado, radios, sombras, capas, movimiento) para el shell rediseñado (`app/layout/thers/`, `features/feed/`). No reemplaza al de v0.3: ambos conviven a propósito, cada módulo usa el suyo (ver `docs/THERS_DESIGN_SYSTEM.md` §1).
+- **Origen de la decisión — autorizado por el propietario del proyecto, no por el Comité Técnico.** `THERS_IMPLEMENTACION_MAESTRA_CLAUDE.md` (raíz del repo, fuera de `/docs`) instruyó explícitamente reconstruir estas pantallas con fidelidad a un set de referencias visuales, incluyendo crear la fuente de tokens que eso requiere. Es una autorización real del dueño del proyecto, pero **no equivale a la ratificación del equipo que exige `HB-001` §11–12** para una decisión de este impacto, ni a la que `DS-001` §16 exige para tocar la relación Handbook/producto.
+- **`PENDIENTE DE APROBACIÓN`:** ratificar formalmente este segundo sistema de tokens (o fusionarlo con el de v0.3, o mantenerlos separados a propósito) vía ADR, siguiendo `HB-001` §11–12 — señalado aquí, no resuelto por este documento.
 
 ---
 

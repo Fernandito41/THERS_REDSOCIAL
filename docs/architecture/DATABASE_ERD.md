@@ -4,12 +4,18 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD.md` |
 | Identificador propuesto | `DB-002` (acompaña a `DB-001` / `DATABASE_ARCHITECTURE.md`) — **pendiente de ratificación** |
-| Versión | 0.9 |
+| Versión | 0.12 |
 | Estado | **Borrador — representa solo el modelo conceptual ratificado hasta hoy** |
 | Depende de | `DATABASE_ARCHITECTURE.md` (fuente de verdad directa), `HB-001`, `REPOSITORY_STRUCTURE.md` |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
->  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). Las entidades ratificadas hoy son `users`, `posts`, `likes`, `comments`, `follows`, `notifications`, `password_reset_tokens` y `email_verification_tokens` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>  **Este ERD NO es el esquema de PostgreSQL.** Representa el **modelo conceptual aprobado hasta este momento**, no un esquema implementado 1:1 (aunque en esta versión coincide con él, ver nota v0.3). Las entidades ratificadas hoy son `users`, `posts`, `likes`, `comments`, `follows`, `notifications`, `password_reset_tokens`, `email_verification_tokens` y `user_identities` (`DATABASE_ARCHITECTURE.md` §5). No se implementan tablas, migraciones ni dependencias desde este documento.
+>
+> **v0.12 — "Continuar con Google" (`ADR-012-google-sign-in.md`).** Nueva entidad `USER_IDENTITIES` — resuelve "Login con Google" (§8, candidata `oauth_accounts`) de `PENDIENTE DE DECISIÓN` a ratificada. `USERS.phone`/`country_code`/`birth_date`/`password_hash` pasan de `NOT NULL` a `NULLABLE`; `USERS` gana `profile_completed`. Nueva relación `USERS ||--o{ USER_IDENTITIES`. Reflejado en §3, §4, §5, §6, §7, §8.
+>
+> **v0.11 — `EMAIL_VERIFICATION_TOKENS` rediseñada (`ADR-011-mandatory-email-verification.md`, reemplaza el modelo de enlace de v0.9/v0.10 para esta entidad).** Mismo rediseño que `ADR-010` ya le aplicó a `PASSWORD_RESET_TOKENS` en v0.10: pasa de un token de enlace (`token_hash`) a un código OTP de 6 dígitos — gana `code_hash` (hash scrypt, no SHA-256 — baja entropía del código) y `attempts`; pierde `token_hash`. A diferencia de `PASSWORD_RESET_TOKENS`, **no** gana `verified_at`/`reset_authorization_hash`/`_expires_at` — verificar el código ya es la acción final. `PASSWORD_RESET_TOKENS` **no cambia** en esta versión. Reflejado en §3, §5, §7, §8.
+>
+> **v0.10 — `PASSWORD_RESET_TOKENS` rediseñada (`ADR-010-password-reset-otp-flow.md`, reemplaza el modelo de enlace de v0.9 para esta entidad).** Pasa de un token de enlace (`token_hash`) a un código OTP de 6 dígitos: gana `code_hash` (hash scrypt, no SHA-256 — baja entropía del código), `attempts`, `verified_at`, `reset_authorization_hash`/`_expires_at`; pierde `token_hash`. `EMAIL_VERIFICATION_TOKENS` **no cambia**. Reflejado en §3, §5, §7, §8.
 >
 > **v0.9 — decimoprimera y decimosegunda relación del modelo (`ADR-009-password-reset-and-email-verification.md`).** `password_reset_tokens`/`email_verification_tokens` pasan de candidata objetivo ("Verificación de correo, Recuperación de contraseña", `PENDIENTE DE DECISIÓN`) a ratificadas (`DATABASE_ARCHITECTURE.md` §4.A/§5.7/§5.8, v0.13) — se agregan al diagrama (§3) junto con `USERS ||--o{ PASSWORD_RESET_TOKENS` y `USERS ||--o{ EMAIL_VERIFICATION_TOKENS`. `users` gana la columna `email_verified`. Reflejado en §3, §4, §5, §6, §7, §8.
 >
@@ -56,12 +62,13 @@ erDiagram
         varchar_120 name "NOT NULL"
         varchar_30 username UK "NOT NULL — case-sensitive (ADR-002)"
         citext email UK "NOT NULL — case-insensitive, identificador de login"
-        varchar_20 phone "NOT NULL — junto con country_code (ADR-002)"
-        varchar_6 country_code "NOT NULL (ADR-002)"
-        date birth_date "NOT NULL — edad mínima 13 años (ADR-002)"
-        text password_hash "NOT NULL — nunca en claro"
+        varchar_20 phone "NULLABLE desde ADR-012 — Google no lo entrega"
+        varchar_6 country_code "NULLABLE desde ADR-012 — Google no lo entrega"
+        date birth_date "NULLABLE desde ADR-012 — Google no lo entrega"
+        text password_hash "NULLABLE desde ADR-012 — NULL = cuenta Google-only, sin contraseña local"
         timestamptz username_changed_at "NULLABLE — soporta cooldown de 30 días (ADR-003), nunca expuesta en la API"
         boolean email_verified "NOT NULL, DEFAULT false (ADR-009)"
+        boolean profile_completed "NOT NULL, DEFAULT true (ADR-012) — false hasta completar phone/country_code/birth_date"
         timestamptz created_at "NOT NULL, DEFAULT now()"
         timestamptz updated_at "NOT NULL, DEFAULT now(), mantenida por trigger"
     }
@@ -109,19 +116,32 @@ erDiagram
 
     PASSWORD_RESET_TOKENS {
         uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
-        uuid user_id FK "NOT NULL — ON DELETE CASCADE (ADR-009)"
-        varchar_64 token_hash UK "NOT NULL — SHA-256 del token crudo, nunca el valor en claro"
-        timestamptz expires_at "NOT NULL — 30 minutos desde su creación"
+        uuid user_id FK "NOT NULL — ON DELETE CASCADE (ADR-010), a lo sumo un activo por usuario"
+        text code_hash "NOT NULL — hash scrypt del código OTP de 6 dígitos (ADR-010)"
+        integer attempts "NOT NULL, DEFAULT 0 — intentos fallidos de verificación"
+        timestamptz expires_at "NOT NULL — 10 minutos desde su creación (código)"
+        timestamptz verified_at "NULLABLE — NULL = código todavía no verificado"
+        varchar_64 reset_authorization_hash "NULLABLE — SHA-256 de la autorización temporal, tras verificar"
+        timestamptz reset_authorization_expires_at "NULLABLE — 10 minutos desde la verificación"
         timestamptz used_at "NULLABLE — NULL = no usado, un solo uso"
         timestamptz created_at "NOT NULL, DEFAULT now()"
     }
 
     EMAIL_VERIFICATION_TOKENS {
         uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
-        uuid user_id FK "NOT NULL — ON DELETE CASCADE (ADR-009)"
-        varchar_64 token_hash UK "NOT NULL — SHA-256 del token crudo, nunca el valor en claro"
-        timestamptz expires_at "NOT NULL — 24 horas desde su creación"
+        uuid user_id FK "NOT NULL — ON DELETE CASCADE (ADR-011), a lo sumo un activo por usuario"
+        text code_hash "NOT NULL — hash scrypt del código OTP de 6 dígitos (ADR-011)"
+        integer attempts "NOT NULL, DEFAULT 0 — intentos fallidos de verificación"
+        timestamptz expires_at "NOT NULL — 10 minutos desde su creación"
         timestamptz used_at "NULLABLE — NULL = no usado, un solo uso"
+        timestamptz created_at "NOT NULL, DEFAULT now()"
+    }
+
+    USER_IDENTITIES {
+        uuid id PK "DEFAULT gen_random_uuid() — generado en PostgreSQL"
+        uuid user_id FK "NOT NULL — ON DELETE CASCADE (ADR-012)"
+        varchar_20 provider "NOT NULL — 'google' hoy, string libre"
+        text provider_subject "NOT NULL — claim 'sub' del ID Token, identificador estable"
         timestamptz created_at "NOT NULL, DEFAULT now()"
     }
 
@@ -137,6 +157,7 @@ erDiagram
     POSTS ||--o{ NOTIFICATIONS : "origina"
     USERS ||--o{ PASSWORD_RESET_TOKENS : "solicita"
     USERS ||--o{ EMAIL_VERIFICATION_TOKENS : "solicita"
+    USERS ||--o{ USER_IDENTITIES : "vincula"
 ```
 
 > **Nota sobre el tipo de `id`:** UUID con `DEFAULT gen_random_uuid()` a nivel de PostgreSQL (función nativa desde PostgreSQL 13, sin extensión adicional), implementado en `backend/app/infrastructure/persistence/models.py` y en la migración `a1b2c3d4e5f6_create_users_table.py` (`DATABASE_ARCHITECTURE.md` §5). **Ratificación formal por el Comité Técnico pendiente de confirmar** (`HB-001` §11.1) — decisión indicada directamente por el Tech Lead Backend.
@@ -159,7 +180,13 @@ erDiagram
 >
 > **Nota sobre `NOTIFICATIONS` (v0.8, `ADR-008-notifications-minimal-model.md`):** primera entidad que este ERD dibuja con **dos** relaciones distintas hacia `USERS` en roles distintos (`recipient_id`/"recibe" y `actor_id`/"genera", ambas `ON DELETE CASCADE`) más una tercera hacia `POSTS` (`post_id`, nullable — solo aplica a `like`/`comment`, `NULL` en `follow`). Sin `updated_at`, mismo criterio que `LIKES`/`FOLLOWS`: se crea o se marca leída (`read_at`), nunca se edita de otro modo. **Sin `UNIQUE`** — a diferencia de `LIKES`/`FOLLOWS`, dos notificaciones del mismo tipo/actor/post en momentos distintos son eventos legítimos, no un duplicado a impedir (`DATABASE_ARCHITECTURE.md` §5.6). Cubre solo los tipos `like`/`comment`/`follow` — respuestas, menciones y mensajes siguen como candidatas (§8), dependientes de entidades que todavía no existen.
 >
-> **Nota sobre `email_verified` en `USERS` y sobre `PASSWORD_RESET_TOKENS`/`EMAIL_VERIFICATION_TOKENS` (v0.9, `ADR-009-password-reset-and-email-verification.md`):** `email_verified` es la primera columna nueva que `USERS` gana desde `username_changed_at` (v0.3) — `DEFAULT false`, sin backfill posible para cuentas previas. Las dos tablas de tokens tienen exactamente la misma forma (`token_hash` con `UNIQUE`, no representable con el marcador `UK` de Mermaid sobre una constraint compuesta pero acá sí es una columna simple; `expires_at`; `used_at` nullable = no usado; sin `updated_at`, mismo criterio que `LIKES`/`FOLLOWS`) — se mantienen como dos entidades separadas, no una genérica, porque su TTL (30 minutos vs. 24 horas) y su política al consumirse (`password_reset_tokens` invalida otros tokens pendientes del mismo usuario, `email_verification_tokens` no) difieren (`DATABASE_ARCHITECTURE.md` §5.7/§5.8). El valor **crudo** del token nunca se dibuja como columna — solo su hash SHA-256, el mismo que se persiste.
+> **Nota sobre `email_verified` en `USERS` (v0.9, `ADR-009-password-reset-and-email-verification.md`):** primera columna nueva que `USERS` gana desde `username_changed_at` (v0.3) — `DEFAULT false`, sin backfill posible para cuentas previas.
+>
+> **Nota sobre `PASSWORD_RESET_TOKENS` (v0.10, `ADR-010-password-reset-otp-flow.md`, reemplaza la forma de v0.9 para esta entidad):** deja de tener un `token_hash` único de alta entropía y pasa a tener `code_hash` (hash **scrypt**, no SHA-256 — un código de 6 dígitos tiene solo `10^6` combinaciones, un hash rápido no protege nada ante una tabla filtrada), `attempts` (máximo de intentos, defensa de fuerza bruta), y el par `reset_authorization_hash`/`_expires_at` (la autorización temporal que se emite al verificar el código, esa sí de alta entropía, SHA-256). `code_hash` **no** lleva `UK` en el diagrama — a diferencia de un token de 256 bits, dos códigos de 6 dígitos pueden coincidir sin que eso sea una violación de ninguna invariante de negocio real. El campo con marcador conceptual "a lo sumo un activo por usuario" en `user_id` (§3) corresponde a `uq_password_reset_tokens_active_user`, un índice único **parcial** (`WHERE used_at IS NULL`) — no representable con el marcador `UK` de Mermaid, que no admite condiciones; ver `DATABASE_ARCHITECTURE.md` §5.7/§8 para el detalle exacto.
+>
+> **Nota sobre `EMAIL_VERIFICATION_TOKENS` (v0.11, `ADR-011-mandatory-email-verification.md`, reemplaza la forma de v0.9/v0.10 para esta entidad):** deja de tener un `token_hash` único de alta entropía y pasa a tener `code_hash` (hash **scrypt**, mismo motivo que `PASSWORD_RESET_TOKENS.code_hash` — un código de 6 dígitos tiene solo `10^6` combinaciones) y `attempts` (máximo de intentos, defensa de fuerza bruta) — mismo patrón exacto que el rediseño de `ADR-010` le aplicó a `PASSWORD_RESET_TOKENS`. A diferencia de esa entidad, **no** gana columnas de autorización temporal: verificar el código marca `users.email_verified = true` directamente, es la acción final, no hay un paso sensible posterior que proteger. El campo con marcador conceptual "a lo sumo un activo por usuario" en `user_id` corresponde a `uq_email_verification_tokens_active_user`, el mismo tipo de índice único **parcial** que ya tenía `PASSWORD_RESET_TOKENS` — no representable con el marcador `UK` de Mermaid. Estructuralmente separada de `PASSWORD_RESET_TOKENS`: ninguna de las dos tablas comparte fila ni discriminador de tipo, así que un código de una nunca verifica el propósito de la otra (`ADR-011` §Decisión, purpose separation). Ninguno de los dos valores crudos (el código de registro, el de recuperación) se dibuja como columna — solo sus hashes, los mismos que se persisten.
+>
+> **Nota sobre `USERS` y `USER_IDENTITIES` (v0.12, `ADR-012-google-sign-in.md`):** `USERS.phone`/`country_code`/`birth_date`/`password_hash` pasan de `NOT NULL` a `NULLABLE` — Google no entrega los primeros tres, y una cuenta creada exclusivamente vía Google no tiene contraseña local (`NULL` nunca significa una contraseña vacía o inventada). `USERS` gana `profile_completed` (`false` hasta completar esos tres campos vía `PATCH /api/users/me`). Nueva entidad `USER_IDENTITIES`: vincula una identidad externa (`provider`/`provider_subject`, el claim `sub` de Google) a un usuario — tabla separada, no columnas `google_sub`/`auth_provider` en `USERS`, para no acoplar el esquema a un proveedor específico (preparada para Apple/Microsoft sin otra migración de `USERS`). Su `UNIQUE (provider, provider_subject)` es una constraint **compuesta** sobre dos columnas — tampoco representable con el marcador `UK` de Mermaid, que solo marca una columna a la vez; ver `DATABASE_ARCHITECTURE.md` §5.9/§8 para el detalle exacto. Un usuario puede tener varias identidades vinculadas a la vez (password + Google, account linking) — `USER_IDENTITIES` no reemplaza ninguna columna de autenticación existente, se suma.
 
 ---
 
@@ -198,22 +225,25 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 
 | Entidad | Estado | Justificación | Atributos (según `DATABASE_ARCHITECTURE.md` §5) |
 |---|---|---|---|
-| `users` |  Ratificada | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`; login autentica por `email`; `GET`/`PATCH /api/users/me` leen y actualizan el mismo registro | `id` UUID (PK), `name` VARCHAR(120), `username` VARCHAR(30) (UK), `email` CITEXT (UK), `phone` VARCHAR(20), `country_code` VARCHAR(6), `birth_date` DATE, `password_hash` TEXT, `username_changed_at` TIMESTAMPTZ (nullable, interna), `email_verified` BOOLEAN (`DEFAULT false`, v0.9), `created_at`/`updated_at` TIMESTAMPTZ |
+| `users` |  Ratificada | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`; login autentica por `email`; `GET`/`PATCH /api/users/me` leen y actualizan el mismo registro; `POST /api/auth/google` (v0.12, `ADR-012`) crea/vincula cuentas sin pasar por el registro tradicional | `id` UUID (PK), `name` VARCHAR(120), `username` VARCHAR(30) (UK), `email` CITEXT (UK), `phone` VARCHAR(20) (nullable, v0.12), `country_code` VARCHAR(6) (nullable, v0.12), `birth_date` DATE (nullable, v0.12), `password_hash` TEXT (nullable, v0.12), `username_changed_at` TIMESTAMPTZ (nullable, interna), `email_verified` BOOLEAN (`DEFAULT false`, v0.9), `profile_completed` BOOLEAN (`DEFAULT true`, v0.12), `created_at`/`updated_at` TIMESTAMPTZ |
 | `posts` |  Ratificada — v0.4 | `POST`/`GET /api/posts` crean y listan posts de texto reales, respaldados por PostgreSQL (`ADR-004-posts-minimal-model.md`) | `id` UUID (PK), `author_id` UUID (FK → `users.id`), `content` TEXT, `created_at`/`updated_at` TIMESTAMPTZ |
 | `likes` |  Ratificada — v0.5 (caso binario) | `POST`/`DELETE /api/posts/<id>/like` registran y quitan likes reales, respaldados por PostgreSQL (`ADR-005-likes-minimal-model.md`) | `id` UUID (PK), `post_id` UUID (FK → `posts.id`), `user_id` UUID (FK → `users.id`), `created_at` TIMESTAMPTZ, `UNIQUE (post_id, user_id)` |
 | `comments` |  Ratificada — v0.6 (mitad plana) | `POST`/`GET /api/posts/<id>/comments` crean y listan comentarios reales, respaldados por PostgreSQL (`ADR-006-comments-minimal-model.md`) | `id` UUID (PK), `post_id` UUID (FK → `posts.id`), `author_id` UUID (FK → `users.id`), `content` TEXT, `created_at`/`updated_at` TIMESTAMPTZ |
 | `follows` |  Ratificada — v0.7 | `POST`/`DELETE /api/users/<id>/follow` registran y quitan follows reales, respaldados por PostgreSQL (`ADR-007-follows-minimal-model.md`) | `id` UUID (PK), `follower_id` UUID (FK → `users.id`), `followed_id` UUID (FK → `users.id`), `created_at` TIMESTAMPTZ, `UNIQUE (follower_id, followed_id)`, `CHECK (follower_id <> followed_id)` |
 | `notifications` |  Ratificada — v0.8 (solo `like`/`comment`/`follow`) | `GET /api/notifications`/`PATCH /api/notifications/<id>/read` listan y marcan como leídas notificaciones reales, generadas como efecto secundario de like/comentario/follow, respaldadas por PostgreSQL (`ADR-008-notifications-minimal-model.md`) | `id` UUID (PK), `recipient_id` UUID (FK → `users.id`), `actor_id` UUID (FK → `users.id`), `type` VARCHAR(20), `post_id` UUID (FK → `posts.id`, nullable), `read_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
-| `password_reset_tokens` |  Ratificada — v0.9 | `POST /api/forgot-password`/`POST /api/reset-password` crean y consumen tokens reales de recuperación, respaldados por PostgreSQL (`ADR-009-password-reset-and-email-verification.md`) | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `token_hash` VARCHAR(64) (UK), `expires_at` TIMESTAMPTZ, `used_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
-| `email_verification_tokens` |  Ratificada — v0.9 | `POST /api/send-verification-email`/`POST /api/verify-email` crean y consumen tokens reales de verificación, respaldados por PostgreSQL (`ADR-009-password-reset-and-email-verification.md`) | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `token_hash` VARCHAR(64) (UK), `expires_at` TIMESTAMPTZ, `used_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
+| `password_reset_tokens` |  Ratificada — v0.10 (reconstruida, `ADR-010-password-reset-otp-flow.md`) | `POST /api/forgot-password`/`POST /api/verify-reset-code`/`POST /api/reset-password` crean, verifican y consumen solicitudes reales de recuperación por código OTP, respaldadas por PostgreSQL | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `code_hash` TEXT, `attempts` INTEGER, `expires_at` TIMESTAMPTZ, `verified_at` TIMESTAMPTZ (nullable), `reset_authorization_hash` VARCHAR(64) (nullable), `reset_authorization_expires_at` TIMESTAMPTZ (nullable), `used_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
+| `email_verification_tokens` |  Ratificada — v0.11 (reconstruida, `ADR-011-mandatory-email-verification.md`) | `POST /api/register`/`POST /api/verify-registration-code`/`POST /api/resend-registration-code` crean, verifican y consumen códigos reales de verificación por OTP, respaldados por PostgreSQL | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `code_hash` TEXT, `attempts` INTEGER, `expires_at` TIMESTAMPTZ, `used_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
+| `user_identities` |  Ratificada — v0.12 (`ADR-012-google-sign-in.md`) | `POST /api/auth/google` crea/consulta identidades externas vinculadas reales, respaldadas por PostgreSQL | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `provider` VARCHAR(20), `provider_subject` TEXT, `created_at` TIMESTAMPTZ, `UNIQUE (provider, provider_subject)` |
 
 **Constraints relevantes de `users`:**
 - `email`: **UNIQUE** (case-insensitive, vía `CITEXT`) + **NOT NULL** (login por email; genera un índice justificado, `DATABASE_ARCHITECTURE.md` §8).
 - `username`: **UNIQUE** (`uq_users_username`, case-sensitive) + **NOT NULL** (`ADR-002`; genera el otro índice justificado, `DATABASE_ARCHITECTURE.md` §8).
-- `name`, `phone`, `country_code`, `birth_date`: **NOT NULL** (el formulario de registro los exige; formato validado en el backend).
-- `password_hash`: **NOT NULL** (nunca se almacena la contraseña en claro).
+- `name`: **NOT NULL** (el formulario de registro lo exige; formato validado en el backend).
+- `phone`, `country_code`, `birth_date`: **NOT NULL hasta v0.11, nullable desde v0.12** (`ADR-012-google-sign-in.md`) — el registro tradicional los sigue exigiendo siempre a nivel de aplicación; Google no los entrega.
+- `password_hash`: **NOT NULL hasta v0.11, nullable desde v0.12** (`ADR-012`) — `NULL` = cuenta creada exclusivamente vía Google, sin contraseña local (nunca se almacena la contraseña en claro cuando sí existe).
 - `username_changed_at`: nullable — soporta el cooldown de 30 días de `PATCH /api/users/me` (`ADR-003`), no forma parte del contrato HTTP público.
-- `email_verified`: **NOT NULL**, `DEFAULT false` (`ADR-009`) — solo `POST /api/verify-email` puede ponerla en `true`.
+- `email_verified`: **NOT NULL**, `DEFAULT false` (`ADR-009`) — `POST /api/verify-registration-code` (`ADR-011`) o `POST /api/auth/google` (`ADR-012`, si Google confirma el email verificado) pueden ponerla en `true`.
+- `profile_completed`: **NOT NULL**, `DEFAULT true` (`ADR-012`, v0.12) — `false` solo para una cuenta Google nueva, hasta completar `phone`/`country_code`/`birth_date` vía `PATCH /api/users/me`.
 
 No se añaden columnas adicionales solo para "completar" el diagrama (regla explícita de esta tarea).
 
@@ -231,7 +261,9 @@ No se añaden columnas adicionales solo para "completar" el diagrama (regla expl
 
 **v0.8 — octava, novena y décima relación real:** `users (1) ←→ (N) notifications` (dos veces: `notifications.recipient_id → users.id` y `notifications.actor_id → users.id`) y `posts (1) ←→ (N) notifications` (`notifications.post_id → posts.id`, nullable), todas `ON DELETE CASCADE` — `ADR-008-notifications-minimal-model.md`. Cada notificación tiene exactamente un destinatario, un actor, y opcionalmente un post de origen.
 
-**v0.9 — decimoprimera y decimosegunda relación real:** `users (1) ←→ (N) password_reset_tokens` (`password_reset_tokens.user_id → users.id`) y `users (1) ←→ (N) email_verification_tokens` (`email_verification_tokens.user_id → users.id`), ambas `ON DELETE CASCADE` — `ADR-009-password-reset-and-email-verification.md`.
+**v0.9 — decimoprimera y decimosegunda relación real:** `users (1) ←→ (N) password_reset_tokens` (`password_reset_tokens.user_id → users.id`) y `users (1) ←→ (N) email_verification_tokens` (`email_verification_tokens.user_id → users.id`), ambas `ON DELETE CASCADE` — `ADR-009-password-reset-and-email-verification.md`. Sin cambios de relación en v0.10/v0.11 — solo cambió la forma de las columnas de cada tabla (§5), no el vínculo con `users`.
+
+**v0.12 — decimotercera relación real:** `users (1) ←→ (N) user_identities` (`user_identities.user_id → users.id`, `ON DELETE CASCADE`) — `ADR-012-google-sign-in.md`. Un usuario puede tener varias identidades vinculadas (password + Google al mismo tiempo, account linking); cada identidad pertenece a exactamente un usuario.
 
 Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHITECTURE.md` §6): las entidades dependientes referenciarán a `users` y/o a `posts` mediante FK; las relaciones N:N que sigan pendientes (participantes de conversación, etc.) se modelarán con tablas puente siguiendo el mismo patrón que `likes`/`comments`/`follows` ya establecieron. Nada de esto se dibuja hasta que se ratifique.
 
@@ -241,7 +273,7 @@ Regla de diseño para cuando existan más entidades (heredada de `DATABASE_ARCHI
 
 - El diagrama contiene **exactamente** las entidades y columnas que `DATABASE_ARCHITECTURE.md` ratifica — ni una más.
 - No se modeló ninguna entidad "por ser común en redes sociales" (regla 1).
-- `username`, `phone`, `country_code`, `birth_date` (`ADR-002-user-profile-fields.md`) y `username_changed_at` (`ADR-003-profile-update-contract.md`) se dibujan desde v0.3 — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `posts` (v0.4, `ADR-004-posts-minimal-model.md`) es la primera entidad *distinta* de `users` y la primera relación real que este ERD dibuja — deliberadamente sin `visibility`/medios/reacciones/comentarios, cada uno sigue como candidata (§8). `likes` (v0.5, `ADR-005-likes-minimal-model.md`) es la primera tabla puente N:N — resuelve solo el caso binario de la candidata `reactions`, tipos de reacción siguen como candidata (§8). `comments` (v0.6, `ADR-006-comments-minimal-model.md`) resuelve solo la mitad plana de "Comentarios + Respuestas" — `parent_comment_id`/hilos siguen como candidata (§8). `follows` (v0.7, `ADR-007-follows-minimal-model.md`) es la primera relación auto-referencial — listar seguidores/seguidos sigue como candidata (§8); `followers_count`/`following_count`/`is_followed_by_me` son calculados, no columnas, y no se dibujan como tales. `notifications` (v0.8, `ADR-008-notifications-minimal-model.md`) resuelve solo los tipos `like`/`comment`/`follow` de la candidata combinada de Notificaciones — respuestas, menciones y mensajes siguen como candidata (§8), dependientes de entidades que todavía no existen. `password_reset_tokens`/`email_verification_tokens` (v0.9, `ADR-009-password-reset-and-email-verification.md`) resuelven "Verificación de correo, Recuperación de contraseña" de `DATABASE_ARCHITECTURE.md` §4.B › Autenticación y cuenta — `email_verified` es la primera columna que `users` gana desde v0.3. `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia.
+- `username`, `phone`, `country_code`, `birth_date` (`ADR-002-user-profile-fields.md`) y `username_changed_at` (`ADR-003-profile-update-contract.md`) se dibujan desde v0.3 — dejaron de ser candidatos objetivo (§4.B) para pasar a ratificados (§5). `posts` (v0.4, `ADR-004-posts-minimal-model.md`) es la primera entidad *distinta* de `users` y la primera relación real que este ERD dibuja — deliberadamente sin `visibility`/medios/reacciones/comentarios, cada uno sigue como candidata (§8). `likes` (v0.5, `ADR-005-likes-minimal-model.md`) es la primera tabla puente N:N — resuelve solo el caso binario de la candidata `reactions`, tipos de reacción siguen como candidata (§8). `comments` (v0.6, `ADR-006-comments-minimal-model.md`) resuelve solo la mitad plana de "Comentarios + Respuestas" — `parent_comment_id`/hilos siguen como candidata (§8). `follows` (v0.7, `ADR-007-follows-minimal-model.md`) es la primera relación auto-referencial — listar seguidores/seguidos sigue como candidata (§8); `followers_count`/`following_count`/`is_followed_by_me` son calculados, no columnas, y no se dibujan como tales. `notifications` (v0.8, `ADR-008-notifications-minimal-model.md`) resuelve solo los tipos `like`/`comment`/`follow` de la candidata combinada de Notificaciones — respuestas, menciones y mensajes siguen como candidata (§8), dependientes de entidades que todavía no existen. `password_reset_tokens`/`email_verification_tokens` (v0.9, `ADR-009-password-reset-and-email-verification.md`) resuelven "Verificación de correo, Recuperación de contraseña" de `DATABASE_ARCHITECTURE.md` §4.B › Autenticación y cuenta — `email_verified` es la primera columna que `users` gana desde v0.3. `password_reset_tokens` (v0.10, `ADR-010-password-reset-otp-flow.md`) se reconstruye para un código OTP de 6 dígitos en vez de un enlace — sigue siendo la misma entidad ratificada, no una nueva. `email_verification_tokens` (v0.11, `ADR-011-mandatory-email-verification.md`) se reconstruye con el mismo criterio, mismo motivo (código OTP en vez de enlace) — tampoco es una entidad nueva, y sigue estructuralmente separada de `password_reset_tokens`: ninguna ganó un discriminador de tipo compartido. `user_identities` (v0.12, `ADR-012-google-sign-in.md`) resuelve "Login con Google" de `DATABASE_ARCHITECTURE.md` §4.B › Autenticación y cuenta (candidata `oauth_accounts`) — entidad nueva, separada de `users` a propósito (§Opciones consideradas del ADR); `USERS.phone`/`country_code`/`birth_date`/`password_hash` pasan a nullable y `USERS` gana `profile_completed` en la misma versión. `avatar_url`/`bio` siguen sin ratificar y **no** se añaden por inferencia.
 
 ---
 
@@ -256,7 +288,7 @@ Versiones anteriores de este documento (hasta v0.2) registraban aquí una contra
 
 | Dominio funcional confirmado | Entidades candidatas (a ratificar) | Nota |
 |---|---|---|
-| **Autenticación y cuenta** | `oauth_accounts` (login con Google), ~~`email_verifications`, `password_resets`~~ — **ratificadas v0.9** como `email_verification_tokens`/`password_reset_tokens` (ver §3/§5, `ADR-009-password-reset-and-email-verification.md`), `account_status`/desactivación | Login con Google y desactivación de cuenta siguen sin ratificar |
+| **Autenticación y cuenta** | ~~`oauth_accounts` (login con Google)~~ — **ratificada v0.12** como `user_identities` (ver §3/§5, `ADR-012-google-sign-in.md`); ~~`email_verifications`, `password_resets`~~ — **ratificadas v0.9** como `email_verification_tokens`/`password_reset_tokens` (ver §3/§5, `ADR-009-password-reset-and-email-verification.md`); `account_status`/desactivación | Solo desactivación de cuenta sigue sin ratificar |
 | **Perfil** | Columnas en `users`: `avatar_url`, `bio` (`username`/`phone`/`country_code`/`birth_date` ya ratificadas, ver §3/§5) | Pendiente de ADR propio — no cubiertas por `ADR-002` ni `ADR-003` |
 | **Configuración** | `user_settings` (privacidad, seguridad, preferencias), `notification_preferences`, `blocked_users`, gestión de datos | — |
 | **Contenido** | ~~`posts`~~ — **ratificada v0.4** (solo texto, ver §3/§5); `media` (fotos/videos/reels), reglas de `visibility` siguen candidatas | La ruta `/feed` en el Frontend ya consume `posts` real (`feature/frontend-feed-posts-integration`, PR #39) — nota anterior de "sigue mostrando `mockCapsules`" quedó desactualizada, corregida aquí (`API_CONTRACT.md`) |

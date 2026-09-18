@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.14 (Propuesta) |
+| Versión | 0.17 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -35,6 +35,12 @@
 > **v0.11 — comentarios sobre posts (`ADR-006-comments-minimal-model.md`):** se agregan `POST`/`GET /api/posts/<post_id>/comments` (§4.5) — tercera entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata combinada "Comentarios + Respuestas") en pasar a implementada, solo en su mitad plana: comentar un post, sin hilos de respuestas. `GET`/`POST /api/posts` se extienden de forma aditiva con `comments_count` (§4.3, §5), sumado a `likes_count`/`liked_by_me` de v0.10 — no rompen el contrato existente. A diferencia del feed, el listado de comentarios va en orden cronológico ascendente (§4.5). El Frontend (`CapsuleCard.jsx`) ya consume este contrato en la misma tarea — panel expandible que carga el hilo bajo demanda (`GET .../comments` al abrirse, no precargado con el feed) y publica comentarios nuevos (`POST .../comments`). Verificado con 22 pruebas nuevas + la suite completa (93/93, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real.
 >
 > **v0.12 — seguir/dejar de seguir usuarios (`ADR-007-follows-minimal-model.md`):** se agregan `POST`/`DELETE /api/users/<user_id>/follow` (§4.6) — cuarta entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `follows`) en pasar a implementada. `GET`/`PATCH /api/users/me` se extienden con `followers_count`/`following_count` (§4.2, §5); `GET`/`POST /api/posts` se extienden con `author.is_followed_by_me` (§4.3, §5) — ninguna rompe el contrato existente. El feed **sigue global**, no se personaliza por seguidos (`ADR-007` §No objetivos — decisión de producto separada, no un efecto colateral de este ADR). El Frontend ya consume este contrato en la misma tarea: `CapsuleCard.jsx` gana "Seguir"/"Siguiendo" sobre el autor de un post real, `Profile.jsx` muestra `followers_count`/`following_count` reales. El panel de sugerencias mock de `Home.jsx` no se toca — sus personas no son usuarios reales. Verificado con 17 pruebas nuevas + la suite completa (124/124, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real.
+>
+> **v0.15 — recuperación de contraseña por código OTP de 6 dígitos (`ADR-010-password-reset-otp-flow.md`, reemplaza el flujo de enlace de v0.14):** `POST /api/forgot-password` deja de generar un enlace y genera un código de 6 dígitos (también sirve como "Reenviar código"); se agrega `POST /api/verify-reset-code` (§4.8) que verifica el código y devuelve una autorización temporal de propósito específico (nunca un JWT de sesión); `POST /api/reset-password` cambia su body de `token` a `reset_authorization`. Protecciones nuevas: máximo 5 intentos por solicitud, hashing scrypt del código (no SHA-256, por su baja entropía), índice único parcial que garantiza a lo sumo un código activo por usuario incluso ante reenvíos simultáneos. `send-verification-email`/`verify-email` **no cambian** — siguen exactamente como en v0.14. El Frontend queda conectado de punta a punta: `ForgotPassword.jsx` (sin conectar hasta ahora), nueva pantalla `VerifyResetCode.jsx`, `ResetPassword.jsx` adaptada. Verificado con 31 pruebas nuevas + la suite completa (189/189, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (código incorrecto, código correcto, autorización de un solo uso, login con la contraseña nueva).
+>
+> **v0.17 — "Continuar con Google" (`ADR-012-google-sign-in.md`):** se agrega `POST /api/auth/google` (§4.9) — método de autenticación **adicional**, no reemplaza `register`/`login` tradicional. Recibe `{credential}` (ID Token de Google Identity Services), lo verifica criptográficamente (firma/`iss`/`aud`/`exp`, librería oficial `google-auth`), y crea/vincula/loguea según corresponda; nunca confía en datos que el Frontend diga que vienen de Google. `users` relaja `phone`/`country_code`/`birth_date`/`password_hash` a nullable (Google no entrega los primeros tres, y una cuenta Google-only no tiene contraseña local) — `register`/`login` tradicional siguen exigiendo todo igual que siempre, sin cambio de comportamiento. El objeto `user` (§5) gana `profile_completed` (si falta completar `phone`/`country_code`/`birth_date`, reutiliza `PATCH /api/users/me` sin endpoint nuevo) y `has_password` (booleano derivado). Account linking con una cuenta tradicional del mismo email: se vincula automático si esa cuenta ya estaba verificada, se "reclama" (anulando cualquier contraseña existente) si nunca se verificó — nunca por la sola coincidencia del email sin esa garantía. Una cuenta Google-only puede fijar su primera contraseña reutilizando `forgot-password`/`verify-reset-code`/`reset-password` (`ADR-010`) sin ningún cambio de código ahí. Verificado con 30 pruebas nuevas (`test_google_id_token_verifier.py` + `test_google_auth.py`, Google mockeado — nunca llamadas reales) + la suite completa (242/242, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
+>
+> **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
 >
@@ -96,7 +102,7 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — actualizado en esta tarea (THERS Backend Fase 2.1) para incluir los campos de perfil ratificados por `ADR-002-user-profile-fields.md` |
+| Estado | **IMPLEMENTADO** — semántica ampliada por `ADR-011-mandatory-email-verification.md`: la cuenta se crea sin verificar y no puede iniciar sesión hasta completar `POST /api/verify-registration-code` (§4.8) |
 | Blueprint | `auth_bp` (`backend/app/interfaces/routes/auth_routes.py`) |
 | Auth requerida | No (endpoint público) |
 
@@ -122,12 +128,14 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
     "username": "string",
     "email": "string",
     "name": "string",
-    "phone": "string",
-    "country_code": "string",
-    "birth_date": "string (ISO yyyy-mm-dd)",
+    "phone": "string | null",
+    "country_code": "string | null",
+    "birth_date": "string (ISO yyyy-mm-dd) | null",
     "followers_count": "integer",
     "following_count": "integer",
-    "email_verified": "boolean"
+    "email_verified": "boolean",
+    "profile_completed": "boolean",
+    "has_password": "boolean"
   }
 }
 ```
@@ -137,7 +145,7 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 | Código | Causa | Body |
 |---|---|---|
 | `400` | Body vacío; alguno de `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`/`confirm_password` ausente; `email` con formato inválido; `password` ≠ `confirm_password`; `password` con menos de 8 caracteres; `username`/`phone`/`country_code`/`birth_date` con formato inválido; edad menor a 13 años | `{"msg": "..."}` |
-| `409` | Ya existe un usuario con ese email (comparación case-insensitive, `CITEXT`) **o** con ese username | `{"msg": "..."}` |
+| `409` | Ya existe una cuenta **verificada** con ese email (comparación case-insensitive, `CITEXT`) **o** con ese username | `{"msg": "..."}` |
 
 **Notas de implementación:**
 - `password_hash` se genera con `werkzeug.security.generate_password_hash` (scrypt) — nunca se persiste ni se devuelve la contraseña en claro.
@@ -145,12 +153,14 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 - `confirm_password` se valida (debe coincidir con `password`) y **nunca se persiste** — no existe como columna de `users`.
 - Formato validado en el backend (`domain/auth/validators.py`, ver `ADR-002` §3): `username` (`^[a-zA-Z0-9_]{3,20}$`), `phone` (7–15 dígitos), `country_code` (`^\+[1-9]\d{0,3}$`), `birth_date` (ISO válida + edad mínima 13 años).
 - **v0.7 — resuelto:** `email` (regex básica `^[^\s@]+@[^\s@]+\.[^\s@]+$`, sin verificar dominio real) y `password` (mínimo `MIN_PASSWORD_LENGTH = 8` caracteres, sin exigir mayúscula/número/símbolo) — ambos placeholders de producto explícitos, revisables (mismo criterio que `MIN_AGE_YEARS`).
+- **v0.16 — verificación obligatoria de email (`ADR-011-mandatory-email-verification.md`):** `email_verified` nace en `false`; el registro envía de inmediato un código de 6 dígitos por correo (mismo mecanismo que `verify-reset-code`, §4.8) y la cuenta no puede usar `POST /api/login` hasta verificarlo. Registrar de nuevo con un email que existe pero **nunca** se verificó actualiza esa misma fila (incluida la contraseña) y reenvía un código — no produce un `409` ni una fila duplicada; el `409` de email solo ocurre contra una cuenta ya verificada. La prueba definitiva de que la cuenta controla el correo es siempre el código OTP — el formato de `email` se valida, pero un dominio/formato con buena forma nunca se trata como verificación por sí solo.
+- **v0.17 (`ADR-012-google-sign-in.md`):** este contrato de `POST /api/register` **no cambia** — sigue exigiendo `phone`/`country_code`/`birth_date`/`password`/`confirm_password` igual que siempre. La relajación a nullable de esas columnas en `users` (§5, `DATABASE_ARCHITECTURE.md`) es exclusiva de cuentas creadas vía `POST /api/auth/google` (§4.9) — el registro tradicional nunca las deja en `NULL` en la práctica.
 
 #### `POST /api/login`
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — sin cambios de comportamiento en esta tarea; la respuesta expone ahora los campos de perfil nuevos |
+| Estado | **IMPLEMENTADO** — gana un caso de rechazo nuevo en `ADR-011-mandatory-email-verification.md`: cuenta sin verificar (§Cambios respecto a la versión anterior de este documento) |
 | Blueprint | `auth_bp` (`backend/app/interfaces/routes/auth_routes.py`) |
 | Auth requerida | No (endpoint público — emite el token) |
 
@@ -171,12 +181,14 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
     "username": "string",
     "email": "string",
     "name": "string",
-    "phone": "string",
-    "country_code": "string",
-    "birth_date": "string (ISO yyyy-mm-dd)",
+    "phone": "string | null",
+    "country_code": "string | null",
+    "birth_date": "string (ISO yyyy-mm-dd) | null",
     "followers_count": "integer",
     "following_count": "integer",
-    "email_verified": "boolean"
+    "email_verified": "boolean",
+    "profile_completed": "boolean",
+    "has_password": "boolean"
   }
 }
 ```
@@ -187,12 +199,14 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 |---|---|---|
 | `400` | Body vacío, o `email`/`password` ausentes | `{"msg": "..."}` |
 | `401` | Credenciales inválidas — email inexistente **o** contraseña incorrecta, mismo mensaje en ambos casos deliberadamente, para no permitir enumerar emails registrados | `{"msg": "..."}` |
+| `403` | Email y contraseña correctos, pero la cuenta todavía no completó la verificación obligatoria de email (`ADR-011-mandatory-email-verification.md`) — se distingue deliberadamente de `401` porque la contraseña sí era correcta; el chequeo ocurre **después** de validar la contraseña, nunca antes, para no abrir un canal lateral nuevo. Nunca se emite un JWT en este caso | `{"msg": "Tu correo electrónico todavía no fue verificado.", "email_verified": false}` |
 
 **Cambios respecto a la versión anterior de este documento:**
 - La validación ya **no** compara contra una credencial hardcodeada — consulta la tabla `users` real vía `SQLAlchemyUserRepository` (`backend/app/infrastructure/persistence/repositories/user_repository.py`).
 - El objeto `user` devuelto ahora incluye también `username`, `phone`, `country_code`, `birth_date` (`ADR-002`).
 - **`identity` del JWT cambió de `email` a `user.id` (UUID, como string)** — cualquier endpoint protegido usa `get_jwt_identity()` y recibe un UUID de `users.id`, no un email. Ver `BACKEND_ARCHITECTURE.md` §9.
 - El token sigue sin política de expiración explícita configurada (`PENDIENTE DE APROBACIÓN`, sin cambios en esta tarea).
+- **v0.16:** nuevo caso `403` para cuenta sin verificar (`ADR-011-mandatory-email-verification.md` §Decisión) — `email_verified: false` explícito en el body (no solo en el mensaje) para que el Frontend lo distinga sin parsear texto y redirija a `POST /api/verify-registration-code` (§4.8).
 
 ### 4.2 Endpoints protegidos
 
@@ -214,12 +228,14 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
     "username": "string",
     "email": "string",
     "name": "string",
-    "phone": "string",
-    "country_code": "string",
-    "birth_date": "string (ISO yyyy-mm-dd)",
+    "phone": "string | null",
+    "country_code": "string | null",
+    "birth_date": "string (ISO yyyy-mm-dd) | null",
     "followers_count": "integer",
     "following_count": "integer",
-    "email_verified": "boolean"
+    "email_verified": "boolean",
+    "profile_completed": "boolean",
+    "has_password": "boolean"
   }
 }
 ```
@@ -274,12 +290,14 @@ Ejemplo mínimo válido — cambiar solo el nombre:
     "username": "string",
     "email": "string",
     "name": "string",
-    "phone": "string",
-    "country_code": "string",
-    "birth_date": "string (ISO yyyy-mm-dd)",
+    "phone": "string | null",
+    "country_code": "string | null",
+    "birth_date": "string (ISO yyyy-mm-dd) | null",
     "followers_count": "integer",
     "following_count": "integer",
-    "email_verified": "boolean"
+    "email_verified": "boolean",
+    "profile_completed": "boolean",
+    "has_password": "boolean"
   }
 }
 ```
@@ -620,11 +638,11 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-009-password-reset-and-email-verification.md`) |
+| Estado | **IMPLEMENTADO** — reescrito en `ADR-010-password-reset-otp-flow.md` (reemplaza el flujo de enlace de `ADR-009-password-reset-and-email-verification.md`) |
 | Blueprint | `auth_bp` (`backend/app/interfaces/routes/auth_routes.py`) |
 | Auth requerida | No (endpoint público — quien lo llama todavía no tiene sesión) |
 
-**Semántica.** Si `email` corresponde a una cuenta real, genera un token de recuperación (30 minutos de vigencia, un solo uso) y envía un correo con el enlace `<FRONTEND_URL>/reset-password?token=<token>`. Si no corresponde a ninguna cuenta, no hace nada — en **ambos** casos la respuesta es idéntica (`ADR-009` §Seguridad, evita enumeración de usuarios). Sujeto a un cooldown de 60 segundos por usuario: un pedido repetido dentro de esa ventana no genera un token ni un correo nuevo, sin cambiar la respuesta.
+**Semántica.** Si `email` corresponde a una cuenta real, genera un código numérico de 6 dígitos (10 minutos de vigencia, un solo uso) y envía un correo mostrándolo. Si no corresponde a ninguna cuenta, no hace nada — en **ambos** casos la respuesta es idéntica (evita enumeración de usuarios). Sujeto a un cooldown de 60 segundos por usuario: un pedido repetido dentro de esa ventana no genera un código ni un correo nuevo, sin cambiar la respuesta. **También es el endpoint de "Reenviar código"** — el Frontend lo llama de nuevo con el mismo email; el código anterior queda invalidado, incluso ante dos reenvíos simultáneos (`ADR-010` §Opciones consideradas, índice único parcial).
 
 **Request body**
 ```json
@@ -633,7 +651,7 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 
 **Response — éxito (200), siempre el mismo mensaje**
 ```json
-{ "msg": "Si existe una cuenta asociada a ese correo, recibirás instrucciones para restablecer tu contraseña." }
+{ "msg": "Si existe una cuenta asociada a ese correo, enviaremos un código de recuperación." }
 ```
 
 **Response — error**
@@ -642,20 +660,46 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 |---|---|---|
 | `400` | Body vacío, `email` ausente, o con formato inválido (`domain/auth/validators.is_valid_email`) | `{"msg": "..."}` |
 
+#### `POST /api/verify-reset-code`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-010-password-reset-otp-flow.md`) |
+| Blueprint | `auth_bp`, mismo blueprint que `POST /api/forgot-password` |
+| Auth requerida | No — la identidad la aporta `email` + el código correcto |
+
+**Semántica.** Verifica el código de 6 dígitos emitido por `POST /api/forgot-password`. Si es correcto, marca la solicitud como verificada y devuelve una **autorización temporal** (10 minutos de vigencia, un solo uso, de propósito específico — nunca un JWT de sesión normal) que `POST /api/reset-password` exige a continuación. Máximo **5 intentos** por solicitud (`domain/auth/token_policy.PASSWORD_RESET_MAX_ATTEMPTS`) — agotarlos bloquea la solicitud sin borrarla, obligando a pedir un código nuevo. Todos los casos de rechazo (email inexistente, sin solicitud activa, código expirado, intentos agotados, código incorrecto) devuelven el **mismo** mensaje y código — no se distinguen, para no habilitar enumeración de usuarios ni un canal lateral que revelara "intentos agotados" solo para cuentas reales.
+
+**Request body**
+```json
+{ "email": "string", "code": "string (6 dígitos)" }
+```
+
+**Response — éxito (200)**
+```json
+{ "msg": "Código verificado correctamente.", "reset_authorization": "string" }
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Body vacío; `email`/`code` ausentes; email sin cuenta asociada; sin solicitud activa; código expirado; intentos agotados; código incorrecto — los seis casos comparten el mismo mensaje | `{"msg": "El código es incorrecto. Inténtalo nuevamente."}` |
+
 #### `POST /api/reset-password`
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-009-password-reset-and-email-verification.md`) |
+| Estado | **IMPLEMENTADO** — reescrito en `ADR-010-password-reset-otp-flow.md` (reemplaza el consumo directo del token de enlace de `ADR-009`) |
 | Blueprint | `auth_bp`, mismo blueprint que `POST /api/forgot-password` |
-| Auth requerida | No — la identidad la aporta el token, no un JWT |
+| Auth requerida | No — la identidad la aporta la autorización temporal, no un JWT |
 
-**Semántica.** Aplica una nueva contraseña usando el token recibido por correo. El token debe existir, no haber expirado, y no haber sido usado antes. Al aplicarse con éxito, invalida ese token **y** cualquier otro token de recuperación pendiente del mismo usuario, y envía un correo de confirmación ("contraseña actualizada").
+**Semántica.** Aplica una nueva contraseña usando la autorización temporal emitida por `POST /api/verify-reset-code`. La autorización debe existir, provenir de una solicitud verificada, no haber expirado, y no haber sido usada antes. Al aplicarse con éxito, marca la solicitud como usada y envía un correo de confirmación ("contraseña actualizada") — no hace falta invalidar "otras solicitudes pendientes" por separado: solo puede existir una activa por usuario en todo momento (`ADR-010` §Decisión).
 
 **Request body**
 ```json
 {
-  "token": "string",
+  "reset_authorization": "string",
   "password": "string",
   "confirm_password": "string"
 }
@@ -670,51 +714,21 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 
 | Código | Causa | Body |
 |---|---|---|
-| `400` | Body vacío; `token`/`password`/`confirm_password` ausentes; `password` ≠ `confirm_password`; `password` no cumple el formato mínimo (mismo `MIN_PASSWORD_LENGTH` que `POST /api/register`); el token no existe, ya expiró, o ya fue usado — los tres últimos casos comparten el mismo mensaje, sin distinguir cuál ocurrió | `{"msg": "..."}` |
+| `400` | Body vacío; `reset_authorization`/`password`/`confirm_password` ausentes; `password` ≠ `confirm_password`; `password` no cumple el formato mínimo (mismo `MIN_PASSWORD_LENGTH` que `POST /api/register`); la autorización no existe, no proviene de una solicitud verificada, ya expiró, o ya fue usada — ninguno de estos casos se distingue en el mensaje | `{"msg": "La autorización para restablecer tu contraseña no es válida o expiró"}` |
 
-#### `POST /api/send-verification-email`
-
-| Campo | Valor |
-|---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-009-password-reset-and-email-verification.md`) |
-| Blueprint | `users_bp` (`backend/app/interfaces/routes/user_routes.py`) |
-| Auth requerida | **Sí** — `Bearer <jwt>`. Opera exclusivamente sobre el usuario del JWT, sin `user_id` en la URL ni en el body |
-
-**Semántica.** Genera un token de verificación (24 horas de vigencia, un solo uso) y envía un correo con el enlace `<FRONTEND_URL>/verify-email?token=<token>`. A diferencia de `forgot-password`, no hay anti-enumeración que aplicar (quien pregunta ya demostró ser dueño de la cuenta con su JWT): si el email ya está verificado, lo dice explícitamente; sujeto al mismo cooldown de 60 segundos que `forgot-password`.
-
-**Request:** sin body.
-
-**Response — éxito (200) — tres mensajes posibles, todos 200**
-```json
-{ "msg": "Te enviamos un correo de verificación." }
-```
-```json
-{ "msg": "Tu correo ya está verificado." }
-```
-```json
-{ "msg": "Ya te enviamos un correo de verificación hace poco. Revisá tu bandeja de entrada (y spam) antes de pedir otro." }
-```
-
-**Response — error**
-
-| Código | Causa | Body |
-|---|---|---|
-| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
-| `404` | El `id` del JWT no corresponde a ningún usuario real | `{"msg": "..."}` |
-
-#### `POST /api/verify-email`
+#### `POST /api/verify-registration-code`
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-009-password-reset-and-email-verification.md`) |
-| Blueprint | `auth_bp` |
-| Auth requerida | No — quien hace clic en el enlace del correo puede no tener sesión iniciada en ese navegador/dispositivo |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-011-mandatory-email-verification.md`), reemplaza a `POST /api/verify-email` (`ADR-009`, retirado — ver nota debajo) |
+| Blueprint | `auth_bp` (`backend/app/interfaces/routes/auth_routes.py`) |
+| Auth requerida | No — quien lo llama todavía no puede iniciar sesión (la cuenta sigue sin verificar) |
 
-**Semántica.** Consume el token de verificación y marca `users.email_verified = true`. El token debe existir, no haber expirado, y no haber sido usado antes.
+**Semántica.** Verifica el código de 6 dígitos que `POST /api/register` (o un reenvío) ya envió por correo. Si es correcto, marca `users.email_verified = true` directamente — a diferencia de la recuperación de contraseña, verificar el código **es** la acción final, no hay un paso sensible posterior que proteger con una autorización intermedia. Máximo **5 intentos** por código (`domain/auth/token_policy.REGISTRATION_MAX_ATTEMPTS`) — agotarlos bloquea el código sin borrarlo, obligando a pedir uno nuevo (`resend-registration-code`). Todos los casos de rechazo (email inexistente, cuenta ya verificada, sin código activo, código expirado, intentos agotados, código incorrecto) devuelven el **mismo** mensaje y código — mismo criterio anti-enumeración que `verify-reset-code` (§4.8).
 
 **Request body**
 ```json
-{ "token": "string" }
+{ "email": "string", "code": "string (6 dígitos)" }
 ```
 
 **Response — éxito (200)**
@@ -726,12 +740,98 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 
 | Código | Causa | Body |
 |---|---|---|
-| `400` | Body vacío; `token` ausente; el token no existe, ya expiró, o ya fue usado (mismo mensaje en los tres casos) | `{"msg": "..."}` |
+| `400` | Body vacío; `email`/`code` ausentes; email sin cuenta asociada; cuenta ya verificada; sin código activo; código expirado; intentos agotados; código incorrecto — los siete casos comparten el mismo mensaje | `{"msg": "El código es incorrecto. Inténtalo nuevamente."}` |
 
-**Notas de implementación (los cuatro endpoints):**
+#### `POST /api/resend-registration-code`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-011-mandatory-email-verification.md`) |
+| Blueprint | `auth_bp`, mismo blueprint que `verify-registration-code` |
+| Auth requerida | No — mismo criterio que `forgot-password` (§4.8), quien lo llama todavía no puede iniciar sesión |
+
+**Semántica.** "Reenviar código" en la pantalla de verificación de registro. Si `email` corresponde a una cuenta real y todavía sin verificar, invalida el código activo anterior (si lo hay) y envía uno nuevo — sujeto al mismo cooldown de 60 segundos por usuario que `forgot-password` (`domain/auth/token_policy.REGISTRATION_CODE_REQUEST_COOLDOWN_SECONDS`), impuesto en el backend, no solo en el contador del Frontend. Si el email no existe, ya está verificado, o está en cooldown, no hace nada — en **todos** los casos la respuesta es idéntica (mismo criterio anti-enumeración que `forgot-password`).
+
+**Request body**
+```json
+{ "email": "string" }
+```
+
+**Response — éxito (200), siempre el mismo mensaje**
+```json
+{ "msg": "Si existe una cuenta pendiente de verificación con ese correo, enviaremos un código nuevo." }
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Body vacío, `email` ausente, o con formato inválido | `{"msg": "..."}` |
+
+> ⚠️ **Retirados en v0.16.** `POST /api/send-verification-email` (protegido) y `POST /api/verify-email` (público, `ADR-009`, flujo de enlace) fueron **eliminados**, no solo deprecados: con `POST /api/login` ya bloqueado para cuentas sin verificar (§4.1), una cuenta sin verificar nunca puede obtener el JWT que el primero exigía — el par quedaba permanentemente inalcanzable, mismo criterio que `ADR-010` ya aplicó al reemplazar el flujo de enlace de recuperación de contraseña.
+
+**Notas de implementación (los seis endpoints de esta sección):**
 - Servicio de correo centralizado (`application/email/email_service.py`) detrás de un puerto `EmailSender` (`domain/email/sender.py`) — ningún endpoint ni caso de uso llama a Resend directamente (`ADR-009` §Decisión).
-- El token crudo nunca cruza la frontera HTTP más de una vez (viaja en el enlace del correo, se recibe una sola vez en `reset-password`/`verify-email`) — solo se persiste su hash SHA-256.
-- Sin `RESEND_API_KEY` configurada, el backend usa un `EmailSender` nulo que no envía nada de verdad pero no rompe ningún flujo — pensado para desarrollo local sin cuenta de Resend todavía (`ADR-009` §Riesgos).
+- El código de registro y el de recuperación de contraseña viven en tablas/repositorios completamente separados (`email_verification_tokens`/`password_reset_tokens`) — un código de uno nunca verifica al otro, ni por accidente ni por un valor coincidente (`ADR-011` §Decisión, purpose separation).
+- Solo se persiste el hash de cada código (scrypt, no SHA-256 — baja entropía, `ADR-010`/`ADR-011` §Seguridad); ninguno de los dos valores crudos vuelve a aparecer en ningún response, log, ni URL.
+- Sin `RESEND_API_KEY` configurada, el backend usa un `EmailSender` nulo que no envía nada de verdad pero no rompe ningún flujo — pensado para desarrollo local sin cuenta de Resend todavía (`ADR-009` §Riesgos). Si el envío real falla (Resend caído, credenciales inválidas), la excepción se propaga a un `500` genérico — la cuenta y el código ya persistidos quedan intactos, la persona puede pedir un código nuevo más tarde (`ADR-011` §Riesgos).
+
+### 4.9 Autenticación con Google (OAuth 2.0 / OpenID Connect)
+
+#### `POST /api/auth/google`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-012-google-sign-in.md`) |
+| Blueprint | `auth_bp` (`backend/app/interfaces/routes/auth_routes.py`) |
+| Auth requerida | No — es, en sí mismo, el mecanismo de autenticación. Google prueba la identidad, THERS emite su propio JWT a partir de ese resultado |
+
+**Semántica.** Único endpoint para "Continuar con Google" desde Login **y** desde Register (FASE 3 de la tarea origen: es la misma operación, resuelve crear/vincular/loguear según corresponda). Recibe el ID Token (`credential`) que Google Identity Services le entregó al Frontend y lo verifica criptográficamente (firma, `iss`, `aud` contra `GOOGLE_CLIENT_ID`, `exp`) contra las claves públicas reales de Google — nunca confía en un email/nombre que el Frontend le pase por su cuenta. Según el resultado:
+
+- Identidad de Google ya vinculada antes → login directo.
+- Sin cuenta de THERS con ese email → cuenta nueva, `email_verified=true` (la garantía de Google reemplaza al OTP para este email), `profile_completed=false` (Google no entrega `phone`/`country_code`/`birth_date`; `username` nace con un valor provisorio que la persona debe reemplazar).
+- Cuenta de THERS existente con ese email, ya verificada → se vincula la identidad de Google, la contraseña existente **no se toca** (Google se suma como método adicional).
+- Cuenta de THERS existente con ese email, nunca verificada → se **reclama**: se vincula, se marca `email_verified=true`, y se **anula** cualquier contraseña existente (nadie había probado antes ser su dueño real — ver `ADR-012` §Decisión, account linking).
+- Google indica `email_verified=false` en el propio ID Token → se rechaza, no se crea ni vincula nada.
+
+**Request body**
+```json
+{ "credential": "string (ID Token de Google)" }
+```
+
+**Response — éxito (200)** — mismo shape que `POST /api/login`
+```json
+{
+  "token": "string (JWT de THERS)",
+  "user": {
+    "id": "string (UUID)",
+    "username": "string",
+    "email": "string",
+    "name": "string",
+    "phone": "string | null",
+    "country_code": "string | null",
+    "birth_date": "string (ISO yyyy-mm-dd) | null",
+    "followers_count": "integer",
+    "following_count": "integer",
+    "email_verified": "boolean",
+    "profile_completed": "boolean",
+    "has_password": "boolean"
+  }
+}
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Body vacío; `credential` ausente; la credencial no pudo verificarse (firma inválida, `aud`/`iss` incorrectos, expirada, o simplemente no es un JWT bien formado — todos con el mismo mensaje, sin distinguir el motivo) | `{"msg": "No pudimos verificar tu cuenta de Google. Intentá de nuevo."}` |
+| `400` | La propia Google indica `email_verified=false` para esa cuenta (caso raro) | `{"msg": "Tu cuenta de Google no tiene el correo verificado. THERS no puede usarla."}` |
+
+**Notas de implementación:**
+- El JWT emitido es idéntico en forma al de `POST /api/login` (`identity=user["id"]`, mismo `create_access_token`) — ningún endpoint protegido distingue si la sesión empezó por password o por Google.
+- `GOOGLE_CLIENT_ID` (backend) y `VITE_GOOGLE_CLIENT_ID` (Frontend) deben ser el mismo valor — es el Client ID de OAuth creado en Google Cloud Console, no es secreto. `GOOGLE_CLIENT_SECRET` **no existe** como variable de este proyecto — este flujo (verificación de ID Token) no lo requiere.
+- `PATCH /api/users/me` (§4.2, sin cambios de contrato) es la pantalla "Complete your profile" para una cuenta con `profile_completed=false` — sin endpoint nuevo.
+- Ver `ADR-012-google-sign-in.md` para la política completa de account linking y el razonamiento de seguridad detrás de cada caso.
 
 ---
 
@@ -741,13 +841,15 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 
 | Objeto | Campos expuestos hoy | Fuente |
 |---|---|---|
-| `user` (en response de register, login, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone`, `country_code`, `birth_date`, `followers_count`, `following_count`, `email_verified` | `ADR-002-user-profile-fields.md` + `ADR-007-follows-minimal-model.md` (`followers_count`/`following_count`, v0.12) + `ADR-009-password-reset-and-email-verification.md` (`email_verified`, v0.14); coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — nunca debe exponerse). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
+| `user` (en response de register, login, `POST /api/auth/google`, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone` (nullable desde v0.17), `country_code` (nullable desde v0.17), `birth_date` (nullable desde v0.17), `followers_count`, `following_count`, `email_verified`, `profile_completed` (v0.17), `has_password` (v0.17) | `ADR-002-user-profile-fields.md` + `ADR-007-follows-minimal-model.md` (`followers_count`/`following_count`, v0.12) + `ADR-009-password-reset-and-email-verification.md` (`email_verified`, v0.14) + `ADR-012-google-sign-in.md` (`profile_completed`/`has_password`, `phone`/`country_code`/`birth_date` nullable, v0.17); coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — `has_password` es un booleano derivado, nunca el hash en sí). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
 | `post` (en response de `POST`/`GET /api/posts`) | `id`, `author` (`id`/`username`/`name`/`is_followed_by_me`, forma reducida de `user`), `content`, `created_at`, `likes_count`, `liked_by_me`, `comments_count` | `ADR-004-posts-minimal-model.md` + `ADR-005-likes-minimal-model.md` (`likes_count`/`liked_by_me`, v0.10) + `ADR-006-comments-minimal-model.md` (`comments_count`, v0.11) + `ADR-007-follows-minimal-model.md` (`author.is_followed_by_me`, v0.12); coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` en la respuesta — no hay edición todavía (`ADR-004` §No objetivos), así que exponerlo no aporta nada hoy |
 | `like` — no se expone como objeto propio; solo el resumen agregado (`likes_count`/`liked_by_me`) embebido en `post` | — | `ADR-005-likes-minimal-model.md` §No objetivos: no se lista quién dio like a un post |
 | `comment` (en response de `POST`/`GET /api/posts/<id>/comments`) | `id`, `post_id`, `author` (misma forma reducida que en `post`), `content`, `created_at` | `ADR-006-comments-minimal-model.md`; coincide con `comments` en `DATABASE_ARCHITECTURE.md` §5. Sin `updated_at` — mismo motivo que `post` |
 | `follow` — no se expone como objeto propio; solo `{"following": bool}` en `POST`/`DELETE .../follow`, y el resumen agregado (`followers_count`/`following_count` en `user`, `is_followed_by_me` en `post.author`) | — | `ADR-007-follows-minimal-model.md` §No objetivos: no se lista quién sigue a quién |
 | `notification` (en response de `GET /api/notifications`) | `id`, `type` (`like`/`comment`/`follow`), `actor` (misma forma reducida que en `post`/`comment`), `post_id` (nullable), `read` | `ADR-008-notifications-minimal-model.md`; coincide con `notifications` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` (internamente un timestamp) — se expone como booleano, nunca como el timestamp crudo, mismo criterio que `username_changed_at` nunca cruza la frontera HTTP |
-| `password_reset_token`/`email_verification_token` — no se exponen como objetos propios; el valor crudo del token viaja una única vez, dentro del enlace del correo (nunca en un response JSON) | — | `ADR-009-password-reset-and-email-verification.md` §Seguridad: solo se persiste `token_hash` (SHA-256), el valor crudo nunca cruza la frontera HTTP más que dentro del enlace que arma el correo |
+| `password_reset_token` (OTP) — no se expone como objeto propio; el código viaja una única vez por correo, la autorización temporal viaja una única vez en `reset_authorization` (respuesta de `verify-reset-code`) | — | `ADR-010-password-reset-otp-flow.md` §Seguridad: solo se persisten `code_hash` (scrypt) y `reset_authorization_hash` (SHA-256), ninguno de los dos valores crudos vuelve a aparecer en ningún response |
+| `email_verification_token` (OTP de registro) — no se expone como objeto propio; el código viaja una única vez por correo, nunca en un response JSON | — | `ADR-011-mandatory-email-verification.md` §Seguridad (reemplaza el token de enlace de `ADR-009`): solo se persiste `code_hash` (scrypt), el valor crudo nunca cruza la frontera HTTP; estructuralmente separado de `password_reset_token` (tabla y repositorio propios) — un código nunca verifica el propósito del otro |
+| `user_identity` — no se expone como objeto propio; el `credential` (ID Token) que la origina viaja una única vez, en el body de `POST /api/auth/google` (nunca en la respuesta) | — | `ADR-012-google-sign-in.md`: solo se persisten `provider`/`provider_subject` (el claim `sub`, nunca el email como identificador); ningún endpoint lista las identidades vinculadas de un usuario todavía |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 

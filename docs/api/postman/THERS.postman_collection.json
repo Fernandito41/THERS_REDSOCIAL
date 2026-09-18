@@ -423,6 +423,212 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "03_AUTH_GOOGLE",
+      "item": [
+        {
+          "name": "google auth - credencial inválida",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/google",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"credential\": \"esto-no-es-una-credencial-real\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains msg\", function () {",
+                  "    pm.expect(json).to.have.property(\"msg\");",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "google auth - body vacío",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/google",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "google auth - credential ausente",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/google",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        },
+        {
+          "name": "google auth - credencial real (ver descripción para obtenerla)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/auth/google",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"credential\": \"{{google_id_token}}\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Requiere una credencial (ID Token) real de Google en la variable de entorno `google_id_token` -- este endpoint verifica criptográficamente la credencial contra las claves públicas reales de Google (GOOGLE_CLIENT_ID configurado en backend/.env), así que no hay forma de fabricar una válida solo con Postman.\n\nCómo obtener una credencial de desarrollo para probar esta request a mano:\n1. Con el Frontend corriendo (`npm run dev`, VITE_GOOGLE_CLIENT_ID configurada) y el backend con GOOGLE_CLIENT_ID configurada (mismo Client ID), abrir http://localhost:5173/login en el navegador.\n2. Abrir las DevTools > pestaña Network, hacer clic en \"Continuar con Google\" y completar el flujo real con una cuenta de Google.\n3. Buscar la request que el navegador hace a POST /api/auth/google (la que dispara AuthContext.jsx -> loginWithGoogle) y copiar el valor de `credential` de su body.\n4. Pegar ese valor en la variable de entorno `google_id_token` de esta colección (Environment > Edit, nunca en el propio JSON de la colección) ANTES de correr esta request.\n\nEl ID Token expira en minutos (ver `exp` del JWT) -- hay que repetir estos pasos cada vez que se quiera volver a probar esta request real. NUNCA commitear un valor real en `google_id_token` ni en ningún archivo del repositorio (HB-001 §19.1) -- la variable debe quedar vacía en el environment exportado/versionado, si alguna vez se versiona uno."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains token\", function () {",
+                  "    pm.expect(json).to.have.property(\"token\");",
+                  "    pm.expect(json.token).to.be.a(\"string\").and.not.empty;",
+                  "});",
+                  "",
+                  "pm.test(\"Response contains user\", function () {",
+                  "    pm.expect(json).to.have.property(\"user\");",
+                  "});",
+                  "",
+                  "pm.test(\"User contains profile_completed\", function () {",
+                  "    pm.expect(json.user).to.have.property(\"profile_completed\");",
+                  "});",
+                  "",
+                  "pm.environment.set(\"jwt_token\", json.token);",
+                  "pm.environment.set(\"user_id\", json.user.id);"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ]
+        }
+      ],
+      "description": "POST /api/auth/google (ADR-012-google-sign-in.md). Los tres primeros casos se pueden probar directo por Postman (no dependen de una credencial real de Google); el último exige un ID Token real obtenido desde el navegador -- ver la descripción de esa request para el procedimiento exacto. El flujo completo (cuenta nueva, cuenta existente, account linking) está cubierto por backend/tests/test_google_auth.py, que sí corre en CI sin depender de Google."
     }
   ]
 }

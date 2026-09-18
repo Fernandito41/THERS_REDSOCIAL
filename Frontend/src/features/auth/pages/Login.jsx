@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { IoInformationCircleOutline } from "react-icons/io5";
 import { useAuth, useOAuthNotice } from "@features/auth";
@@ -9,13 +8,14 @@ import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 import Spinner from "@shared/components/Spinner";
 import AuthCard from "../components/AuthCard";
+import GoogleSignInButton from "../components/GoogleSignInButton";
 import TextField from "../components/TextField";
 import PasswordField from "../components/PasswordField";
 import { isValidEmail } from "../lib/validators";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const { notice, notify } = useOAuthNotice();
   const toast = useToast();
   const { t } = useLanguage();
@@ -24,6 +24,27 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+
+  // "Continuar con Google" (ADR-012-google-sign-in.md, FASE 16) -- mismo
+  // criterio de manejo de errores que handleSubmit: red/backend caído
+  // (getErrorMessage genérico), credencial rechazada o email de Google sin
+  // verificar (400, con `data.msg` propio de cada caso ya distinguido por
+  // el backend). `profile_completed` decide a dónde navegar en éxito --
+  // mismo patrón que el `email_verified` de handleSubmit.
+  const handleGoogleCredential = async (credential) => {
+    if (isGoogleSubmitting) return;
+    setIsGoogleSubmitting(true);
+    try {
+      const googleUser = await loginWithGoogle(credential);
+      navigate(googleUser.profile_completed ? "/feed" : "/complete-profile");
+    } catch (error) {
+      console.error(error);
+      toast.error(getErrorMessage(error, t), { title: t("auth.login.toastErrorTitle") });
+    } finally {
+      setIsGoogleSubmitting(false);
+    }
+  };
 
   const validate = () => {
     const next = {};
@@ -45,6 +66,17 @@ export default function Login() {
       await login({ email: email.trim(), password });
       navigate("/feed");
     } catch (error) {
+      // Credenciales correctas pero cuenta todavía sin verificar
+      // (ADR-011-mandatory-email-verification.md §Decisión) -- nunca se
+      // emitió un JWT para este caso (login_use_case.py nunca llega a
+      // create_access_token()). En vez del toast de error genérico, se
+      // avisa y se lleva a la pantalla que pide el código de verificación,
+      // igual que si acabara de registrarse.
+      if (error.response?.status === 403 && error.response?.data?.email_verified === false) {
+        toast.info(t("auth.login.emailNotVerified"));
+        navigate("/verify-registration-code", { state: { email: email.trim() } });
+        return;
+      }
       console.error(error);
       toast.error(getErrorMessage(error, t), { title: t("auth.login.toastErrorTitle") });
     } finally {
@@ -63,15 +95,8 @@ export default function Login() {
       }
       subtitle={t("auth.login.subtitle")}
     >
-      {/* GOOGLE LOGIN */}
-      <button
-        type="button"
-        onClick={() => notify("google")}
-        className="w-full flex items-center justify-center gap-3 bg-white text-black py-3 rounded-full font-semibold hover:bg-gray-200 transition"
-      >
-        <FcGoogle size={20} />
-        {t("auth.oauthGoogleLogin")}
-      </button>
+      {/* GOOGLE LOGIN -- ADR-012-google-sign-in.md, botón real */}
+      <GoogleSignInButton onCredential={handleGoogleCredential} disabled={isGoogleSubmitting} />
 
       {/* APPLE LOGIN */}
       <button
@@ -89,9 +114,9 @@ export default function Login() {
           className="flex items-start gap-1.5 text-xs text-muted-dark bg-black/30 rounded-lg px-3 py-2 mt-3"
         >
           <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
-          {t("auth.oauthNoticeLogin", {
-            provider: notice === "google" ? t("auth.providerGoogle") : t("auth.providerApple"),
-          })}
+          {/* Solo Apple puede disparar este aviso ahora -- Google ya usa
+              GoogleSignInButton real, ver useOAuthNotice.js */}
+          {t("auth.oauthNoticeLogin", { provider: t("auth.providerApple") })}
         </p>
       )}
 

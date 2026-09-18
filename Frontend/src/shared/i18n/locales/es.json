@@ -27,11 +27,8 @@
   "auth": {
     "close": "Cerrar",
     "or": "o",
-    "providerGoogle": "Google",
     "providerApple": "Apple",
-    "oauthGoogleRegister": "Registrarse con Google",
     "oauthAppleRegister": "Registrarse con Apple",
-    "oauthGoogleLogin": "Iniciar sesión con Google",
     "oauthAppleLogin": "Iniciar sesión con Apple",
     "oauthNoticeLogin": "{{provider}} todavía no está configurado en el backend de THERS — esta cuenta no puede iniciar sesión así por ahora.",
     "oauthNoticeRegister": "{{provider}} todavía no está configurado en el backend de THERS — esta cuenta no puede registrarse así por ahora.",
@@ -70,7 +67,8 @@
       "errorEmailRequired": "Ingresá tu correo electrónico.",
       "errorEmailInvalid": "Ingresá un correo electrónico válido.",
       "errorPasswordRequired": "Ingresá tu contraseña.",
-      "toastErrorTitle": "No pudimos iniciar sesión"
+      "toastErrorTitle": "No pudimos iniciar sesión",
+      "emailNotVerified": "Tu correo electrónico todavía no ha sido verificado. Ingresá el código que te enviamos, o pedí uno nuevo."
     },
 
     "register": {
@@ -122,23 +120,20 @@
     "forgotPassword": {
       "title": "Recuperar contraseña",
       "subtitle": "Te ayudamos a volver a tu cuenta.",
-      "intro": "Ingresá el correo electrónico asociado a tu cuenta y te ayudaremos a recuperar el acceso.",
+      "intro": "Ingresá el correo electrónico asociado a tu cuenta y te enviaremos un código de verificación.",
       "emailLabel": "Correo electrónico",
-      "submit": "Enviar enlace de recuperación",
+      "submit": "Enviar código",
       "submitting": "Enviando...",
       "backToLogin": "Volver a iniciar sesión",
       "errorEmailRequired": "Ingresá tu correo electrónico.",
-      "errorEmailInvalid": "Ingresá un correo electrónico válido.",
-      "inProgressTitle": "Función en construcción",
-      "inProgressToast": "El equipo de Backend está terminando de implementar el envío del correo de recuperación. Todavía no podemos enviarte el enlace, pero esta pantalla ya está lista para conectarse en cuanto esté disponible.",
-      "inProgressNotice": "La recuperación de contraseña por correo está en desarrollo en el Backend de THERS. Todavía no podemos enviarte el enlace, pero muy pronto vas a poder recuperar tu cuenta desde acá."
+      "errorEmailInvalid": "Ingresá un correo electrónico válido."
     },
 
     "resetPassword": {
-      "invalidLinkTitle": "Enlace inválido",
-      "invalidLinkSubtitle": "Este enlace de recuperación no es válido o expiró.",
-      "invalidLinkNotice": "Pedí un nuevo enlace desde la pantalla de recuperación de contraseña.",
-      "requestNewLink": "Solicitar nuevo enlace",
+      "invalidLinkTitle": "Sesión de recuperación inválida",
+      "invalidLinkSubtitle": "Esta autorización no es válida o expiró.",
+      "invalidLinkNotice": "Pedí un código nuevo desde la pantalla de recuperación de contraseña.",
+      "requestNewLink": "Solicitar código nuevo",
       "successTitle": "Contraseña actualizada",
       "successSubtitle": "Ya podés iniciar sesión con tu nueva contraseña.",
       "successMessage": "Tu contraseña fue actualizada correctamente.",
@@ -153,6 +148,48 @@
       "errorPasswordRequired": "Ingresá una nueva contraseña.",
       "errorPasswordTooShort": "Usá al menos 8 caracteres.",
       "errorConfirmPasswordMismatch": "Las contraseñas no coinciden."
+    },
+
+    "verifyResetCode": {
+      "title": "Verificá tu código",
+      "subtitle": "Te enviamos un código de 6 dígitos a {{email}}",
+      "verify": "Verificar",
+      "verifying": "Verificando...",
+      "noCodeReceived": "¿No recibiste el código?",
+      "resend": "Reenviar código",
+      "resendIn": "Reenviar código en {{time}}",
+      "resendSuccess": "Te enviamos un código nuevo.",
+      "missingEmailTitle": "Sesión de recuperación inválida",
+      "missingEmailSubtitle": "No encontramos una solicitud de recuperación activa.",
+      "missingEmailNotice": "Volvé a pedir un código desde la pantalla de recuperación de contraseña."
+    },
+
+    "verifyRegistrationCode": {
+      "title": "Verificá tu correo",
+      "subtitle": "Te enviamos un código de 6 dígitos a {{email}}",
+      "verify": "Verificar",
+      "verifying": "Verificando...",
+      "verifySuccess": "Tu correo fue verificado correctamente. Ya podés iniciar sesión.",
+      "noCodeReceived": "¿No recibiste el código?",
+      "resend": "Reenviar código",
+      "resendIn": "Reenviar código en {{time}}",
+      "resendSuccess": "Te enviamos un código nuevo.",
+      "backToLogin": "Volver a iniciar sesión",
+      "missingEmailTitle": "Verificación no disponible",
+      "missingEmailSubtitle": "No encontramos un registro pendiente de verificación.",
+      "missingEmailNotice": "Volvé a registrarte, o iniciá sesión si ya verificaste tu correo antes.",
+      "backToRegister": "Volver a registrarme"
+    },
+
+    "completeProfile": {
+      "title": "Completá tu perfil",
+      "subtitle": "Necesitamos estos datos para terminar de crear tu cuenta.",
+      "usernamePlaceholder": "Elegí tu nombre de usuario",
+      "submit": "Completar cuenta",
+      "submitting": "Guardando...",
+      "toastSuccess": "Tu perfil está completo. ¡Bienvenido a THERS!",
+      "toastErrorTitle": "No pudimos completar tu perfil",
+      "logoutAria": "Cerrar sesión"
     },
 
     "passwordStrength": {

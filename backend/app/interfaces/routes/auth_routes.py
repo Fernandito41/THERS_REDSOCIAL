@@ -1,18 +1,26 @@
-from flask import Blueprint, current_app, request, jsonify
+from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token
 
 from app.application.auth.forgot_password_use_case import forgot_password
+from app.application.auth.google_auth_use_case import authenticate_with_google
 from app.application.auth.login_use_case import login_user
 from app.application.auth.register_use_case import register_user
+from app.application.auth.resend_registration_code_use_case import resend_registration_code
 from app.application.auth.reset_password_use_case import reset_password
-from app.application.auth.verify_email_use_case import verify_email
+from app.application.auth.verify_registration_code_use_case import verify_registration_code
+from app.application.auth.verify_reset_code_use_case import verify_reset_code
 from app.application.email.email_service import EmailService
 from app.config import Config
 from app.domain.auth.exceptions import (
     EmailAlreadyExistsError,
+    EmailNotVerifiedError,
+    GoogleEmailNotVerifiedError,
+    IdentityAlreadyLinkedError,
     InvalidCredentialsError,
+    InvalidGoogleCredentialError,
     InvalidOrExpiredResetTokenError,
-    InvalidOrExpiredVerificationTokenError,
+    InvalidRegistrationCodeError,
+    InvalidResetCodeError,
     UsernameAlreadyExistsError,
 )
 from app.domain.auth.validators import (
@@ -25,12 +33,16 @@ from app.domain.auth.validators import (
     meets_minimum_age,
     parse_birth_date,
 )
+from app.infrastructure.auth.google_id_token_verifier import GoogleIdTokenVerifier
 from app.infrastructure.email.factory import create_email_sender
 from app.infrastructure.persistence.repositories.email_verification_repository import (
     SQLAlchemyEmailVerificationTokenRepository,
 )
 from app.infrastructure.persistence.repositories.password_reset_repository import (
     SQLAlchemyPasswordResetTokenRepository,
+)
+from app.infrastructure.persistence.repositories.user_identity_repository import (
+    SQLAlchemyUserIdentityRepository,
 )
 from app.infrastructure.persistence.repositories.user_repository import (
     SQLAlchemyUserRepository,
@@ -45,12 +57,17 @@ auth_bp = Blueprint("auth", __name__)
 _user_repository = SQLAlchemyUserRepository()
 _password_reset_token_repository = SQLAlchemyPasswordResetTokenRepository()
 _email_verification_token_repository = SQLAlchemyEmailVerificationTokenRepository()
+_user_identity_repository = SQLAlchemyUserIdentityRepository()
 
 # EmailSender se decide una sola vez, al importar este módulo (mismo momento
 # en que Config ya resolvió RESEND_API_KEY desde el entorno) -- Resend real
 # si hay API key, NullEmailSender si no (ADR-009-password-reset-and-email-verification.md
 # §Decisión, infrastructure/email/factory.py).
 _email_service = EmailService(create_email_sender(Config.RESEND_API_KEY, Config.EMAIL_FROM))
+
+# Mismo criterio: el Client ID se resuelve una sola vez al importar este
+# módulo (ADR-012-google-sign-in.md §Decisión, infrastructure/auth/google_id_token_verifier.py).
+_google_identity_verifier = GoogleIdTokenVerifier(Config.GOOGLE_CLIENT_ID)
 
 
 @auth_bp.route("/register", methods=["POST"])
@@ -119,7 +136,8 @@ def register():
 
     try:
         user = register_user(
-            name, username, email, phone, country_code, birth_date, password, _user_repository
+            name, username, email, phone, country_code, birth_date, password,
+            _user_repository, _email_verification_token_repository, _email_service,
         )
     except EmailAlreadyExistsError:
         return jsonify({"msg": "Ya existe una cuenta con ese email"}), 409
@@ -150,6 +168,18 @@ def login():
         user = login_user(email, password, _user_repository)
     except InvalidCredentialsError:
         return jsonify({"msg": "Credenciales incorrectas"}), 401
+    except EmailNotVerifiedError:
+        # 403, no 401: las credenciales SÍ eran correctas -- la cuenta
+        # todavía no completó la verificación obligatoria
+        # (ADR-011-mandatory-email-verification.md §Decisión). Nunca se
+        # llega a create_access_token() en este caso -- ningún JWT de
+        # sesión normal se emite mientras la cuenta siga sin verificar.
+        # `email_verified` explícito en el body (no solo el mensaje) para
+        # que el Frontend distinga este caso sin parsear texto.
+        return jsonify({
+            "msg": "Tu correo electrónico todavía no fue verificado.",
+            "email_verified": False,
+        }), 403
 
     # Identity del JWT: user.id (UUID de PostgreSQL), no email — ver
     # BACKEND_ARCHITECTURE.md §9 nota de impacto sobre esta migración.
@@ -164,7 +194,10 @@ def login():
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password_route():
     # Público, sin @jwt_required() -- quien lo llama todavía no tiene
-    # sesión (por eso perdió su contraseña). ADR-009 §Contrato API.
+    # sesión (por eso perdió su contraseña). También sirve para "Reenviar
+    # código" -- el Frontend llama a este mismo endpoint de nuevo con el
+    # mismo email (ADR-010-password-reset-otp-flow.md §Decisión, reemplaza
+    # el flujo de enlace de ADR-009-password-reset-and-email-verification.md).
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"msg": "No se enviaron datos"}), 400
@@ -175,15 +208,36 @@ def forgot_password_route():
     if not is_valid_email(email):
         return jsonify({"msg": "El email no es válido"}), 400
 
-    result = forgot_password(
-        email,
-        current_app.config["FRONTEND_URL"],
-        _user_repository,
-        _password_reset_token_repository,
-        _email_service,
-    )
+    result = forgot_password(email, _user_repository, _password_reset_token_repository, _email_service)
     # Siempre 200 con el mismo mensaje genérico, exista o no el email --
-    # FASE 4: no revelar si una dirección está registrada.
+    # evitar enumeración de usuarios.
+    return jsonify(result), 200
+
+
+@auth_bp.route("/verify-reset-code", methods=["POST"])
+def verify_reset_code_route():
+    # Público -- quien lo llama todavía no tiene sesión (ADR-010 §Contrato
+    # API). No usa @jwt_required(): la identidad la aporta email + código.
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"msg": "No se enviaron datos"}), 400
+
+    email = data.get("email").strip() if isinstance(data.get("email"), str) else data.get("email")
+    code = data.get("code")
+
+    if not email:
+        return jsonify({"msg": "El email es obligatorio"}), 400
+    if not code or not isinstance(code, str):
+        return jsonify({"msg": "El código es obligatorio"}), 400
+
+    try:
+        result = verify_reset_code(email, code, _user_repository, _password_reset_token_repository)
+    except InvalidResetCodeError:
+        # Mismo mensaje sin importar si el email no existe, no hay solicitud
+        # activa, el código expiró, se agotaron los intentos, o el código es
+        # simplemente incorrecto -- ADR-010 §Seguridad.
+        return jsonify({"msg": "El código es incorrecto. Inténtalo nuevamente."}), 400
+
     return jsonify(result), 200
 
 
@@ -193,12 +247,12 @@ def reset_password_route():
     if not data:
         return jsonify({"msg": "No se enviaron datos"}), 400
 
-    token = data.get("token")
+    reset_authorization = data.get("reset_authorization")
     new_password = data.get("password")
     confirm_password = data.get("confirm_password")
 
-    if not token or not isinstance(token, str):
-        return jsonify({"msg": "El token es obligatorio"}), 400
+    if not reset_authorization or not isinstance(reset_authorization, str):
+        return jsonify({"msg": "La autorización de recuperación es obligatoria"}), 400
     if not new_password or not confirm_password:
         return jsonify({"msg": "La contraseña y su confirmación son obligatorias"}), 400
     if new_password != confirm_password:
@@ -210,35 +264,113 @@ def reset_password_route():
 
     try:
         result = reset_password(
-            token,
+            reset_authorization,
             new_password,
             _user_repository,
             _password_reset_token_repository,
             _email_service,
         )
     except InvalidOrExpiredResetTokenError:
-        # Mismo mensaje/código sin importar si el token no existe, expiró o
-        # ya se usó -- ADR-009 §Contrato API.
-        return jsonify({"msg": "El enlace de recuperación no es válido o expiró"}), 400
+        # Mismo mensaje/código sin importar si la autorización no existe,
+        # expiró o ya se usó -- ADR-010 §Contrato API.
+        return jsonify(
+            {"msg": "La autorización para restablecer tu contraseña no es válida o expiró"}
+        ), 400
 
     return jsonify(result), 200
 
 
-@auth_bp.route("/verify-email", methods=["POST"])
-def verify_email_route():
-    # Público -- quien hace clic en el enlace del correo puede no tener
-    # sesión iniciada en ese navegador/dispositivo (ADR-009 §Contrato API).
+@auth_bp.route("/verify-registration-code", methods=["POST"])
+def verify_registration_code_route():
+    # Público -- quien lo llama todavía no puede iniciar sesión (la cuenta
+    # sigue sin verificar, ADR-011-mandatory-email-verification.md §Contrato
+    # API, reemplaza `POST /api/verify-email` de ADR-009).
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"msg": "No se enviaron datos"}), 400
 
-    token = data.get("token")
-    if not token or not isinstance(token, str):
-        return jsonify({"msg": "El token es obligatorio"}), 400
+    email = data.get("email").strip() if isinstance(data.get("email"), str) else data.get("email")
+    code = data.get("code")
+
+    if not email:
+        return jsonify({"msg": "El email es obligatorio"}), 400
+    if not code or not isinstance(code, str):
+        return jsonify({"msg": "El código es obligatorio"}), 400
 
     try:
-        result = verify_email(token, _user_repository, _email_verification_token_repository)
-    except InvalidOrExpiredVerificationTokenError:
-        return jsonify({"msg": "El enlace de verificación no es válido o expiró"}), 400
+        result = verify_registration_code(
+            email, code, _user_repository, _email_verification_token_repository
+        )
+    except InvalidRegistrationCodeError:
+        # Mismo mensaje sin importar si el email no existe, ya está
+        # verificado, no hay código activo, expiró, se agotaron los
+        # intentos, o el código es simplemente incorrecto -- ADR-011
+        # §Seguridad.
+        return jsonify({"msg": "El código es incorrecto. Inténtalo nuevamente."}), 400
 
     return jsonify(result), 200
+
+
+@auth_bp.route("/resend-registration-code", methods=["POST"])
+def resend_registration_code_route():
+    # Público, mismo criterio que POST /api/forgot-password -- quien lo
+    # llama todavía no puede iniciar sesión (ADR-011 §Contrato API).
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"msg": "No se enviaron datos"}), 400
+
+    email = data.get("email").strip() if isinstance(data.get("email"), str) else data.get("email")
+    if not email:
+        return jsonify({"msg": "El email es obligatorio"}), 400
+    if not is_valid_email(email):
+        return jsonify({"msg": "El email no es válido"}), 400
+
+    result = resend_registration_code(
+        email, _user_repository, _email_verification_token_repository, _email_service
+    )
+    # Siempre 200 con el mismo mensaje genérico -- evitar enumeración de
+    # usuarios (mismo criterio que POST /api/forgot-password).
+    return jsonify(result), 200
+
+
+@auth_bp.route("/auth/google", methods=["POST"])
+def google_auth_route():
+    # Público -- es, en sí mismo, el mecanismo de autenticación (ADR-012-google-sign-in.md
+    # §Contrato API). El Frontend nunca envía email/nombre directamente: solo
+    # el `credential` (ID Token) que Google Identity Services le entregó, tal
+    # cual, sin que el Frontend lo interprete.
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"msg": "No se enviaron datos"}), 400
+
+    credential = data.get("credential")
+    if not credential or not isinstance(credential, str):
+        return jsonify({"msg": "La credencial de Google es obligatoria"}), 400
+
+    try:
+        user = authenticate_with_google(
+            credential, _google_identity_verifier, _user_repository, _user_identity_repository
+        )
+    except InvalidGoogleCredentialError:
+        # Nunca hay una cuenta de THERS involucrada todavía en este punto --
+        # no hay enumeración que proteger, el mensaje puede ser directo.
+        return jsonify({"msg": "No pudimos verificar tu cuenta de Google. Intentá de nuevo."}), 400
+    except GoogleEmailNotVerifiedError:
+        return jsonify(
+            {"msg": "Tu cuenta de Google no tiene el correo verificado. THERS no puede usarla."}
+        ), 400
+    except IdentityAlreadyLinkedError:
+        # Condición de carrera: dos requests simultáneas de POST /api/auth/google
+        # para una cuenta de Google que todavía no existía en THERS (ADR-012
+        # §Seguridad) -- el otro request ya la vinculó, un reintento hace login
+        # normal, así que el mismo mensaje genérico de "intentá de nuevo" aplica.
+        return jsonify({"msg": "No pudimos verificar tu cuenta de Google. Intentá de nuevo."}), 400
+
+    # Mismo mecanismo de siempre (BACKEND_ARCHITECTURE.md §9): Google
+    # autenticó la identidad, pero el JWT que autoriza el resto de la API de
+    # THERS lo emite exclusivamente este backend, con `identity=user["id"]`
+    # -- ningún endpoint protegido (incluido GET /api/users/me) necesita ni
+    # acepta un token de Google (FASE 15 de la tarea origen).
+    token = create_access_token(identity=user["id"])
+
+    return jsonify({"token": token, "user": user}), 200

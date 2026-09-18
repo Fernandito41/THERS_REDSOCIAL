@@ -2,6 +2,8 @@
 # extensión de GET/POST /api/posts (ADR-006-comments-minimal-model.md)
 # contra PostgreSQL 16 real (thers_test, ver conftest.py) -- no mocks.
 
+from tests.conftest import mark_email_verified
+
 VALID_PASSWORD = "secretpass"
 
 
@@ -22,7 +24,11 @@ def _register_payload(**overrides):
 
 def _register_and_login(client, **overrides):
     payload = _register_payload(**overrides)
-    client.post("/api/register", json=payload)
+    register_response = client.post("/api/register", json=payload)
+    # Verificación directa en la base -- ADR-011-mandatory-email-verification.md
+    # bloquea login() para cuentas sin verificar; el código real de
+    # verificación no es observable por un test (ver conftest.mark_email_verified).
+    mark_email_verified(register_response.get_json()["user"]["id"])
     res = client.post(
         "/api/login", json={"email": payload["email"], "password": VALID_PASSWORD}
     )

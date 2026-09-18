@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from flask_jwt_extended import create_access_token
 
+from tests.conftest import mark_email_verified
 from tests.test_auth import _register_payload
 
 VALID_PASSWORD = "secretpass"
@@ -18,6 +19,7 @@ def _register_and_login(client, **overrides):
     overrides.setdefault("confirm_password", VALID_PASSWORD)
     register_response = client.post("/api/register", json=_register_payload(**overrides))
     assert register_response.status_code == 201
+    mark_email_verified(register_response.get_json()["user"]["id"])
 
     login_response = client.post(
         "/api/login",

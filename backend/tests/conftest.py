@@ -24,10 +24,34 @@ os.environ["DATABASE_URL"] = os.environ.get(
 # suite -- exactamente lo que DATABASE_URL de arriba ya evita para Postgres.
 os.environ["RESEND_API_KEY"] = ""
 
+import psycopg
 import pytest
 
 from app import create_app
 from app.extensions import db
+
+
+def mark_email_verified(user_id):
+    """Verifica el email de `user_id` directamente en la base, sin pasar
+    por el flujo OTP real (ADR-011-mandatory-email-verification.md) --
+    desde esa tarea, `login_use_case.py` rechaza cualquier cuenta con
+    `email_verified=false`, y el código real de verificación nunca es
+    observable por un test (viaja solo por correo; `NullEmailSender` no lo
+    registra en ningún lado que un test pueda leer). La inmensa mayoría de
+    los tests de este proyecto no están probando el flujo de registro/
+    verificación en sí (eso lo cubre `test_registration.py`) -- solo
+    necesitan una cuenta ya utilizable para poder probar otra cosa (posts,
+    likes, perfil, etc.), igual que ya pasaba antes de ADR-011.
+
+    Conexión psycopg directa (no `db.session`/Flask-SQLAlchemy): evita que
+    cada test que llame a esto necesite además pedir la fixture `app` solo
+    para abrir un `app_context()` -- esta función no depende de que haya una
+    app Flask activa, solo de la misma `DATABASE_URL` que ya usa toda la
+    suite (fijada arriba)."""
+    dsn = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
+    with psycopg.connect(dsn) as conn:
+        conn.execute("UPDATE users SET email_verified = true WHERE id = %s", (user_id,))
+        conn.commit()
 
 
 @pytest.fixture()
@@ -65,16 +89,18 @@ def _clean_tables(app):
     # y a `posts` una vez (ADR-008-notifications-minimal-model.md), y
     # `password_reset_tokens`/`email_verification_tokens` referencian a
     # `users` una vez cada una (ADR-009-password-reset-and-email-verification.md)
-    # -- un TRUNCATE de una sola tabla falla si otra tiene filas
-    # dependientes, salvo que todas se trunquen juntas en la misma sentencia
-    # (Postgres lo permite sin necesitar CASCADE en el propio TRUNCATE
-    # cuando la tabla referenciante también está en la lista).
+    # y `user_identities` referencia a `users` una vez
+    # (ADR-012-google-sign-in.md) -- un TRUNCATE de una sola tabla falla si
+    # otra tiene filas dependientes, salvo que todas se trunquen juntas en
+    # la misma sentencia (Postgres lo permite sin necesitar CASCADE en el
+    # propio TRUNCATE cuando la tabla referenciante también está en la
+    # lista).
     yield
     with app.app_context():
         db.session.execute(
             db.text(
                 "TRUNCATE TABLE password_reset_tokens, email_verification_tokens, "
-                "notifications, comments, likes, follows, posts, users"
+                "user_identities, notifications, comments, likes, follows, posts, users"
             )
         )
         db.session.commit()

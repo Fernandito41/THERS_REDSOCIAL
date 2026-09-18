@@ -63,32 +63,46 @@ def _button(href, label):
     )
 
 
-def password_reset_email(name, reset_link, ttl_minutes):
-    subject = "Recuperá tu contraseña de THERS"
+def _code_box(code):
+    # Código con buena visibilidad (ADR-010-password-reset-otp-flow.md
+    # §Fase 3 de la tarea): tamaño grande, espaciado entre dígitos
+    # (`letter-spacing`, con espacios reales de por medio como respaldo --
+    # algunos clientes de correo ignoran letter-spacing), centrado en una
+    # caja con el color de marca. Nada de <a href>: no hay ningún enlace
+    # que rodee el código, es texto plano para transcribir a mano.
+    spaced = " ".join(code)
+    return (
+        '<div style="margin:8px 0 20px;padding:20px;background-color:#f4f4f7;'
+        'border-radius:12px;text-align:center;">'
+        f'<span style="font-family:\'Courier New\',monospace;font-size:36px;'
+        f'font-weight:700;letter-spacing:10px;color:{_BRAND_COLOR};">'
+        f"{spaced}</span></div>"
+    )
+
+
+def password_reset_code_email(name, code, ttl_minutes):
+    subject = "Tu código de recuperación de THERS"
     body = f"""
         <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
           Hola {name},
         </p>
         <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
           Recibimos una solicitud para restablecer la contraseña de tu cuenta de THERS.
-          Tocá el siguiente botón para elegir una nueva contraseña:
+          Usá el siguiente código para continuar:
         </p>
-        {_button(reset_link, "Restablecer contraseña")}
+        {_code_box(code)}
         <p style="margin:0 0 16px;font-size:13px;color:#666666;line-height:1.6;">
-          Este enlace vence en {ttl_minutes} minutos y solo puede usarse una vez.
+          Este código vence en {ttl_minutes} minutos y solo puede usarse una vez.
         </p>
         <p style="margin:0;font-size:13px;color:#666666;line-height:1.6;">
           Si vos no solicitaste este cambio, podés ignorar este correo con tranquilidad:
           tu contraseña actual sigue siendo válida y no se realizó ningún cambio en tu cuenta.
         </p>
     """
-    footer = (
-        "Este es un mensaje automático de THERS. Si el botón no funciona, "
-        f"copiá y pegá este enlace en tu navegador:<br>{reset_link}"
-    )
+    footer = "Este es un mensaje automático de THERS. Nunca compartas este código con nadie, ni siquiera con el equipo de THERS."
     return subject, _shell(
-        preheader="Restablecé tu contraseña de THERS",
-        title="Restablecer tu contraseña",
+        preheader=f"Tu código de recuperación de THERS: {code}",
+        title="Código de verificación",
         body_html=body,
         footer_note=footer,
     )
@@ -118,31 +132,31 @@ def password_changed_email(name):
     )
 
 
-def email_verification_email(name, verify_link, ttl_hours):
+def registration_code_email(name, code, ttl_minutes):
+    # Reemplaza email_verification_email (enlace, ADR-009) --
+    # ADR-011-mandatory-email-verification.md: código de 6 dígitos, mismo
+    # criterio de visibilidad que password_reset_code_email (ADR-010).
     subject = "Verificá tu correo en THERS"
     body = f"""
         <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
           Hola {name},
         </p>
         <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
-          Confirmá que esta es tu dirección de correo para terminar de activar
-          tu cuenta de THERS:
+          Gracias por registrarte en THERS. Usá el siguiente código para
+          verificar tu correo:
         </p>
-        {_button(verify_link, "Verificar mi correo")}
+        {_code_box(code)}
         <p style="margin:0 0 16px;font-size:13px;color:#666666;line-height:1.6;">
-          Este enlace vence en {ttl_hours} horas y solo puede usarse una vez.
+          Este código vence en {ttl_minutes} minutos y solo puede usarse una vez.
         </p>
         <p style="margin:0;font-size:13px;color:#666666;line-height:1.6;">
-          Si vos no creaste esta cuenta, podés ignorar este correo.
+          Si vos no intentaste crear una cuenta en THERS, podés ignorar este correo.
         </p>
     """
-    footer = (
-        "Este es un mensaje automático de THERS. Si el botón no funciona, "
-        f"copiá y pegá este enlace en tu navegador:<br>{verify_link}"
-    )
+    footer = "Este es un mensaje automático de THERS. Nunca compartas este código con nadie, ni siquiera con el equipo de THERS."
     return subject, _shell(
-        preheader="Verificá tu correo para activar tu cuenta de THERS",
-        title="Verificar tu correo",
+        preheader=f"Tu código de verificación de THERS: {code}",
+        title="Verificá tu correo electrónico",
         body_html=body,
         footer_note=footer,
     )

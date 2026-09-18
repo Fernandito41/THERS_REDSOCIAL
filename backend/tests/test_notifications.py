@@ -3,6 +3,8 @@
 # efecto secundario de like/comment/follow (ADR-008-notifications-minimal-model.md)
 # contra PostgreSQL 16 real (thers_test, ver conftest.py) -- no mocks.
 
+from tests.conftest import mark_email_verified
+
 VALID_PASSWORD = "secretpass"
 
 
@@ -25,6 +27,7 @@ def _register_and_login(client, **overrides):
     payload = _register_payload(**overrides)
     res = client.post("/api/register", json=payload)
     user_id = res.get_json()["user"]["id"]
+    mark_email_verified(user_id)
     res = client.post(
         "/api/login", json={"email": payload["email"], "password": VALID_PASSWORD}
     )

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
-import { IoSearchOutline, IoArrowBack, IoSend, IoChatbubblesOutline } from "react-icons/io5";
+import { IoSearchOutline, IoArrowBack, IoSend, IoChatbubblesOutline, IoTrashOutline } from "react-icons/io5";
 import Avatar from "@shared/components/Avatar";
 import { api, getErrorMessage } from "@shared/lib/api";
 import { getStoredToken } from "@features/auth";
@@ -8,13 +8,12 @@ import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 
-// Mensajes directos reales (POST/GET /api/users/<id>/messages,
-// GET /api/conversations -- ADR-013-messages-minimal-model.md). `conversations`
-// llega por contexto desde AppShell.jsx (mismo patrón que `capsules`/
-// `notifications`: se carga una sola vez ahí, no en cada página). El hilo
-// abierto y su envío de mensajes son estado propio de esta página -- cargar
-// el historial completo de cada conversación por adelantado no tendría
-// sentido.
+// Mensajes directos reales (POST/GET/DELETE .../messages, GET /api/conversations
+// -- ADR-013-messages-minimal-model.md, ADR-014-messages-ux-improvements.md).
+// `conversations` llega por contexto desde AppShell.jsx (mismo patrón que
+// `capsules`/`notifications`: se carga una sola vez ahí, no en cada página).
+// El hilo abierto, su envío/borrado y el indicador de "escribiendo" son
+// estado propio de esta página.
 //
 // Sin presencia en línea: `mockConversations` tenía un campo `online`
 // inventado -- no existe ningún dato real de eso todavía, así que se quita
@@ -28,6 +27,11 @@ function authHeaders() {
 // recibir mensajes nuevos de la otra persona -- sin WebSockets/SSE todavía
 // (ADR-013 §No objetivos), este es el único mecanismo de "tiempo real".
 const THREAD_POLL_MS = 4000;
+// "Escribiendo..." necesita sentirse más inmediato que el resto del chat
+// para no parecer roto -- mismo motivo por el que ADR-014 eligió un
+// intervalo más corto para esto que para el hilo en sí.
+const TYPING_POLL_MS = 2000;
+const TYPING_PING_MIN_INTERVAL_MS = 2000;
 
 export default function Messages() {
   const { currentUser, conversations, onReloadConversations } = useOutletContext();
@@ -41,6 +45,15 @@ export default function Messages() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
+  // Id del primer mensaje sin leer al abrir el hilo -- calculado una sola
+  // vez con la primera respuesta (ADR-014 §Decisión: `read` refleja el
+  // estado ANTES de marcar como leído solo en esa primera llamada), no en
+  // cada refresco del polling siguiente, para que el separador no
+  // desaparezca mientras la persona sigue mirando la pantalla.
+  const [unreadDividerId, setUnreadDividerId] = useState(null);
+  const [otherIsTyping, setOtherIsTyping] = useState(false);
+  const threadEndRef = useRef(null);
+  const lastTypingPingRef = useRef(0);
   // Hilo nuevo abierto desde el botón "Mensaje" de CapsuleCard (?to=/&name=/
   // &username=) -- GET /api/conversations solo lista gente con la que ya
   // hay al menos un mensaje, así que esto rellena el panel mientras el
@@ -81,11 +94,20 @@ export default function Messages() {
   useEffect(() => {
     if (!activeId) return undefined;
     let cancelled = false;
+    let firstLoad = true;
 
     async function loadThread() {
       try {
         const res = await api.get(`/users/${activeId}/messages`, { headers: authHeaders() });
-        if (!cancelled) setThread(res.data.messages);
+        if (cancelled) return;
+        setThread(res.data.messages);
+        if (firstLoad) {
+          const firstUnread = res.data.messages.find(
+            (m) => !m.read && m.sender_id !== currentUser.id
+          );
+          setUnreadDividerId(firstUnread ? firstUnread.id : null);
+          firstLoad = false;
+        }
       } catch (error) {
         if (!cancelled) toast.error(getErrorMessage(error, t));
       } finally {
@@ -93,20 +115,54 @@ export default function Messages() {
       }
     }
 
+    async function pollTypingStatus() {
+      try {
+        const res = await api.get(`/users/${activeId}/typing`, { headers: authHeaders() });
+        if (!cancelled) setOtherIsTyping(res.data.typing);
+      } catch {
+        // Silencioso: "escribiendo" es un detalle cosmético, no amerita
+        // interrumpir al usuario con un Toast si un poll puntual falla.
+      }
+    }
+
     setThreadLoading(true);
+    setUnreadDividerId(null);
+    setOtherIsTyping(false);
     loadThread();
     // Abrir el hilo marca como leídos los mensajes recibidos (efecto
     // secundario del GET, ADR-013) -- refresca la lista para que el
     // `unread_count` de esta conversación y el badge del shell bajen.
     onReloadConversations();
 
-    const interval = setInterval(loadThread, THREAD_POLL_MS);
+    const threadInterval = setInterval(loadThread, THREAD_POLL_MS);
+    const typingInterval = setInterval(pollTypingStatus, TYPING_POLL_MS);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearInterval(threadInterval);
+      clearInterval(typingInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
+
+  // Hace scroll al mensaje más reciente cada vez que el hilo cambia (al
+  // abrirlo, al recibir uno nuevo por polling, o al mandar uno propio) --
+  // sin esto, un hilo largo se abría mostrando el mensaje más viejo primero.
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ block: "end" });
+  }, [thread]);
+
+  const handleDraftChange = (e) => {
+    setDraft(e.target.value);
+    if (!activeId) return;
+
+    const now = Date.now();
+    if (now - lastTypingPingRef.current < TYPING_PING_MIN_INTERVAL_MS) return;
+    lastTypingPingRef.current = now;
+    api.post(`/users/${activeId}/typing`, null, { headers: authHeaders() }).catch(() => {
+      // Mismo criterio que pollTypingStatus: un ping perdido no es un error
+      // que el usuario necesite ver.
+    });
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -128,6 +184,20 @@ export default function Messages() {
       toast.error(getErrorMessage(error, t));
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleDelete = async (messageId) => {
+    if (!window.confirm("¿Eliminar este mensaje? No se puede deshacer.")) return;
+
+    const previous = thread;
+    setThread((prev) => prev.filter((m) => m.id !== messageId));
+    try {
+      await api.delete(`/messages/${messageId}`, { headers: authHeaders() });
+      onReloadConversations();
+    } catch (error) {
+      setThread(previous);
+      toast.error(getErrorMessage(error, t));
     }
   };
 
@@ -203,7 +273,14 @@ export default function Messages() {
                   <IoArrowBack size={20} />
                 </button>
                 <Avatar name={active.user.name} size="w-9 h-9" />
-                <p className="text-ink dark:text-ink-dark text-sm font-semibold">{active.user.name}</p>
+                <div className="min-w-0">
+                  <p className="text-ink dark:text-ink-dark text-sm font-semibold truncate">
+                    {active.user.name}
+                  </p>
+                  {otherIsTyping && (
+                    <p className="text-pulse-600 text-xs animate-pulse">Escribiendo...</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
@@ -211,24 +288,45 @@ export default function Messages() {
                   <p className="text-center text-muted text-sm">Cargando...</p>
                 ) : (
                   thread.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex animate-float-in ${
-                        message.sender_id === currentUser.id ? "justify-end" : "justify-start"
-                      }`}
-                    >
+                    <div key={message.id}>
+                      {message.id === unreadDividerId && (
+                        <div className="flex items-center gap-3 py-2" role="separator">
+                          <span className="h-px flex-1 bg-line dark:bg-line-dark" />
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                            Mensajes no leídos
+                          </span>
+                          <span className="h-px flex-1 bg-line dark:bg-line-dark" />
+                        </div>
+                      )}
                       <div
-                        className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
-                          message.sender_id === currentUser.id
-                            ? "bg-pulse-600 text-white rounded-br-md"
-                            : "bg-canvas dark:bg-canvas-dark text-ink dark:text-ink-dark rounded-bl-md"
+                        className={`group flex items-center gap-1.5 animate-float-in ${
+                          message.sender_id === currentUser.id ? "justify-end" : "justify-start"
                         }`}
                       >
-                        {message.content}
+                        {message.sender_id === currentUser.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(message.id)}
+                            aria-label="Eliminar mensaje"
+                            className="shrink-0 rounded-full p-1 text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-500"
+                          >
+                            <IoTrashOutline size={14} />
+                          </button>
+                        )}
+                        <div
+                          className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
+                            message.sender_id === currentUser.id
+                              ? "bg-pulse-600 text-white rounded-br-md"
+                              : "bg-canvas dark:bg-canvas-dark text-ink dark:text-ink-dark rounded-bl-md"
+                          }`}
+                        >
+                          {message.content}
+                        </div>
                       </div>
                     </div>
                   ))
                 )}
+                <div ref={threadEndRef} />
               </div>
 
               <form onSubmit={handleSend} className="flex items-center gap-2 px-4 py-3 border-t border-line dark:border-line-dark">
@@ -236,7 +334,7 @@ export default function Messages() {
                 <input
                   type="text"
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={handleDraftChange}
                   placeholder="Escribe un mensaje..."
                   aria-label="Escribir un mensaje"
                   className="flex-1 bg-canvas dark:bg-canvas-dark border border-transparent rounded-full px-4 py-2 text-sm text-ink dark:text-ink-dark placeholder-muted focus:outline-none focus:ring-2 focus:ring-pulse-500"

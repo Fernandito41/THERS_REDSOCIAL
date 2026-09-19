@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.18 (Propuesta) |
+| Versión | 0.19 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -43,6 +43,8 @@
 > **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
+>
+> **v0.19 — borrado de mensajes, corte de no-leídos y "escribiendo..." (`ADR-014-messages-ux-improvements.md`, extiende `ADR-013`):** se agregan `DELETE /api/messages/<message_id>` (borra un mensaje propio, sin placeholder) y `POST`/`GET /api/users/<user_id>/typing` (§4.10) — a partir de feedback real probando el chat entre el equipo. `GET /api/users/<user_id>/messages` **no cambia de forma**, pero corrige cuándo se evalúa `read`: ahora refleja el estado antes de que esa misma llamada marque como leído (antes, por cómo Flask-SQLAlchemy expira sus objetos tras un `commit()`, ya aparecía en `true` para los mensajes recién marcados) — permite que el Frontend ubique un separador de "mensajes no leídos". El indicador de "escribiendo" vive en memoria del proceso del backend, no en PostgreSQL — es información efímera, sin migración ni tabla nueva; no sobrevive un reinicio ni se comparte entre varios workers (`ADR-014` §Riesgos). El Frontend (`Messages.jsx`) hace *polling* de `GET .../typing` cada 2 segundos mientras un hilo está abierto (más rápido que el *polling* general del chat, 4s) y manda `POST .../typing` con *debounce* mientras el usuario escribe. Verificado con 13 pruebas nuevas + la suite completa (276/276, ejecutada contra PostgreSQL 16 real).
 >
 > **v0.18 — mensajes directos (`ADR-013-messages-minimal-model.md`):** se agregan `POST`/`GET /api/users/<user_id>/messages` y `GET /api/conversations` (§4.10) — décima entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `conversations`+`messages`) en pasar a implementada, solo en su mitad 1:1: mensaje directo entre dos usuarios reales, sin conversaciones grupales ni tabla `conversation_participants`. `GET .../messages` marca como leídos, como efecto secundario, los mensajes recibidos de esa persona — no hay un `PATCH .../read` separado (`ADR-013` §Opciones consideradas). Sin tiempo real: el Frontend refresca por *polling*, mismo criterio que `ADR-008` para notificaciones. Ningún endpoint existente cambia de contrato. El Frontend queda conectado en la misma tarea: `Messages.jsx` deja de estar vacío y consume `GET /api/conversations`/`GET .../messages`; `unreadMessages` de `Sidebar`/`Topbar` pasa a sumar `unread_count` real en vez de quedar en `0`. Verificado con 21 pruebas nuevas + la suite completa (263/263, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
@@ -937,10 +939,83 @@ Lista vacía (`[]`) si nunca mandó ni recibió ningún mensaje.
 |---|---|---|
 | `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
 
-**Notas de implementación (los tres endpoints):**
+**Notas de implementación (los tres endpoints de arriba):**
 - No existe una entidad `conversation`/`conversation_participants` en el esquema — una "conversación" es una vista derivada de los mensajes entre dos usuarios, no una fila propia (`ADR-013` §Opciones consideradas). No hay soporte de conversaciones grupales en esta versión.
 - Sin tiempo real (WebSockets/Server-Sent Events) — el Frontend debe volver a pedir `GET /api/conversations`/`GET .../messages` periódicamente (*polling*) para ver mensajes nuevos, mismo criterio que `ADR-008` para notificaciones.
-- Sin fotos/archivos adjuntos, sin borrado de mensajes, sin confirmación de lectura visible para el remitente ("visto") en esta versión.
+- Sin fotos/archivos adjuntos, sin confirmación de lectura visible para el remitente ("visto") en esta versión.
+- **v0.19 — `read` en `GET .../messages` refleja el estado antes de marcar como leído** (`ADR-014-messages-ux-improvements.md`) — permite ubicar un separador de "mensajes no leídos" en el Frontend. Sin cambio de forma en la respuesta.
+
+#### `DELETE /api/messages/<message_id>`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-014-messages-ux-improvements.md`) |
+| Blueprint | `messages_bp` |
+| Auth requerida | **Sí**. Solo se puede borrar un mensaje propio (`sender_id == get_jwt_identity()`) |
+
+**Semántica.** Borra el mensaje `message_id` — *hard delete*, sin placeholder ("mensaje eliminado" no existe en esta versión). Deja de existir para ambas partes.
+
+**Request:** sin body.
+
+**Response — éxito (200)**
+```json
+{ "deleted": true }
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+| `404` | `message_id` no existe, **o** existe pero no le pertenece a quien hace la petición — mismo mensaje/código en ambos casos, no se distingue cuál ocurrió; incluye cualquier segmento de URL que no sea un UUID válido | `{"msg": "..."}` |
+
+#### `POST /api/users/<user_id>/typing`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-014-messages-ux-improvements.md`) |
+| Blueprint | `messages_bp` |
+| Auth requerida | **Sí**. `sender_id` sale del JWT, `recipient_id` de la URL |
+
+**Semántica.** Avisa que el usuario autenticado le está escribiendo a `user_id` en este momento. Vive en memoria del proceso del backend — **no** en PostgreSQL, sin migración ni tabla nueva (`ADR-014` §Opciones consideradas). Vigente por 3 segundos desde el último `POST`.
+
+**Request:** sin body.
+
+**Response — éxito (204, sin contenido)**
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+| `404` | `user_id` no corresponde a ningún usuario real | `{"msg": "..."}` |
+
+#### `GET /api/users/<user_id>/typing`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-014-messages-ux-improvements.md`) |
+| Blueprint | `messages_bp` |
+| Auth requerida | **Sí** |
+
+**Semántica.** Indica si `user_id` le está escribiendo al usuario autenticado en este momento (dentro de los últimos 3 segundos).
+
+**Request:** sin body.
+
+**Response — éxito (200)**
+```json
+{ "typing": "boolean" }
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+
+**Notas de implementación (`DELETE .../messages`, `POST`/`GET .../typing`):**
+- El indicador de "escribiendo" **no sobrevive un reinicio del backend** ni se comparte entre varios procesos/workers — vive en un diccionario del proceso de Flask (`ADR-014` §Riesgos). Aceptable para un servidor de desarrollo único; revisar si el backend pasa a desplegarse con `gunicorn -w N` con `N > 1`.
+- Sin "borrado solo para mí", sin placeholder de mensaje eliminado — ambos quedan como decisión de producto futura (`ADR-014` §Decisiones pendientes).
 
 ---
 

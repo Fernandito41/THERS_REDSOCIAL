@@ -13,11 +13,14 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
+from app.application.messages.delete_message_use_case import delete_message
+from app.application.messages.get_typing_status_use_case import get_typing_status
 from app.application.messages.list_conversations_use_case import list_conversations
 from app.application.messages.list_thread_use_case import DEFAULT_LIMIT, list_thread
 from app.application.messages.send_message_use_case import send_message
+from app.application.messages.send_typing_ping_use_case import send_typing_ping
 from app.domain.auth.exceptions import UserNotFoundError
-from app.domain.messages.exceptions import CannotMessageSelfError
+from app.domain.messages.exceptions import CannotMessageSelfError, MessageNotFoundError
 from app.domain.messages.validators import MAX_CONTENT_LENGTH, is_valid_content
 from app.infrastructure.persistence.repositories.message_repository import (
     SQLAlchemyMessageRepository,
@@ -25,11 +28,15 @@ from app.infrastructure.persistence.repositories.message_repository import (
 from app.infrastructure.persistence.repositories.user_repository import (
     SQLAlchemyUserRepository,
 )
+from app.infrastructure.realtime.typing_indicator_repository import (
+    InMemoryTypingIndicatorRepository,
+)
 
 messages_bp = Blueprint("messages", __name__)
 
 _user_repository = SQLAlchemyUserRepository()
 _message_repository = SQLAlchemyMessageRepository()
+_typing_repository = InMemoryTypingIndicatorRepository()
 
 
 @messages_bp.route("/users/<uuid:user_id>/messages", methods=["POST"])
@@ -89,3 +96,43 @@ def conversations():
 
     result = list_conversations(user_id, _message_repository)
     return jsonify({"conversations": result}), 200
+
+
+@messages_bp.route("/messages/<uuid:message_id>", methods=["DELETE"])
+@jwt_required()
+def delete(message_id):
+    # No anida bajo /users/<id>/messages -- borrar depende de quién mandó
+    # el mensaje, no de con quién es la conversación (ADR-014-messages-ux-improvements.md).
+    sender_id = get_jwt_identity()
+
+    try:
+        result = delete_message(str(message_id), sender_id, _message_repository)
+    except MessageNotFoundError:
+        # Mismo mensaje/código tanto si el id no existe como si existe pero
+        # es de otro usuario -- no revela cuál de los dos ocurrió (mismo
+        # criterio que PATCH /api/notifications/<id>/read).
+        return jsonify({"msg": "Mensaje no encontrado"}), 404
+
+    return jsonify(result), 200
+
+
+@messages_bp.route("/users/<uuid:user_id>/typing", methods=["POST"])
+@jwt_required()
+def typing_ping(user_id):
+    sender_id = get_jwt_identity()
+
+    try:
+        send_typing_ping(sender_id, str(user_id), _user_repository, _typing_repository)
+    except UserNotFoundError:
+        return jsonify({"msg": "Usuario no encontrado"}), 404
+
+    return "", 204
+
+
+@messages_bp.route("/users/<uuid:user_id>/typing", methods=["GET"])
+@jwt_required()
+def typing_status(user_id):
+    current_user_id = get_jwt_identity()
+
+    result = get_typing_status(current_user_id, str(user_id), _typing_repository)
+    return jsonify(result), 200

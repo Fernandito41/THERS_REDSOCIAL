@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import Icon from "@shared/components/Icon";
 import Avatar from "@shared/components/Avatar";
 import Spinner from "@shared/components/Spinner";
@@ -103,6 +104,22 @@ export default function CapsuleCard({
               >
                 {capsule.author.is_followed_by_me ? "Siguiendo" : "Seguir"}
               </button>
+            )}
+
+            {capsule.author.id !== currentUserId && (
+              // GET /api/conversations (ADR-013) solo lista gente con la que
+              // ya hay al menos un mensaje -- este es el punto de entrada
+              // real para empezar una conversación nueva. Messages.jsx lee
+              // estos mismos parámetros para abrir un hilo vacío listo para
+              // escribir, sin inventar un endpoint de búsqueda de usuarios
+              // (no existe todavía, DATABASE_ARCHITECTURE.md §4.B).
+              <Link
+                to={`/messages?to=${capsule.author.id}&name=${encodeURIComponent(capsule.author.name)}&username=${encodeURIComponent(capsule.author.username)}`}
+                aria-label={`Mandarle un mensaje a ${capsule.author.name}`}
+                className="shrink-0 rounded-th-pill border border-th-border bg-th-surface p-1.5 text-th-fg-muted transition-colors th-focus-ring hover:bg-th-surface-subtle"
+              >
+                <Icon name="mail" size={16} />
+              </Link>
             )}
           </div>
 

@@ -4,13 +4,15 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.16 |
+| Versión | 0.17 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
 > ⚠️ **Nota de alcance y honestidad de fuentes.** Este documento es un **contrato técnico previo a la implementación**, no una descripción de un esquema ya existente. Al momento de escribirlo (v0.1), el backend **no tenía base de datos, ni ORM, ni driver de PostgreSQL instalado**: la autenticación funcionaba contra credenciales hardcodeadas (ver §4). Todo lo que aquí se define como "decidido" se limita a lo que la documentación oficial ya respalda o a lo que el estado real del código justifica de forma evidente. Todo lo demás está marcado explícitamente como **PENDIENTE DE APROBACIÓN** (§14). No se inventan entidades, columnas, índices ni políticas que el proyecto no necesite hoy.
+>
+> **v0.17 — mensajes directos, `messages` (`ADR-013-messages-minimal-model.md`):** "Conversaciones (privadas y grupales), Participantes" + "Mensajes" (§4.B › Mensajería) se resuelve **solo a medias** — pasa a **implementada** (§4.A, §5.10) únicamente la mitad 1:1: mensaje directo entre dos usuarios reales, sin la tabla puente `conversation_participants` que soportaría grupos (sigue sin ratificar). Nueva tabla `messages`: `sender_id`/`recipient_id` (FKs a `users`, ambas `ON DELETE CASCADE`), `content` (texto, sin límite de esquema — validado en la aplicación, máximo 2000 caracteres), `read_at` (`TIMESTAMPTZ`, nullable, `NULL` = no leído, mismo criterio que `notifications.read_at`), sin `updated_at` (mismo criterio que `likes`/`follows`/`notifications`). **Segunda `CHECK` constraint del esquema** (`ck_messages_no_self_message`: `sender_id <> recipient_id`, mismo criterio que `ck_follows_no_self_follow`). Sin `UNIQUE` — dos mensajes entre las mismas personas son eventos legítimos, no un duplicado a impedir (mismo criterio que `notifications`). Dos índices compuestos nuevos, `ix_messages_sender_recipient_created`/`ix_messages_recipient_sender_created` (§8) — el hilo entre A y B se busca con un `OR` sobre ambos sentidos de la relación, que ninguna `UNIQUE` cubre. Decimocuarta y decimoquinta relación real entre entidades (§6): `messages.sender_id → users.id`, `messages.recipient_id → users.id`. Migración `f7a2c9e4d1b8`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 263 pruebas).
 >
 > **v0.3 — cierre de la capa de persistencia (auditoría y validación real de esta tarea).** Se corrigió la referencia a una instalación nativa de PostgreSQL 17.11 (no reproducible por el equipo) por el entorno estandarizado real: **PostgreSQL 16 vía Docker Compose** (`docker-compose.yml`, raíz del repo, imagen `postgres:16-alpine`), verificado end-to-end (`flask db upgrade`/`downgrade` repetidos, INSERT sin `id` confirmando `gen_random_uuid()` en PostgreSQL, UPDATE confirmando el trigger de `updated_at`, unicidad case-insensitive de `email` vía `CITEXT`, y reconstrucción completa desde un volumen Docker vacío). Se marcó como resuelta la herramienta de migraciones (§9) donde el documento aún decía `PENDIENTE`, pese a que Flask-Migrate/Alembic ya estaba implementado. Ningún esquema, entidad ni columna cambió — solo se sincronizó el documento con el código real ya existente.
 >
@@ -128,6 +130,7 @@ Se distingue entre:
 | `password_reset_tokens` | **IMPLEMENTADA — v0.14** (reescrita por `ADR-010-password-reset-otp-flow.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/forgot-password`/`POST /api/verify-reset-code`/`POST /api/reset-password`) | Sexta entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `verified_at` (nullable), `reset_authorization_hash`/`_expires_at` (nullable), `used_at` (nullable) — código de un solo uso (10 min), autorización temporal de propósito específico tras verificarlo (10 min), máximo 5 intentos, a lo sumo una solicitud activa por usuario (índice único parcial) |
 | `email_verification_tokens` | **IMPLEMENTADA — v0.15** (reescrita por `ADR-011-mandatory-email-verification.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/register`/`POST /api/verify-registration-code`/`POST /api/resend-registration-code`) | Séptima entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `used_at` (nullable) — código de un solo uso (10 min), máximo 5 intentos, a lo sumo un código activo por usuario (índice único parcial); sin columnas de autorización temporal, a diferencia de `password_reset_tokens` — verificar el código ya es la acción final |
 | `user_identities` | **IMPLEMENTADA — v0.16** (ratificada por `ADR-012-google-sign-in.md`; definición formal en §5.9; en uso real por `POST /api/auth/google`) | Octava entidad de la capa objetivo (§4.B, "Autenticación y cuenta", candidata `oauth_accounts`). Modelo: `user_id` (FK a `users`), `provider` (string libre, `"google"` hoy), `provider_subject` (el claim `sub`, único junto con `provider`) — un usuario puede tener varias identidades vinculadas a la vez (account linking); preparada para Apple/Microsoft sin otra migración de `users` |
+| `messages` | **IMPLEMENTADA — v0.17** (ratificada por `ADR-013-messages-minimal-model.md`; definición formal en §5.10; en uso real por `POST`/`GET /api/users/<id>/messages`, `GET /api/conversations`) | Novena entidad de la capa objetivo (§4.B, "Mensajería") en pasar a implementada, solo su mitad 1:1 — sin `conversation_participants`, sin grupos. Modelo: `sender_id`+`recipient_id` (FKs a `users`), `content` (texto), `read_at` (nullable) — sin fotos/archivos adjuntos, sin tiempo real (polling desde el Frontend) |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -204,16 +207,17 @@ Estados usados en esta capa:
 #### Mensajería
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
 |---|---|---|---|
-| Conversaciones (privadas y grupales), Participantes | `conversations` + puente `conversation_participants` (1:1 y grupo con la misma estructura) | OBJETIVO | Modelado sin decidir |
-| Mensajes | Entidad `messages` | OBJETIVO | — |
+| Conversaciones grupales, Participantes | `conversations` + puente `conversation_participants` | OBJETIVO | Modelado sin decidir — la mitad 1:1 se resolvió sin esta tabla (ver fila de abajo), grupos siguen pendientes |
+| Mensajes (1:1) | ~~Entidad `messages`~~ — **resuelto en v0.17** (`ADR-013-messages-minimal-model.md`, ver §4.A/§5.10): `sender_id`/`recipient_id` directos, sin tabla `conversations` | IMPLEMENTADA | — |
 | Fotos/videos en mensajes | `message_media` **o** reutilizar `media` | PENDIENTE DE DECISIÓN | Reutilización vs entidad propia |
-| Estado leído/no leído | Columna `last_read_at` en participante **o** tabla `message_reads` | PENDIENTE DE DECISIÓN | Granularidad (por conversación vs por mensaje) no decidida |
+| Estado leído/no leído | ~~Columna `last_read_at` en participante **o** tabla `message_reads`~~ — **resuelto en v0.17**: `messages.read_at` por mensaje individual (no por conversación) | IMPLEMENTADA | — |
 
 #### Notificaciones
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
 |---|---|---|---|
 | Likes, Comentarios, Nuevos seguidores | ~~**Una** entidad `notifications` con discriminador de tipo — no una tabla por tipo~~ — **resuelto en v0.12** (`ADR-008-notifications-minimal-model.md`, ver §4.A/§5.6) para estos tres eventos | IMPLEMENTADA | — |
-| Respuestas (a comentarios), Menciones, Mensajes, Actividad relevante | Misma entidad `notifications`, tipos adicionales | PENDIENTE DE DECISIÓN | Dependen de que existan primero las entidades de origen (`parent_comment_id`/hilos, `mentions`, `conversations`) — ninguna está ratificada todavía |
+| Respuestas (a comentarios), Menciones, Actividad relevante | Misma entidad `notifications`, tipos adicionales | PENDIENTE DE DECISIÓN | Dependen de que existan primero las entidades de origen (`parent_comment_id`/hilos, `mentions`) — ninguna está ratificada todavía |
+| Mensajes nuevos | Misma entidad `notifications`, tipo `'message'` | PENDIENTE DE DECISIÓN | `messages` ya existe (v0.17, `ADR-013`) — lo que falta es una decisión de producto explícita sobre si un mensaje nuevo debe generar notificación además de aparecer en `GET /api/conversations`, no una entidad faltante |
 
 #### Seguridad
 | Requisito funcional | Forma candidata | Estado | Por qué aún requiere decisión |
@@ -544,6 +548,42 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 ---
 
+### 5.10 `messages`
+
+> Décima entidad con definición formal (capa 4.A), ratificada por `ADR-013-messages-minimal-model.md` — cubre solo la mitad 1:1 de la candidata "Conversaciones + Mensajes" (§4.B › Mensajería): mensaje directo entre dos usuarios reales, sin tabla `conversations`/`conversation_participants`. Una "conversación" es una vista derivada de los mensajes entre dos usuarios (`GET /api/conversations`), no una fila propia.
+
+**Propósito.** Un mensaje de texto directo de un usuario a otro, con su estado de lectura.
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` — mismo patrón que el resto de entidades |
+| `sender_id` | **UUID**, FK → `users.id` | No | Quién manda — siempre resuelto desde `get_jwt_identity()`, nunca aceptado del body |
+| `recipient_id` | **UUID**, FK → `users.id` | No | Quién recibe — viene de la URL, nunca del body |
+| `content` | **TEXT** | No | Sin límite de longitud a nivel de esquema — validado en la aplicación (máximo 2000 caracteres, mismo criterio que `posts`) |
+| `read_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = no leído. Se expone en la API como booleano (`read`), nunca como el timestamp crudo — mismo criterio que `notifications.read_at` |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Define el orden cronológico del hilo |
+
+**Sin `updated_at`.** Igual que `likes`/`follows`/`notifications`: un mensaje no se edita in place más allá de marcarse como leído.
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `sender_id → users.id` y `recipient_id → users.id` (ambas `ON DELETE CASCADE`, mismo placeholder que el resto de entidades).
+
+**Relaciones.** `users (1) ←→ (N) messages` (dos veces: como remitente y como destinatario) — un usuario puede mandar y recibir muchos mensajes; cada mensaje tiene exactamente un remitente y un destinatario.
+
+**Constraints relevantes**
+- `sender_id`/`recipient_id`/`content` **NOT NULL**.
+- **`ck_messages_no_self_message`** — segunda `CHECK` del esquema (`sender_id <> recipient_id`), mismo criterio que `ck_follows_no_self_follow` (§5.5): impide mandarse un mensaje a sí mismo incluso con un `INSERT` directo.
+- **Sin `UNIQUE`.** Dos mensajes entre las mismas dos personas son eventos legítimos e independientes, no un duplicado a impedir — mismo criterio que `notifications`.
+
+**Índices.** `ix_messages_sender_recipient_created` (`sender_id`, `recipient_id`, `created_at`) e `ix_messages_recipient_sender_created` (`recipient_id`, `sender_id`, `created_at`) — el hilo entre dos usuarios se busca con un `OR` sobre ambos sentidos de la relación, que ninguna columna única cubre; ambos índices permiten que PostgreSQL resuelva ese `OR` sin escanear la tabla completa (`ADR-013` §Índices).
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-013` §Decisiones pendientes): conversaciones grupales (`conversation_participants`), fotos/archivos adjuntos, actualización en tiempo real (WebSockets/Flask-SocketIO en vez de polling), borrado de mensajes/conversaciones, confirmación de lectura visible para el remitente ("visto").
+
+---
+
 ## 6. Relaciones entre entidades
 
 **v0.8 — primera relación implementada:** `posts.author_id → users.id` (`ADR-004-posts-minimal-model.md`, ver §5.2) — `ON DELETE CASCADE`.
@@ -559,6 +599,8 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 **v0.13 — decimoprimera y decimosegunda relación implementadas:** `password_reset_tokens.user_id → users.id` (`ADR-009-password-reset-and-email-verification.md`, ver §5.7) y `email_verification_tokens.user_id → users.id` (ver §5.8), ambas `ON DELETE CASCADE`. Todo lo demás sigue siendo candidato (§4.B).
 
 **v0.16 — decimotercera relación implementada:** `user_identities.user_id → users.id` (`ADR-012-google-sign-in.md`, ver §5.9), `ON DELETE CASCADE`.
+
+**v0.17 — decimocuarta y decimoquinta relación implementadas:** `messages.sender_id → users.id` y `messages.recipient_id → users.id` (`ADR-013-messages-minimal-model.md`, ver §5.10), ambas `ON DELETE CASCADE`. Todo lo demás (conversaciones grupales) sigue siendo candidato (§4.B).
 
 Regla de diseño para cuando existan más entidades (para evitar decisiones improvisadas durante la implementación):
 - Las entidades dependientes referencian a `users` y/o `posts` (o a otras entidades ratificadas, cuando corresponda) con una FK.
@@ -597,6 +639,7 @@ Regla de diseño para cuando existan más entidades (para evitar decisiones impr
 | `uq_follows_follower_followed` | `follows(follower_id, followed_id)`, `UNIQUE` | **v0.11 (`ADR-007`).** Impone la regla de negocio (no seguir dos veces al mismo usuario) y cubre `following_count`/`POST .../follow` por ser `follower_id` su columna líder. |
 | `ix_follows_followed_id` | `follows(followed_id)` | **v0.11 (`ADR-007`).** `followers_count` y "¿me sigue esta persona?" filtran por `followed_id` — a diferencia de `likes`, esta *no* es la columna líder de la `UNIQUE` de arriba, así que necesita su propio índice o escanearía la tabla completa. |
 | `ix_notifications_recipient_id_created_at` | `notifications(recipient_id, created_at)`, compuesto | **v0.12 (`ADR-008`).** `GET /api/notifications` filtra por `recipient_id` (siempre el usuario autenticado) y ordena por `created_at DESC` — la columna líder (`recipient_id`) cubre el filtro sin escanear la tabla completa, mismo patrón que `ix_comments_post_id_created_at`. |
+| `ix_messages_sender_recipient_created` / `ix_messages_recipient_sender_created` | `messages(sender_id, recipient_id, created_at)` y `messages(recipient_id, sender_id, created_at)`, ambos compuestos | **v0.17 (`ADR-013`).** El hilo entre dos usuarios (`GET /api/users/<id>/messages`) filtra con `(sender_id=A AND recipient_id=B) OR (sender_id=B AND recipient_id=A)` y ordena por `created_at` — ninguna `UNIQUE` cubre ese acceso (a diferencia de `likes`/`follows`), así que hacen falta ambos índices para que PostgreSQL resuelva el `OR` sin escanear la tabla completa. |
 | `ix_password_reset_tokens_user_id_created_at` | `password_reset_tokens(user_id, created_at)`, compuesto | **v0.13 (`ADR-009`), sin cambios en v0.14.** `has_recent_unused_code` filtra por `user_id` y compara `created_at` contra el cooldown. |
 | `ix_password_reset_tokens_reset_authorization_hash` | `password_reset_tokens(reset_authorization_hash)` | **v0.14 (`ADR-010`).** `find_valid_by_reset_authorization_hash` busca por este hash en cada `POST /api/reset-password` — reemplaza al índice de `token_hash` de v0.13 (ese lookup ahora es sobre `reset_authorization_hash`, no sobre el código en sí, que ya no admite búsqueda directa por hash al estar salado con scrypt). |
 | `uq_password_reset_tokens_active_user` | `password_reset_tokens(user_id)`, `UNIQUE` **parcial** (`WHERE used_at IS NULL`) | **v0.14 (`ADR-010`).** Primer índice parcial del esquema — garantiza a lo sumo una solicitud activa por usuario, defensa de última línea contra la condición de carrera de dos "Reenviar código" simultáneos. |
@@ -688,7 +731,7 @@ Decisiones que este documento **no toma** porque no están respaldadas por la do
 - **Estrategia de enums** (columna de texto con `CHECK` vs tipo `ENUM` nativo) — no aplica a `users` todavía, sigue pendiente para entidades futuras.
 
 ### Entidades candidatas del modelo objetivo
-La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. ~~`comments` (mitad plana)~~ — **resuelto en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4): solo comentar un post; sigue pendiente `parent_comment_id`/hilos de respuestas. ~~`follows`~~ — **resuelto en v0.11** (`ADR-007-follows-minimal-model.md`, ver §4.A/§5.5): seguir/dejar de seguir y contadores; sigue pendiente listar seguidores/seguidos. ~~`notifications`~~ — **resuelto en v0.12** (`ADR-008-notifications-minimal-model.md`, ver §4.A/§5.6): solo los tipos `like`/`comment`/`follow`; sigue pendiente todo lo demás (respuestas, menciones, mensajes, push/email, preferencias, "marcar todas como leídas", borrado). ~~`password_reset_tokens`/`email_verification_tokens`~~ — **resuelto en v0.13** (`ADR-009-password-reset-and-email-verification.md`, ver §4.A/§5.7/§5.8); `password_reset_tokens` **reconstruida en v0.14** (`ADR-010-password-reset-otp-flow.md`, mismo §5.7 actualizado) y `email_verification_tokens` **reconstruida en v0.15** (`ADR-011-mandatory-email-verification.md`, mismo §5.8 actualizado), ambas para el mismo flujo de código OTP de 6 dígitos, sin afectar el estado "resuelto" de la candidata en sí. ~~`oauth_accounts`~~ — **resuelto en v0.16** (`ADR-012-google-sign-in.md`, ver §4.A/§5.9): entidad separada `user_identities`, preparada para más proveedores sin otra migración de `users`. Entre las candidatas que siguen sin ratificar: `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions` (forma general con tipos), `saves`, `mentions`, `hashtags` (+`post_hashtags`), `blocks`, `restrictions`, `conversations` (+`conversation_participants`, `messages`, `message_media`), `password_changes`, `security_events`.
+La lista completa de estructuras candidatas del producto objetivo (con su **forma candidata, estado y motivo de decisión**) vive ahora en **§4.B**, para no duplicarla ni arriesgar divergencia. Criterio invariable: **ninguna se implementa sin ratificación por ADR** (`HB-001` §11–12), y su **modelado (PK/FK/tipos) permanece PENDIENTE**. ~~`posts`~~ — **resuelto en v0.8** (`ADR-004-posts-minimal-model.md`, ver §4.A/§5.2): solo su versión mínima de texto; sigue pendiente todo lo demás que §4.B › Contenido listaba junto a ella (`visibility`, edición/borrado, compartir). ~~`reactions` (caso binario)~~ — **resuelto en v0.9** (`ADR-005-likes-minimal-model.md`, ver §4.A/§5.3): solo like/no-like; sigue pendiente la forma general con tipos de reacción. ~~`comments` (mitad plana)~~ — **resuelto en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4): solo comentar un post; sigue pendiente `parent_comment_id`/hilos de respuestas. ~~`follows`~~ — **resuelto en v0.11** (`ADR-007-follows-minimal-model.md`, ver §4.A/§5.5): seguir/dejar de seguir y contadores; sigue pendiente listar seguidores/seguidos. ~~`notifications`~~ — **resuelto en v0.12** (`ADR-008-notifications-minimal-model.md`, ver §4.A/§5.6): solo los tipos `like`/`comment`/`follow`; sigue pendiente todo lo demás (respuestas, menciones, mensajes, push/email, preferencias, "marcar todas como leídas", borrado). ~~`password_reset_tokens`/`email_verification_tokens`~~ — **resuelto en v0.13** (`ADR-009-password-reset-and-email-verification.md`, ver §4.A/§5.7/§5.8); `password_reset_tokens` **reconstruida en v0.14** (`ADR-010-password-reset-otp-flow.md`, mismo §5.7 actualizado) y `email_verification_tokens` **reconstruida en v0.15** (`ADR-011-mandatory-email-verification.md`, mismo §5.8 actualizado), ambas para el mismo flujo de código OTP de 6 dígitos, sin afectar el estado "resuelto" de la candidata en sí. ~~`oauth_accounts`~~ — **resuelto en v0.16** (`ADR-012-google-sign-in.md`, ver §4.A/§5.9): entidad separada `user_identities`, preparada para más proveedores sin otra migración de `users`. ~~`messages` (mitad 1:1)~~ — **resuelto en v0.17** (`ADR-013-messages-minimal-model.md`, ver §4.A/§5.10): mensaje directo `sender_id`/`recipient_id`, sin tabla `conversations`/`conversation_participants`; sigue pendiente todo lo demás que §4.B › Mensajería seguía listando (grupos, fotos/archivos adjuntos). Entre las candidatas que siguen sin ratificar: `sessions`/`devices`, `user_settings`, columnas de perfil (`avatar_url`/`bio`), `media`, `reactions` (forma general con tipos), `saves`, `mentions`, `hashtags` (+`post_hashtags`), `blocks`, `restrictions`, `conversations` (+`conversation_participants`, para grupos), `message_media`, `password_changes`, `security_events`.
 
 ### Operación
 - ~~Herramienta de migraciones~~ — **resuelto en código: Flask-Migrate/Alembic**, scaffolding en `backend/migrations/` (ver `BACKEND_ARCHITECTURE.md` §8); ratificación formal pendiente de confirmar. **Ubicación de la carpeta `database/`** sigue sin definir — las migraciones quedaron dentro de `backend/`, no en una carpeta `database/` separada.

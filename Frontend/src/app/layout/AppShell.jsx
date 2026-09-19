@@ -35,6 +35,12 @@ export default function AppShell() {
   // `notifications` = notificaciones reales (GET /api/notifications,
   // ADR-008-notifications-minimal-model.md) -- ya no mockNotifications.
   const [notifications, setNotifications] = useState([]);
+  // `conversations` = conversaciones reales (GET /api/conversations,
+  // ADR-013-messages-minimal-model.md) -- alimenta el badge de no-leídos de
+  // Sidebar/Topbar y el panel de lista de Messages.jsx (vía contexto, mismo
+  // criterio que `capsules`/`notifications`: se carga una vez acá, no en
+  // cada página que la necesita).
+  const [conversations, setConversations] = useState([]);
   const [isComposerOpen, setComposerOpen] = useState(false);
   // El drawer de navegación móvil sustituye al buscador/menú desplegable que
   // antes vivían en el header: ahora el buscador es un formulario real del
@@ -70,14 +76,45 @@ export default function AppShell() {
       }
     }
 
+    // GET /api/conversations (ADR-013). Mismo criterio que loadNotifications:
+    // sin loading propio, un error no bloquea el resto del shell.
+    async function loadConversations() {
+      try {
+        const res = await api.get("/conversations", { headers: authHeaders() });
+        if (!cancelled) setConversations(res.data.conversations);
+      } catch (error) {
+        if (!cancelled) toast.error(getErrorMessage(error, t));
+      }
+    }
+
     loadPosts();
     loadNotifications();
+    loadConversations();
     return () => {
       cancelled = true;
     };
   }, []);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+  const unreadMessages = useMemo(
+    () => conversations.reduce((sum, c) => sum + c.unread_count, 0),
+    [conversations]
+  );
+
+  // Messages.jsx llama a esto después de mandar un mensaje o de abrir un
+  // hilo (que marca como leído en el backend, ADR-013 §Opciones
+  // consideradas) -- vuelve a pedir GET /api/conversations para que el
+  // último mensaje/`unread_count` de la lista y el badge del shell queden
+  // sincronizados, sin duplicar esa lógica de fetch en la propia página.
+  const reloadConversations = async () => {
+    try {
+      const res = await api.get("/conversations", { headers: authHeaders() });
+      setConversations(res.data.conversations);
+    } catch {
+      // Silencioso: no es una acción disparada por el usuario, es una
+      // resincronización de fondo -- un fallo puntual no amerita un Toast.
+    }
+  };
 
   const handleToggleFollow = (id) => {
     setFollowingIds((prev) => {
@@ -247,8 +284,7 @@ export default function AppShell() {
     <ShellFrame
       variant={shellVariant}
       currentUser={currentUser}
-      // Sin endpoint de mensajes todavía: no se inventa un contador.
-      unreadMessages={0}
+      unreadMessages={unreadMessages}
       hasUnreadNotifications={unreadCount > 0}
       onCreate={() => setComposerOpen(true)}
       onLogout={handleLogout}
@@ -265,6 +301,8 @@ export default function AppShell() {
           capsulesLoading,
           followingIds,
           notifications,
+          conversations,
+          onReloadConversations: reloadConversations,
           theme,
           toggleTheme,
           onToggleFollow: handleToggleFollow,

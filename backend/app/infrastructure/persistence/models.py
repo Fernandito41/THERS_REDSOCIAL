@@ -375,6 +375,84 @@ class Notification(db.Model):
         return f"<Notification recipient_id={self.recipient_id} type={self.type!r}>"
 
 
+class Message(db.Model):
+    __tablename__ = "messages"
+
+    # Décima entidad del alcance objetivo del producto en pasar a
+    # ratificada (ADR-013-messages-minimal-model.md) -- mensaje directo
+    # entre dos usuarios reales, sin tabla `conversations`/`conversation_
+    # participants`: una "conversación" es una vista derivada de todos los
+    # mensajes entre dos usuarios, no una fila propia (ADR-013 §Opciones
+    # consideradas).
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    # ON DELETE CASCADE en ambas FKs: mismo placeholder que el resto de
+    # entidades (borrado de cuenta no existe todavía como funcionalidad).
+    sender_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Sin límite de longitud a nivel de esquema -- la validación de negocio
+    # (MAX_CONTENT_LENGTH) vive en domain/messages/validators.py, mismo
+    # criterio que posts/comments.
+    content = db.Column(db.Text, nullable=False)
+
+    # NULL = no leído. Mismo criterio que Notification.read_at (ADR-008):
+    # nunca cruza la frontera HTTP como timestamp crudo, la API expone
+    # "read" como booleano.
+    read_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    # Sin `updated_at`: un mensaje no se edita in place más allá de
+    # marcarse como leído, mismo criterio que Like/Follow/Notification.
+
+    # lazy="joined" en ambos extremos: listar conversaciones siempre
+    # necesita identificar "la otra persona" -- evita el N+1 de resolverla
+    # por separado (mismo motivo que Post.author/Comment.author).
+    sender = db.relationship("User", foreign_keys=[sender_id], lazy="joined")
+    recipient = db.relationship("User", foreign_keys=[recipient_id], lazy="joined")
+
+    __table_args__ = (
+        # Sin UNIQUE: dos mensajes entre las mismas dos personas son eventos
+        # legítimos e independientes, no un duplicado a impedir (mismo
+        # criterio que `notifications`, ADR-008 §Modelo de datos).
+        db.CheckConstraint(
+            "sender_id <> recipient_id", name="ck_messages_no_self_message"
+        ),
+        # El hilo entre A y B se busca con
+        # (sender_id=A AND recipient_id=B) OR (sender_id=B AND recipient_id=A),
+        # ordenado por created_at -- ninguna columna única cubre ese acceso,
+        # así que hacen falta ambos índices compuestos para que PostgreSQL
+        # resuelva el OR sin escanear la tabla completa (ADR-013 §Índices).
+        db.Index(
+            "ix_messages_sender_recipient_created",
+            "sender_id", "recipient_id", "created_at",
+        ),
+        db.Index(
+            "ix_messages_recipient_sender_created",
+            "recipient_id", "sender_id", "created_at",
+        ),
+    )
+
+    def __repr__(self):
+        return f"<Message sender_id={self.sender_id} recipient_id={self.recipient_id}>"
+
+
 class PasswordResetToken(db.Model):
     __tablename__ = "password_reset_tokens"
 

@@ -9,3 +9,9 @@ class CannotMessageSelfError(Exception):
     coincide con `get_jwt_identity()`. Impuesto también a nivel de esquema
     (CHECK ck_messages_no_self_message, ADR-013 §Modelo de datos) -- esta
     excepción es la primera línea de defensa, con un mensaje claro."""
+
+
+class MessageNotFoundError(Exception):
+    """`message_id` no existe, o existe pero no pertenece a quien intenta
+    borrarlo (ADR-014-messages-ux-improvements.md) -- mismo mensaje/código
+    en ambos casos, no se distingue cuál ocurrió."""

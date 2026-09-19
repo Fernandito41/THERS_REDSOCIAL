@@ -1,6 +1,10 @@
-# Pruebas de integración de POST/GET /api/users/<id>/messages y de
-# GET /api/conversations (ADR-013-messages-minimal-model.md) contra
-# PostgreSQL 16 real (thers_test, ver conftest.py) -- no mocks.
+# Pruebas de integración de POST/GET /api/users/<id>/messages,
+# GET /api/conversations (ADR-013-messages-minimal-model.md),
+# DELETE /api/messages/<id> y POST/GET /api/users/<id>/typing
+# (ADR-014-messages-ux-improvements.md) contra PostgreSQL 16 real
+# (thers_test, ver conftest.py) -- no mocks. El indicador de "escribiendo"
+# vive en memoria del proceso (no en la base), así que sus pruebas no
+# dependen de `_clean_tables` de conftest.py.
 
 from tests.conftest import mark_email_verified
 
@@ -240,3 +244,131 @@ class TestListConversations:
         response = client.get("/api/conversations", headers=_auth_headers(token_c))
 
         assert response.get_json()["conversations"] == []
+
+
+class TestReadFlagReflectsPreReadState:
+    """ADR-014: `read` en la respuesta de GET .../messages refleja el
+    estado ANTES de que esta misma llamada marque como leído, no después."""
+
+    def test_first_view_shows_unread_false_for_just_marked_messages(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        client.post(f"/api/users/{id_b}/messages", json={"content": "hola"}, headers=_auth_headers(token_a))
+
+        response = client.get(f"/api/users/{id_a}/messages", headers=_auth_headers(token_b))
+
+        assert response.get_json()["messages"][0]["read"] is False
+
+    def test_second_view_shows_read_true(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        client.post(f"/api/users/{id_b}/messages", json={"content": "hola"}, headers=_auth_headers(token_a))
+        client.get(f"/api/users/{id_a}/messages", headers=_auth_headers(token_b))
+
+        response = client.get(f"/api/users/{id_a}/messages", headers=_auth_headers(token_b))
+
+        assert response.get_json()["messages"][0]["read"] is True
+
+
+class TestDeleteMessage:
+    def _send(self, client, token, recipient_id, content="hola"):
+        res = client.post(
+            f"/api/users/{recipient_id}/messages", json={"content": content}, headers=_auth_headers(token)
+        )
+        return res.get_json()["message"]["id"]
+
+    def test_sender_can_delete_own_message(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        response = client.delete(f"/api/messages/{message_id}", headers=_auth_headers(token_a))
+
+        assert response.status_code == 200
+        assert response.get_json() == {"deleted": True}
+
+    def test_deleted_message_disappears_from_thread(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        client.delete(f"/api/messages/{message_id}", headers=_auth_headers(token_a))
+        response = client.get(f"/api/users/{id_b}/messages", headers=_auth_headers(token_a))
+
+        assert response.get_json()["messages"] == []
+
+    def test_recipient_cannot_delete_a_message_sent_to_them(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        response = client.delete(f"/api/messages/{message_id}", headers=_auth_headers(token_b))
+
+        assert response.status_code == 404
+
+    def test_nonexistent_message_returns_404(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        fake_id = "11111111-1111-1111-1111-111111111111"
+
+        response = client.delete(f"/api/messages/{fake_id}", headers=_auth_headers(token_a))
+
+        assert response.status_code == 404
+
+    def test_without_token_returns_401(self, client):
+        fake_id = "11111111-1111-1111-1111-111111111111"
+
+        response = client.delete(f"/api/messages/{fake_id}")
+
+        assert response.status_code == 401
+
+
+class TestTypingIndicator:
+    def test_no_ping_means_not_typing(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+
+        response = client.get(f"/api/users/{id_b}/typing", headers=_auth_headers(token_a))
+
+        assert response.status_code == 200
+        assert response.get_json() == {"typing": False}
+
+    def test_ping_makes_recipient_see_typing_true(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+
+        ping = client.post(f"/api/users/{id_b}/typing", headers=_auth_headers(token_a))
+        response = client.get(f"/api/users/{id_a}/typing", headers=_auth_headers(token_b))
+
+        assert ping.status_code == 204
+        assert response.get_json() == {"typing": True}
+
+    def test_ping_does_not_make_sender_see_typing_from_themselves(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        client.post(f"/api/users/{id_b}/typing", headers=_auth_headers(token_a))
+
+        response = client.get(f"/api/users/{id_b}/typing", headers=_auth_headers(token_a))
+
+        assert response.get_json() == {"typing": False}
+
+    def test_ping_to_nonexistent_user_returns_404(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        fake_id = "11111111-1111-1111-1111-111111111111"
+
+        response = client.post(f"/api/users/{fake_id}/typing", headers=_auth_headers(token_a))
+
+        assert response.status_code == 404
+
+    def test_ping_without_token_returns_401(self, client):
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+
+        response = client.post(f"/api/users/{id_b}/typing")
+
+        assert response.status_code == 401
+
+    def test_status_without_token_returns_401(self, client):
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+
+        response = client.get(f"/api/users/{id_b}/typing")
+
+        assert response.status_code == 401

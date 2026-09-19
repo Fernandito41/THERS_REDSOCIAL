@@ -4,7 +4,7 @@
 # directamente (BACKEND_ARCHITECTURE.md §17), mismo patrón que
 # follow_repository.py/notification_repository.py.
 
-from sqlalchemy import and_, case, func, or_, select, update
+from sqlalchemy import and_, case, delete as sa_delete, func, or_, select, update
 
 from app.domain.messages.repositories import MessageRepository
 from app.extensions import db
@@ -104,3 +104,14 @@ class SQLAlchemyMessageRepository(MessageRepository):
         # fila por conversación (pocas filas, orden en Python es aceptable).
         conversations.sort(key=lambda c: c["last_message"].created_at, reverse=True)
         return conversations
+
+    def delete(self, message_id, sender_id):
+        # `sender_id` en el propio WHERE, no un chequeo aparte después de
+        # leer la fila -- confirma existencia y pertenencia en la misma
+        # sentencia (mismo principio que NotificationRepository.mark_as_read,
+        # ADR-014-messages-ux-improvements.md).
+        result = db.session.execute(
+            sa_delete(Message).where(Message.id == message_id, Message.sender_id == sender_id)
+        )
+        db.session.commit()
+        return result.rowcount > 0

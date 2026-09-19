@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.17 (Propuesta) |
+| Versión | 0.18 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -43,6 +43,8 @@
 > **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
+>
+> **v0.18 — mensajes directos (`ADR-013-messages-minimal-model.md`):** se agregan `POST`/`GET /api/users/<user_id>/messages` y `GET /api/conversations` (§4.10) — décima entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `conversations`+`messages`) en pasar a implementada, solo en su mitad 1:1: mensaje directo entre dos usuarios reales, sin conversaciones grupales ni tabla `conversation_participants`. `GET .../messages` marca como leídos, como efecto secundario, los mensajes recibidos de esa persona — no hay un `PATCH .../read` separado (`ADR-013` §Opciones consideradas). Sin tiempo real: el Frontend refresca por *polling*, mismo criterio que `ADR-008` para notificaciones. Ningún endpoint existente cambia de contrato. El Frontend queda conectado en la misma tarea: `Messages.jsx` deja de estar vacío y consume `GET /api/conversations`/`GET .../messages`; `unreadMessages` de `Sidebar`/`Topbar` pasa a sumar `unread_count` real en vez de quedar en `0`. Verificado con 21 pruebas nuevas + la suite completa (263/263, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.13 — notificaciones (`ADR-008-notifications-minimal-model.md`):** se agregan `GET /api/notifications` y `PATCH /api/notifications/<id>/read` (§4.7) — sexta entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata `notifications`) en pasar a implementada. Cubre solo los tres eventos que el backend ya sabe generar: dar like a un post (`ADR-005`), comentarlo (`ADR-006`) y seguir a un usuario (`ADR-007`) — nunca al propio actor sobre su propio contenido, y nunca duplicada por una repetición idempotente de un like/follow ya existente (`ADR-008` §Opciones consideradas). `POST /api/posts/<id>/like`, `POST /api/posts/<id>/comments` y `POST /api/users/<id>/follow` **no cambian su contrato** — la notificación es un efecto secundario invisible en la respuesta de quien dispara la acción. El Frontend ya consume este contrato en la misma tarea: `AppShell.jsx` reemplaza `mockNotifications` por `GET /api/notifications` (mismo patrón que `capsules`/`posts`, `ADR-004`) y `handleMarkRead`/`handleMarkAllRead` llaman a `PATCH .../read` con optimistic update (mismo patrón que `handleToggleLike`, `ADR-005`); sin endpoint de "marcar todas" en el backend (`ADR-008` §No objetivos), `handleMarkAllRead` itera sobre las no leídas. Verificado con 21 pruebas nuevas + la suite completa (145/145, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real con dos usuarios reales generando los tres tipos de evento.
 
@@ -835,6 +837,113 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 
 ---
 
+### 4.10 Mensajes
+
+#### `POST /api/users/<user_id>/messages`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-013-messages-minimal-model.md`) |
+| Blueprint | `messages_bp` (`backend/app/interfaces/routes/message_routes.py`) |
+| Auth requerida | **Sí** — `Bearer <jwt>` en el header `Authorization`. `sender_id` sale exclusivamente del JWT, `recipient_id` de la URL — ninguno de los dos se acepta del body |
+
+**Semántica.** Manda un mensaje de texto de la persona autenticada a `user_id`. Nunca idempotente — cada llamada crea una fila nueva (mismo criterio que crear un comentario, `ADR-006`).
+
+**Request body**
+```json
+{ "content": "string" }
+```
+
+**Response — éxito (201)**
+```json
+{
+  "message": {
+    "id": "string (UUID)",
+    "sender_id": "string (UUID)",
+    "recipient_id": "string (UUID)",
+    "content": "string",
+    "read": "boolean",
+    "created_at": "string (ISO 8601)"
+  }
+}
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Body vacío o sin JSON; `content` ausente, vacío tras `trim()`, o mayor a 2000 caracteres; `user_id` es el propio usuario autenticado | `{"msg": "..."}` |
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+| `404` | `user_id` no corresponde a ningún usuario real; incluye cualquier segmento de URL que no sea un UUID válido | `{"msg": "..."}` |
+
+#### `GET /api/users/<user_id>/messages`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-013-messages-minimal-model.md`) |
+| Blueprint | `messages_bp`, mismo blueprint que `POST` |
+| Auth requerida | **Sí** — mismo criterio que `POST`. Solo se puede leer un hilo propio (donde la persona autenticada es remitente o destinatario) |
+
+**Semántica.** Historial de mensajes con `user_id`, ambos sentidos, orden cronológico **ascendente** (mensaje más viejo primero — a diferencia del feed/notificaciones, que van más reciente primero). Sin paginación real: límite fijo de **50** más recientes. **Efecto secundario:** marca como leídos los mensajes que `user_id` le mandó a la persona autenticada (`ADR-013` §Opciones consideradas — no hay un `PATCH .../read` separado).
+
+**Request:** sin body. Header `Authorization: Bearer <token>` obligatorio.
+
+**Response — éxito (200)**
+```json
+{ "messages": [ /* misma forma que el objeto de POST */ ] }
+```
+Lista vacía (`[]`) si nunca hubo mensajes con esa persona.
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+| `404` | `user_id` no corresponde a ningún usuario real; incluye cualquier segmento de URL que no sea un UUID válido | `{"msg": "..."}` |
+
+#### `GET /api/conversations`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-013-messages-minimal-model.md`) |
+| Blueprint | `messages_bp` |
+| Auth requerida | **Sí** — solo lista las conversaciones de la propia persona autenticada, sin `user_id` en la URL (mismo criterio que `GET /api/notifications`) |
+
+**Semántica.** Lista, para cada persona con la que la persona autenticada tiene al menos un mensaje (enviado o recibido), el último mensaje del hilo y cuántos mensajes sin leer le mandó esa persona. Más reciente primero, por fecha del último mensaje.
+
+**Request:** sin body. Header `Authorization: Bearer <token>` obligatorio.
+
+**Response — éxito (200)**
+```json
+{
+  "conversations": [
+    {
+      "user": { "id": "string (UUID)", "username": "string", "name": "string" },
+      "last_message": {
+        "content": "string",
+        "sender_id": "string (UUID)",
+        "created_at": "string (ISO 8601)"
+      },
+      "unread_count": "integer"
+    }
+  ]
+}
+```
+Lista vacía (`[]`) si nunca mandó ni recibió ningún mensaje.
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Falta el header `Authorization`, el token es inválido/está malformado, o expiró | `{"msg": "..."}` |
+
+**Notas de implementación (los tres endpoints):**
+- No existe una entidad `conversation`/`conversation_participants` en el esquema — una "conversación" es una vista derivada de los mensajes entre dos usuarios, no una fila propia (`ADR-013` §Opciones consideradas). No hay soporte de conversaciones grupales en esta versión.
+- Sin tiempo real (WebSockets/Server-Sent Events) — el Frontend debe volver a pedir `GET /api/conversations`/`GET .../messages` periódicamente (*polling*) para ver mensajes nuevos, mismo criterio que `ADR-008` para notificaciones.
+- Sin fotos/archivos adjuntos, sin borrado de mensajes, sin confirmación de lectura visible para el remitente ("visto") en esta versión.
+
+---
+
 ## 5. Modelo de datos expuesto por la API
 
 Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) pero sí documenta **qué forma tiene el dato tal como cruza la frontera HTTP**, que puede no coincidir 1:1 con el modelo de persistencia:
@@ -850,6 +959,8 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | `password_reset_token` (OTP) — no se expone como objeto propio; el código viaja una única vez por correo, la autorización temporal viaja una única vez en `reset_authorization` (respuesta de `verify-reset-code`) | — | `ADR-010-password-reset-otp-flow.md` §Seguridad: solo se persisten `code_hash` (scrypt) y `reset_authorization_hash` (SHA-256), ninguno de los dos valores crudos vuelve a aparecer en ningún response |
 | `email_verification_token` (OTP de registro) — no se expone como objeto propio; el código viaja una única vez por correo, nunca en un response JSON | — | `ADR-011-mandatory-email-verification.md` §Seguridad (reemplaza el token de enlace de `ADR-009`): solo se persiste `code_hash` (scrypt), el valor crudo nunca cruza la frontera HTTP; estructuralmente separado de `password_reset_token` (tabla y repositorio propios) — un código nunca verifica el propósito del otro |
 | `user_identity` — no se expone como objeto propio; el `credential` (ID Token) que la origina viaja una única vez, en el body de `POST /api/auth/google` (nunca en la respuesta) | — | `ADR-012-google-sign-in.md`: solo se persisten `provider`/`provider_subject` (el claim `sub`, nunca el email como identificador); ningún endpoint lista las identidades vinculadas de un usuario todavía |
+| `message` (en response de `POST`/`GET /api/users/<id>/messages`) | `id`, `sender_id`, `recipient_id`, `content`, `read`, `created_at` | `ADR-013-messages-minimal-model.md`; coincide con `messages` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` (internamente un timestamp) — mismo criterio que `notification.read` |
+| `conversation` (en response de `GET /api/conversations`) — no es una entidad propia, es una vista derivada de `messages` agrupada por "la otra persona" | `user` (misma forma reducida que `actor`/`author`), `last_message` (`content`/`sender_id`/`created_at`), `unread_count` | `ADR-013-messages-minimal-model.md` §Opciones consideradas: sin tabla `conversations`/`conversation_participants` en esta versión |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 

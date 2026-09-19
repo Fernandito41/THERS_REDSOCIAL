@@ -100,7 +100,8 @@ def _clean_tables(app):
         db.session.execute(
             db.text(
                 "TRUNCATE TABLE password_reset_tokens, email_verification_tokens, "
-                "user_identities, notifications, comments, likes, follows, posts, users"
+                "user_identities, notifications, messages, comments, likes, follows, "
+                "posts, users"
             )
         )
         db.session.commit()

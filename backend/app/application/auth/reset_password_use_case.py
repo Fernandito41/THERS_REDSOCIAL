@@ -18,7 +18,12 @@ from app.domain.auth.token_generator import hash_token
 
 
 def reset_password(
-    raw_authorization, new_password, user_repository, password_reset_token_repository, email_service
+    raw_authorization,
+    new_password,
+    user_repository,
+    password_reset_token_repository,
+    email_service,
+    refresh_token_repository=None,
 ):
     request_row = password_reset_token_repository.find_valid_by_reset_authorization_hash(
         hash_token(raw_authorization)
@@ -34,6 +39,11 @@ def reset_password(
 
     user_repository.update(user.id, {"password_hash": hash_password(new_password)})
     password_reset_token_repository.mark_used(request_row.id)
+
+    # ADR-017 §7 decisión 1: cambiar la contraseña cierra todas las sesiones
+    # abiertas (si alguien tenía la contraseña vieja, pierde su acceso).
+    if refresh_token_repository is not None:
+        refresh_token_repository.revoke_all_for_user(user.id)
 
     email_service.send_password_changed_email(user.email, user.name)
 

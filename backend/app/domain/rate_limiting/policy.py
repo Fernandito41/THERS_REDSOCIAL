@@ -89,3 +89,11 @@ REGISTER = RateLimitRule("register", 5, _HOUR, clear_on_success=False)
 #: de que ese contador es **por código**, así que pedir códigos nuevos daba 5
 #: intentos más cada 60 s indefinidamente. El límite por IP acota eso.
 OTP_VERIFY = RateLimitRule("otp_verify", 15, 15 * _MINUTE, clear_on_success=True)
+
+#: `POST /api/reports` (ADR-032 §2), limitado **por persona**.
+#:
+#: 10 por hora. Reportar es un acto legítimo y a veces repetido (varias
+#: publicaciones del mismo acoso), así que el tope no es bajo; lo que se frena es
+#: usar el reporte como herramienta de hostigamiento o de saturación de quien
+#: modera. `clear_on_success=False`: acá el acierto **es** el uso.
+REPORT_CREATE = RateLimitRule("report_create", 10, _HOUR, clear_on_success=False)

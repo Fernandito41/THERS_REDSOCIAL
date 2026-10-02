@@ -43,10 +43,10 @@ Cuatro documentos, todos en `docs/architecture/`, todos con el mismo formato y e
 
 | Documento | Versión | Estado | Cubre |
 |---|---|---|---|
-| `BACKEND_ARCHITECTURE.md` | 0.7 | Pendiente de ratificación formal (`HB-001` §11–12) | Capas del backend, flujo de una petición, autenticación, configuración, seguridad |
-| `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md` + `DATABASE_ERD_OBJETIVO.md` | 0.5 / 0.1 / 0.2 | Pendiente de ratificación formal | Modelo de datos en tres capas: implementado (`users`, incluidas columnas de perfil), objetivo del producto (candidatas sin modelado ratificado), pendiente de decisión |
+| `BACKEND_ARCHITECTURE.md` | 0.13 | Pendiente de ratificación formal (`HB-001` §11–12) | Capas del backend, flujo de una petición, autenticación, configuración, seguridad |
+| `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md` + `DATABASE_ERD_OBJETIVO.md` | 0.18 / 0.1 / 0.2 | Pendiente de ratificación formal | Modelo de datos en tres capas: implementado (`users`, incluidas columnas de perfil), objetivo del producto (candidatas sin modelado ratificado), pendiente de decisión |
 | `FRONTEND_ARCHITECTURE.md` | 0.4 | Pendiente de ratificación formal | Stack, estructura, estado, routing, frontera con el backend, seguridad y Design System (§13) del Frontend del producto |
-| `API_CONTRACT.md` | 0.3 | Pendiente de ratificación formal | Catálogo de endpoints, formato de request/response/error, autenticación — única fuente del contrato HTTP entre `Frontend/` y `backend/` |
+| `API_CONTRACT.md` | 0.21 | Pendiente de ratificación formal | Catálogo de endpoints, formato de request/response/error, autenticación — única fuente del contrato HTTP entre `Frontend/` y `backend/` |
 
 Ninguno de los cuatro es todavía un documento oficial ratificado en el sentido de `HB-001` §11–12: son la mejor fuente disponible para su dominio, con las decisiones sin respaldo marcadas explícitamente como `PENDIENTE DE APROBACIÓN` dentro de cada uno. No copian contenido entre sí — cada decisión vive en un único documento y los demás la referencian.
 
@@ -59,6 +59,41 @@ Matiz de estado a tener en cuenta: `ARC-001` se autodeclara "Propuesta v0.1 — 
 `FAS-001` vive en `docs/architecture/Frontend/` y es exclusivo del Handbook (confirmado en su propio §1, §3, §17) — no confundir con `FRONTEND_ARCHITECTURE.md` (§3.1), que es del producto. `FRONTEND_ARCHITECTURE.md` §2 documenta esta distinción con detalle.
 
 Catálogo de componentes cerrado (`PV-001` Parte 7 §21): antes de crear un componente nuevo, verificar si el catálogo ya lo cubre. 25 extensiones al catálogo siguen pendientes de ratificación formal (`PV-001`, Anexo Fase 7) — no implementarlas dándolas por aprobadas.
+
+### 3.2b App móvil Android (`mobile/` — creada 2026-10-01)
+
+`ADR-016-mobile-stack.md` (**ratificado 2026-10-01**) decide **React Native + Expo SDK 57 +
+TypeScript**. Es la **cuarta aplicación** del monorepo, independiente de las otras tres (sin código
+ni `node_modules` compartidos, lockfile propio — mismas reglas de §2).
+
+Versiones fijadas por el template del SDK, **no** por el `latest` de npm: `expo 57.0.26`,
+`react 19.2.3`, `react-native 0.86.3` (**no 0.87.x**), `typescript ~6.0.3`, `expo-router 57.0.24`;
+`compileSdk`/`targetSdk` 36, `minSdk` 24, NDK 27.1.12297006, Gradle 9.3.1.
+
+Estructura (espeja las convenciones de `Frontend/`, §10):
+
+| Ruta | Contenido |
+|---|---|
+| `mobile/app/` | rutas de Expo Router (`_layout.tsx`, `index.tsx`, `login.tsx`, `profile.tsx`) |
+| `mobile/src/features/<dominio>/` | `context/`, `lib/`, `types.ts` por dominio funcional |
+| `mobile/src/shared/` | `lib/api.ts`, `lib/session.ts`, `design/tokens.ts` |
+
+- **Alias:** `@`, `@features`, `@shared`, `@assets` (en `tsconfig.json`, resueltos por Metro).
+  Usarlos en vez de rutas relativas, igual que en `Frontend/`.
+- **`EXPO_PUBLIC_API_URL`** es la única variable; queda **embebida en el bundle**, así que nunca
+  debe llevar un secreto. `mobile/.env` está ignorado por git.
+- **Estado de la implementación:** solo login, perfil propio y logout contra la API real. Typecheck,
+  `expo-doctor` (21/21) y bundle de Android **verificados**; build nativa compilada y probada en un
+  teléfono real (moto z3, 2026-10-02) — pendiente repetir en el Samsung A16 5G. En Windows la
+  build exige una ruta corta (`subst`, `ANDROID_SETUP.md` §9). Ver `docs/mobile/VALIDATION.md`, que
+  distingue los cuatro estados.
+- **No reutilizar los `.jsx` del Frontend**: son DOM + Tailwind. Sí son portables los módulos puros
+  (validadores, i18n, formatters) y los tokens de `tokens.css` como constantes TS.
+- **Sin NativeWind ni biblioteca visual**, por decisión explícita del encargo.
+- `ADR-017-jwt-session-policy.md` (**aceptado**, sin implementar) es su dependencia de sesión: hasta
+  entonces la sesión móvil muere a los 15 minutos, y eso es esperado, no un defecto.
+- Documentación operativa en `docs/mobile/`: `READINESS.md`, `ANDROID_SETUP.md` (entorno Windows y
+  trampas reales del SDK CLI), `VALIDATION.md`, `ROADMAP.md`.
 
 ### 3.3 Organización y repositorio
 
@@ -83,7 +118,7 @@ Ningún cambio de arquitectura o diseño se decide de forma aislada dentro de un
 ## 5. Reglas de arquitectura por área
 
 ### Backend
-- Fuente: `BACKEND_ARCHITECTURE.md` (§3.1) — propuesta v0.3, pendiente de ratificación.
+- Fuente: `BACKEND_ARCHITECTURE.md` (§3.1) — propuesta v0.13, pendiente de ratificación.
 - Capas observadas y consolidadas: `domain/`, `application/`, `interfaces/routes/`, `config.py`, `extensions.py`, `run.py` — mantenerlas por consistencia, sin tratarlas como contrato cerrado hasta su ratificación.
 - Stack confirmado: Flask + JWT (`flask_jwt_extended`) + PostgreSQL — driver (`psycopg` v3) y ORM (SQLAlchemy + Flask-Migrate/Alembic) ya integrados y en uso real (`register`/`login`/`GET /api/users/me` contra PostgreSQL 16 vía Docker Compose; ver `BACKEND_ARCHITECTURE.md` §2/§8, `DATABASE_ARCHITECTURE.md`). Ratificación formal por el Comité Técnico de estas decisiones sigue pendiente de confirmar (`BACKEND_ARCHITECTURE.md` §20).
 - `backend/requirements.txt` ya existe, fijando las versiones en uso real (Flask, flask-cors, Flask-JWT-Extended, Flask-SQLAlchemy, Flask-Migrate, `psycopg[binary]`). `pyproject.toml` sigue sin existir; el equipo no ha ratificado formalmente estas versiones como estándar oficial.
@@ -98,17 +133,21 @@ Ningún cambio de arquitectura o diseño se decide de forma aislada dentro de un
 - Alias de imports (`@`, `@features`, `@shared`, `@assets`) definidos en `vite.config.js` y ya en uso — documentados en `FRONTEND_ARCHITECTURE.md` §20.
 
 ### Base de Datos
-- Fuente: `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md`/`DATABASE_ERD_OBJETIVO.md` (§3.1) — propuesta v0.2/v0.1/v0.2, pendiente de ratificación.
-- Única entidad con modelo implementado: `users` (columnas `name`, `username`, `email`, `phone`, `country_code`, `birth_date`, `password_hash` — las últimas cuatro ratificadas por `ADR-002-user-profile-fields.md`). El resto del alcance funcional del producto está registrado como candidatas objetivo o pendientes de decisión — ninguna se implementa sin ratificación por ADR.
+- Fuente: `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md`/`DATABASE_ERD_OBJETIVO.md` (§3.1) — propuesta v0.18/v0.1/v0.2, pendiente de ratificación.
+- **Ya no es solo `users`** (corrección: este archivo afirmaba "única entidad con modelo implementado" cuando el esquema había avanzado por ADR). Implementadas y ratificadas: `users` (incluidos `username`/`phone`/`country_code`/`birth_date` por `ADR-002`, `bio`/media de perfil por `ADR-015`), `posts` (`ADR-004`), likes (`ADR-005`), comentarios (`ADR-006`), `follows` (`ADR-007`), `notifications` (`ADR-008`), tokens de recuperación y verificación (`ADR-009`/`ADR-010`/`ADR-011`), identidades externas de Google (`ADR-012`) y `messages` (`ADR-013`/`ADR-014`). Migración `head` actual: `b7d41e9a3c52` (`refresh_tokens`, `ADR-017`; encadena con `a5c8e2d71f34`, de `ADR-015`).
+- Lo que siga registrado como candidato objetivo en `DATABASE_ARCHITECTURE.md` §4.B no se implementa sin ratificación por ADR.
 - No inventar esquema, convención ni entidad nueva sin confirmarlo con el equipo.
 
 ### API (Frontend ↔ Backend)
-- Fuente: `API_CONTRACT.md` (§3.1) — propuesta v0.1, pendiente de ratificación.
-- Endpoints implementados: `POST /api/register`, `POST /api/login`, `GET`/`PATCH /api/users/me` (`ADR-002-user-profile-fields.md`, `ADR-003-profile-update-contract.md`), `POST`/`GET /api/posts` (`ADR-004-posts-minimal-model.md`), `POST`/`DELETE /api/posts/<id>/like` (`ADR-005-likes-minimal-model.md`), `POST`/`GET /api/posts/<id>/comments` (`ADR-006-comments-minimal-model.md`) y `POST`/`DELETE /api/users/<id>/follow` (`ADR-007-follows-minimal-model.md`) — catálogo completo en `API_CONTRACT.md` §4 (v0.12). El Frontend ya consume todos estos endpoints end-to-end (`Register.jsx`/`AuthContext.jsx`, `Profile.jsx`, `CapsuleCard.jsx`, feed) — corrección respecto a una nota anterior de este archivo que daba esa integración por pendiente; `API_CONTRACT.md` changelog v0.4/v0.9–v0.12 documenta cada conexión real.
+- Fuente: `API_CONTRACT.md` (§3.1) — propuesta v0.21, pendiente de ratificación.
+- **34 rutas registradas** (verificado contra `app.url_map`, incluida la ruta estática de Flask, 2026-10-02; 32 antes de `ADR-017`). Catálogo completo y autoritativo en `API_CONTRACT.md` §4 (v0.21) — **no replicar aquí la lista**, se desactualiza. Resumen por familia: auth (`register`, `login`, `auth/google`, recuperación y verificación por OTP), perfil (`GET`/`PATCH /api/users/me`, avatar y portada), social (posts, likes, comentarios, follows), notificaciones, mensajes directos (incluido borrado y "escribiendo") y media local.
+- El Frontend ya consume todas esas familias end-to-end.
+- **Sin tiempo real:** no hay Flask-SocketIO ni WebSocket en el backend (verificado por búsqueda). Mensajes y notificaciones se refrescan por *polling* HTTP desde el Frontend. No asumir Socket.IO.
+- **Sesión:** `JWT_ACCESS_TOKEN_EXPIRES` es de **15 minutos** (default de la librería, verificado en ejecución) y con `ADR-017-jwt-session-policy.md` hay **refresh token rotativo de 30 días** (`POST /api/refresh`, `POST /api/logout`, tabla `refresh_tokens`): **backend implementado el 2026-10-02 (rama `feature/refresh-tokens`, pendiente de merge)**. El cliente móvil y la web todavía no lo usan, así que su sesión sigue muriendo a los 15 minutos hasta que se haga el PR 2.
 - Todo endpoint nuevo se documenta en `API_CONTRACT.md` el mismo día del PR (`HB-001` §15.1).
 
 ### DevOps
-- **Sin documentación oficial.** Docker, CI/CD, deploy, SSL, dominios y monitoreo están fuera del alcance declarado de `HB-001` §0 y no aparecen en ningún otro documento de `/docs`. Cualquier trabajo en esta área debe tratarse como territorio no especificado (§15) y consultarse con el equipo antes de tomar decisiones estructurales.
+- **Sin documentación oficial.** Existe una **propuesta sin ratificar**, `ADR-018-hosting-and-environments.md`, y una lista de verificación de publicación, `docs/LAUNCH_CHECKLIST.md` (Play Store, SEO, huecos de producto). Docker, CI/CD, deploy, SSL, dominios y monitoreo están fuera del alcance declarado de `HB-001` §0 y no aparecen en ningún otro documento de `/docs`. Cualquier trabajo en esta área debe tratarse como territorio no especificado (§15) y consultarse con el equipo antes de tomar decisiones estructurales.
 
 ### Handbook (`handbook/`)
 - Código implementado (Módulos 1–10, estado Release Candidate). Fuente de verdad en cascada: `ARC-001` → `DS-001` → `WF-001`/`PV-001` → `FAS-001` (§3.2, con el matiz de ratificación documental ya señalado ahí).
@@ -196,8 +235,10 @@ npm run preview              # sirve el build de producción
 npm run dev             # servidor de desarrollo
 npm run build             # build de producción
 npm run preview             # sirve el build de producción
-# Nota: no hay script "lint" en Frontend/package.json pese a tener @eslint/js
-# como devDependency — no está cableado todavía.
+npm run lint                  # eslint . — ya cableado (corrige una nota vieja de este archivo
+                               # que decía que no existía). Con eslint-plugin-react-hooks
+                               # registrado: rules-of-hooks como error, exhaustive-deps como
+                               # warning. Debe quedar en 0 errores.
 # Copiar Frontend/.env.example a Frontend/.env y ajustar VITE_API_URL si el
 # backend no corre en http://127.0.0.1:5000; sin esa variable, api.js usa ese
 # mismo valor por defecto y lo advierte por consola.
@@ -225,8 +266,12 @@ python -m flask db upgrade        # aplica migraciones (backend/migrations/) —
 python run.py                     # punto de entrada — sirve en http://127.0.0.1:5000
 
 # Tests (requieren una base `thers_test` separada, ya migrada igual que arriba)
-python -m pytest                  # 27 pruebas de integración contra PostgreSQL real,
-                                   # no mocks (backend/tests/conftest.py)
+python -m pytest                  # 316 pruebas de integración contra PostgreSQL real, no mocks
+                                   # (backend/tests/conftest.py). Verificado 2026-10-02: 316 passed.
+                                   # conftest.py deriva el puerto de POSTGRES_PORT (el mismo que usa
+                                   # docker-compose.yml) — antes estaba fijo en 5432 y en una máquina
+                                   # con PostgreSQL nativo apuntaba al motor equivocado.
+                                   # TEST_DATABASE_URL sigue sirviendo como override explícito.
 ```
 
 ---

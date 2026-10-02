@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -181,3 +182,28 @@ Config.S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
 Config.S3_ACCESS_KEY_ID = os.environ.get("S3_ACCESS_KEY_ID")
 Config.S3_SECRET_ACCESS_KEY = os.environ.get("S3_SECRET_ACCESS_KEY")
 Config.S3_REGION = os.environ.get("S3_REGION")
+
+
+# --- Sesión JWT (ADR-017-jwt-session-policy.md) ---------------------------
+# Explícitas, no el default accidental de la librería. Sobreescribibles por
+# entorno para poder probar la renovación en un dispositivo con un access de
+# segundos (p. ej. JWT_ACCESS_TOKEN_EXPIRES_SECONDS=30 solo en local/staging).
+def _positive_int_env(name, default):
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise RuntimeError(f"{name} debe ser un entero positivo (recibido: {raw!r}).")
+    if value < 1:
+        raise RuntimeError(f"{name} debe ser un entero positivo (recibido: {value}).")
+    return value
+
+
+Config.JWT_ACCESS_TOKEN_EXPIRES = timedelta(
+    seconds=_positive_int_env("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", 15 * 60)
+)
+Config.JWT_REFRESH_TOKEN_EXPIRES = timedelta(
+    days=_positive_int_env("JWT_REFRESH_TOKEN_EXPIRES_DAYS", 30)
+)

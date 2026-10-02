@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.20 (Propuesta) |
+| Versión | 0.21 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -44,7 +44,9 @@
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
 >
-> **v0.20 — corrección retroactiva: imágenes y bio de perfil (`ADR-015-profile-media.md`):** este documento quedó atrasado respecto al código (no al revés), igual que en v0.9. `ADR-015` ya estaba implementado en el backend y consumido por el Frontend sin figurar aquí, contra `HB-001` §15.1. Se documentan: el objeto `user` gana `bio`, `location`, `website`, `avatar_url` y `cover_url`; `PATCH /api/users/me` acepta `bio`/`location`/`website`; y cuatro rutas nuevas (`POST`/`DELETE /api/users/me/avatar`, `POST`/`DELETE /api/users/me/cover`) más `GET /api/media/<ruta>` (§4.11). Se verificaron contra el código y la suite del backend, no contra el ADR.
+> **v0.20 — corrección retroactiva: imágenes y bio de perfil (`ADR-015-profile-media.md`):** este documento quedó atrasado respecto al código (no al revés), igual que en v0.9. `ADR-015` ya estaba implementado en el backend y consumido por el Frontend sin figurar aquí, contra `HB-001` §15.1. Se documentan: el objeto `user` gana `bio`, `location`, `website`, `avatar_url` y `cover_url`; `PATCH /api/users/me` acepta `bio`/`location`/`website`; y cuatro rutas nuevas (`POST`/`DELETE /api/users/me/avatar`, `POST`/`DELETE /api/users/me/cover`) más `GET /api/media/<ruta>` (§4.12). Se verificaron contra el código y la suite del backend, no contra el ADR.
+>
+> **v0.21 — sesión con refresh token rotativo (`ADR-017-jwt-session-policy.md`):** `POST /api/login` y `POST /api/auth/google` **agregan** `refresh_token` al cuerpo (cambio aditivo: `token` y `user` no cambian). Se agregan `POST /api/refresh` y `POST /api/logout` (§4.11), ambos autenticados con el **refresh** token en `Authorization: Bearer`. Cada renovación consume el refresh presentado y emite un par nuevo; reusar uno ya consumido revoca toda esa sesión. `POST /api/reset-password` ahora además revoca todas las sesiones del usuario. Access token: 15 min; refresh: 30 días; ambos explícitos en `config.py` y sobreescribibles por entorno. Nueva tabla `refresh_tokens` (`DATABASE_ARCHITECTURE.md` v0.18). Ningún endpoint protegido cambia: siguen aceptando solo access tokens. Verificado con 24 pruebas nuevas (incluida una carrera real de dos renovaciones simultáneas) + la suite completa (316/316, contra PostgreSQL 16 real).
 >
 > **v0.19 — borrado de mensajes, corte de no-leídos y "escribiendo..." (`ADR-014-messages-ux-improvements.md`, extiende `ADR-013`):** se agregan `DELETE /api/messages/<message_id>` (borra un mensaje propio, sin placeholder) y `POST`/`GET /api/users/<user_id>/typing` (§4.10) — a partir de feedback real probando el chat entre el equipo. `GET /api/users/<user_id>/messages` **no cambia de forma**, pero corrige cuándo se evalúa `read`: ahora refleja el estado antes de que esa misma llamada marque como leído (antes, por cómo Flask-SQLAlchemy expira sus objetos tras un `commit()`, ya aparecía en `true` para los mensajes recién marcados) — permite que el Frontend ubique un separador de "mensajes no leídos". El indicador de "escribiendo" vive en memoria del proceso del backend, no en PostgreSQL — es información efímera, sin migración ni tabla nueva; no sobrevive un reinicio ni se comparte entre varios workers (`ADR-014` §Riesgos). El Frontend (`Messages.jsx`) hace *polling* de `GET .../typing` cada 2 segundos mientras un hilo está abierto (más rápido que el *polling* general del chat, 4s) y manda `POST .../typing` con *debounce* mientras el usuario escribe. Verificado con 13 pruebas nuevas + la suite completa (276/276, ejecutada contra PostgreSQL 16 real).
 >
@@ -181,7 +183,8 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 **Response — éxito (200)**
 ```json
 {
-  "token": "string (JWT)",
+  "token": "string (JWT de acceso, 15 min)",
+  "refresh_token": "string (JWT de refresh, 30 días, un solo uso -- ver §4.11)",
   "user": {
     "id": "string (UUID)",
     "username": "string",
@@ -211,7 +214,8 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 - La validación ya **no** compara contra una credencial hardcodeada — consulta la tabla `users` real vía `SQLAlchemyUserRepository` (`backend/app/infrastructure/persistence/repositories/user_repository.py`).
 - El objeto `user` devuelto ahora incluye también `username`, `phone`, `country_code`, `birth_date` (`ADR-002`).
 - **`identity` del JWT cambió de `email` a `user.id` (UUID, como string)** — cualquier endpoint protegido usa `get_jwt_identity()` y recibe un UUID de `users.id`, no un email. Ver `BACKEND_ARCHITECTURE.md` §9.
-- El token sigue sin política de expiración explícita configurada (`PENDIENTE DE APROBACIÓN`, sin cambios en esta tarea).
+- ~~El token sigue sin política de expiración explícita~~ — **cerrado en v0.21** (`ADR-017`): access 15 min y refresh 30 días, explícitos en `config.py`.
+- **v0.21:** la respuesta gana `refresh_token` (aditivo; `token` y `user` no cambian) — ver §4.11.
 - **v0.16:** nuevo caso `403` para cuenta sin verificar (`ADR-011-mandatory-email-verification.md` §Decisión) — `email_verified: false` explícito en el body (no solo en el mensaje) para que el Frontend lo distinga sin parsear texto y redirija a `POST /api/verify-registration-code` (§4.8).
 
 ### 4.2 Endpoints protegidos
@@ -716,6 +720,8 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 { "msg": "Tu contraseña fue actualizada correctamente." }
 ```
 
+**Efecto adicional (v0.21, `ADR-017` §7):** además de cambiar la contraseña, **revoca todas las sesiones** (refresh tokens) del usuario — quien tuviera la contraseña vieja pierde el acceso en cuanto su access token actual expire (≤ 15 min).
+
 **Response — error**
 
 | Código | Causa | Body |
@@ -808,7 +814,8 @@ Lista vacía (`[]`) si el post no tiene comentarios.
 **Response — éxito (200)** — mismo shape que `POST /api/login`
 ```json
 {
-  "token": "string (JWT de THERS)",
+  "token": "string (JWT de acceso de THERS)",
+  "refresh_token": "string (JWT de refresh -- ver §4.11)",
   "user": {
     "id": "string (UUID)",
     "username": "string",
@@ -1021,7 +1028,57 @@ Lista vacía (`[]`) si nunca mandó ni recibió ningún mensaje.
 
 ---
 
-### 4.11 Imágenes de perfil (`ADR-015`)
+### 4.11 Sesión (refresh token)
+
+Política completa y razonamiento: `ADR-017-jwt-session-policy.md`. El **access token** (15 min) autoriza todos los endpoints protegidos, sin cambios. El **refresh token** (30 días) solo sirve para estos dos endpoints y es de **un solo uso**: cada renovación lo consume y entrega uno nuevo.
+
+#### `POST /api/refresh`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** (v0.21) |
+| Blueprint | `auth_bp` |
+| Auth requerida | **Sí, con el refresh token** (`Authorization: Bearer <refresh_token>`). Un access token aquí da `401` |
+
+**Request body:** ninguno.
+
+**Response — éxito (200)**
+```json
+{
+  "token": "string (JWT de acceso nuevo)",
+  "refresh_token": "string (JWT de refresh nuevo; el anterior queda consumido)"
+}
+```
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Sin header, token inválido o expirado, **no es un refresh token**, nunca registrado, revocado, o **ya consumido** (reuso: además revoca toda la sesión) — mismo mensaje en todos los casos | `{"msg": "..."}` |
+
+**Reglas para el cliente (`ADR-017` §4.4):** una sola renovación en vuelo (el resto de peticiones espera); ante `401` en esta llamada, cerrar sesión y volver al login sin reintentos; un error de **red** al renovar no es un `401` y no debe cerrar la sesión. Guardar siempre el refresh nuevo antes de usar el par. Si la respuesta se pierde por la red, el refresh anterior ya está consumido (riesgo aceptado en la v1, `ADR-017` §7).
+
+#### `POST /api/logout`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** (v0.21) |
+| Blueprint | `auth_bp` |
+| Auth requerida | **Sí, con el refresh token** |
+
+**Request body:** ninguno. Revoca toda la sesión (cadena de renovaciones) a la que pertenece el refresh presentado; **otras sesiones del mismo usuario no se tocan**. Idempotente.
+
+**Response — éxito (200):** `{"msg": "Sesión cerrada"}`
+
+| Código | Causa | Body |
+|---|---|---|
+| `401` | Sin header, token inválido o expirado, o es un access token | `{"msg": "..."}` |
+
+**Limitación conocida:** el **access token ya emitido sigue siendo válido hasta expirar** (≤ 15 min); no hay lista de revocación de access tokens. El cliente debe descartarlo localmente.
+
+---
+
+### 4.12 Imágenes de perfil (`ADR-015`)
 
 Documentado en v0.20 de forma retroactiva (ver el changelog). Todo el contenido de esta sección se verificó contra el código y las pruebas del backend.
 
@@ -1084,13 +1141,13 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | `message` (en response de `POST`/`GET /api/users/<id>/messages`) | `id`, `sender_id`, `recipient_id`, `content`, `read`, `created_at` | `ADR-013-messages-minimal-model.md`; coincide con `messages` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` (internamente un timestamp) — mismo criterio que `notification.read` |
 | `conversation` (en response de `GET /api/conversations`) — no es una entidad propia, es una vista derivada de `messages` agrupada por "la otra persona" | `user` (misma forma reducida que `actor`/`author`), `last_message` (`content`/`sender_id`/`created_at`), `unread_count` | `ADR-013-messages-minimal-model.md` §Opciones consideradas: sin tabla `conversations`/`conversation_participants` en esta versión |
 
-**Perfil ampliado (v0.20, `ADR-015`):** además de los campos de la fila `user` de arriba, el objeto `user` expone `bio` (≤ 160 caracteres), `location` (≤ 60), `website` (≤ 100, URL válida), `avatar_url` y `cover_url` — los cuatro primeros `null` mientras no se definan, y las dos URL son absolutas (resueltas con `MEDIA_PUBLIC_BASE_URL`) o `null`. La forma reducida de autor (`author`, `actor`, `user` de `conversation`) incluye `avatar_url`. Las rutas que los gestionan están en §4.11.
+**Perfil ampliado (v0.20, `ADR-015`):** además de los campos de la fila `user` de arriba, el objeto `user` expone `bio` (≤ 160 caracteres), `location` (≤ 60), `website` (≤ 100, URL válida), `avatar_url` y `cover_url` — los cuatro primeros `null` mientras no se definan, y las dos URL son absolutas (resueltas con `MEDIA_PUBLIC_BASE_URL`) o `null`. La forma reducida de autor (`author`, `actor`, `user` de `conversation`) incluye `avatar_url`. Las rutas que los gestionan están en §4.12.
 
 ---
 
 ## 6. Autenticación y autorización
 
-- **Mecanismo:** JWT emitido por `flask_jwt_extended`, `create_access_token(identity=user["id"])` — `identity` es el `id` (UUID, como string) de `users`, no el email (cambiado en esta tarea; ver `BACKEND_ARCHITECTURE.md` §9).
+- **Mecanismo:** JWT emitido por `flask_jwt_extended` — `identity` es el `id` (UUID, como string) de `users`, no el email (ver `BACKEND_ARCHITECTURE.md` §9). Desde v0.21 cada login entrega además un **refresh token** rotativo (§4.11, `ADR-017`): access 15 min, refresh 30 días, ambos explícitos en `config.py` y sobreescribibles por entorno.
 - **Convención de envío:** header `Authorization: Bearer <token>` — verificada contra código real desde v0.3 (`GET /api/users/me`, §4.2).
 - **Almacenamiento en el Frontend:** `localStorage` (`useAuth.js`) — decisión ya registrada como `PENDIENTE DE APROBACIÓN` en `FRONTEND_ARCHITECTURE.md` §16, no se repite la discusión aquí.
 - **Autorización (roles/permisos):** no existe ningún concepto en el sistema — no se documenta lo que no existe.

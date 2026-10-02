@@ -4,13 +4,15 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.17 |
+| Versión | 0.18 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
 > ⚠️ **Nota de alcance y honestidad de fuentes.** Este documento es un **contrato técnico previo a la implementación**, no una descripción de un esquema ya existente. Al momento de escribirlo (v0.1), el backend **no tenía base de datos, ni ORM, ni driver de PostgreSQL instalado**: la autenticación funcionaba contra credenciales hardcodeadas (ver §4). Todo lo que aquí se define como "decidido" se limita a lo que la documentación oficial ya respalda o a lo que el estado real del código justifica de forma evidente. Todo lo demás está marcado explícitamente como **PENDIENTE DE APROBACIÓN** (§14). No se inventan entidades, columnas, índices ni políticas que el proyecto no necesite hoy.
+>
+> **v0.18 — refresh tokens rotativos, `refresh_tokens` (`ADR-017-jwt-session-policy.md`):** nueva entidad implementada (definición formal en §5.11). Una fila por refresh token emitido; cada login abre una familia (`family_id`) y cada renovación consume la fila vigente y crea la siguiente. Se guarda el **SHA-256 del `jti`**, nunca el token. Índice único parcial `uq_refresh_tokens_active_family` (a lo sumo un token activo por familia, mismo patrón que `ADR-010`). Migración `b7d41e9a3c52`, que encadena con `a5c8e2d71f34` (`ADR-015`, aún sin commitear a esta fecha). `ON DELETE CASCADE` desde `users`.
 >
 > **v0.17 — mensajes directos, `messages` (`ADR-013-messages-minimal-model.md`):** "Conversaciones (privadas y grupales), Participantes" + "Mensajes" (§4.B › Mensajería) se resuelve **solo a medias** — pasa a **implementada** (§4.A, §5.10) únicamente la mitad 1:1: mensaje directo entre dos usuarios reales, sin la tabla puente `conversation_participants` que soportaría grupos (sigue sin ratificar). Nueva tabla `messages`: `sender_id`/`recipient_id` (FKs a `users`, ambas `ON DELETE CASCADE`), `content` (texto, sin límite de esquema — validado en la aplicación, máximo 2000 caracteres), `read_at` (`TIMESTAMPTZ`, nullable, `NULL` = no leído, mismo criterio que `notifications.read_at`), sin `updated_at` (mismo criterio que `likes`/`follows`/`notifications`). **Segunda `CHECK` constraint del esquema** (`ck_messages_no_self_message`: `sender_id <> recipient_id`, mismo criterio que `ck_follows_no_self_follow`). Sin `UNIQUE` — dos mensajes entre las mismas personas son eventos legítimos, no un duplicado a impedir (mismo criterio que `notifications`). Dos índices compuestos nuevos, `ix_messages_sender_recipient_created`/`ix_messages_recipient_sender_created` (§8) — el hilo entre A y B se busca con un `OR` sobre ambos sentidos de la relación, que ninguna `UNIQUE` cubre. Decimocuarta y decimoquinta relación real entre entidades (§6): `messages.sender_id → users.id`, `messages.recipient_id → users.id`. Migración `f7a2c9e4d1b8`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 263 pruebas).
 >
@@ -129,6 +131,7 @@ Se distingue entre:
 | `notifications` | **IMPLEMENTADA — v0.12** (ratificada por `ADR-008-notifications-minimal-model.md`; definición formal en §5; en uso real por `GET /api/notifications`/`PATCH /api/notifications/<id>/read`, generada como efecto secundario de `POST /api/posts/<id>/like`, `POST /api/posts/<id>/comments` y `POST /api/users/<id>/follow`) | Quinta entidad de la capa objetivo (§4.B, "Notificaciones") en pasar a implementada, solo para los tipos `like`/`comment`/`follow`. Modelo: `recipient_id`+`actor_id` (FKs a `users`), `type` (discriminador), `post_id` (FK a `posts`, nullable), `read_at` (nullable) — sin respuestas/menciones/mensajes, sin push/email, sin preferencias configurables |
 | `password_reset_tokens` | **IMPLEMENTADA — v0.14** (reescrita por `ADR-010-password-reset-otp-flow.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/forgot-password`/`POST /api/verify-reset-code`/`POST /api/reset-password`) | Sexta entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `verified_at` (nullable), `reset_authorization_hash`/`_expires_at` (nullable), `used_at` (nullable) — código de un solo uso (10 min), autorización temporal de propósito específico tras verificarlo (10 min), máximo 5 intentos, a lo sumo una solicitud activa por usuario (índice único parcial) |
 | `email_verification_tokens` | **IMPLEMENTADA — v0.15** (reescrita por `ADR-011-mandatory-email-verification.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/register`/`POST /api/verify-registration-code`/`POST /api/resend-registration-code`) | Séptima entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `used_at` (nullable) — código de un solo uso (10 min), máximo 5 intentos, a lo sumo un código activo por usuario (índice único parcial); sin columnas de autorización temporal, a diferencia de `password_reset_tokens` — verificar el código ya es la acción final |
+| `refresh_tokens` | **IMPLEMENTADA — v0.18** (ratificada por `ADR-017-jwt-session-policy.md`; definición formal en §5.11; en uso real por `POST /api/login`, `/api/auth/google`, `/api/refresh` y `/api/logout`) | Sesiones de larga vida con refresh token rotativo: familia por login, hash SHA-256 del `jti`, índice único parcial «un token activo por familia». |
 | `user_identities` | **IMPLEMENTADA — v0.16** (ratificada por `ADR-012-google-sign-in.md`; definición formal en §5.9; en uso real por `POST /api/auth/google`) | Octava entidad de la capa objetivo (§4.B, "Autenticación y cuenta", candidata `oauth_accounts`). Modelo: `user_id` (FK a `users`), `provider` (string libre, `"google"` hoy), `provider_subject` (el claim `sub`, único junto con `provider`) — un usuario puede tener varias identidades vinculadas a la vez (account linking); preparada para Apple/Microsoft sin otra migración de `users` |
 | `messages` | **IMPLEMENTADA — v0.17** (ratificada por `ADR-013-messages-minimal-model.md`; definición formal en §5.10; en uso real por `POST`/`GET /api/users/<id>/messages`, `GET /api/conversations`) | Novena entidad de la capa objetivo (§4.B, "Mensajería") en pasar a implementada, solo su mitad 1:1 — sin `conversation_participants`, sin grupos. Modelo: `sender_id`+`recipient_id` (FKs a `users`), `content` (texto), `read_at` (nullable) — sin fotos/archivos adjuntos, sin tiempo real (polling desde el Frontend) |
 
@@ -586,6 +589,37 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 **Índices.** `ix_messages_sender_recipient_created` (`sender_id`, `recipient_id`, `created_at`) e `ix_messages_recipient_sender_created` (`recipient_id`, `sender_id`, `created_at`) — el hilo entre dos usuarios se busca con un `OR` sobre ambos sentidos de la relación, que ninguna columna única cubre; ambos índices permiten que PostgreSQL resuelva ese `OR` sin escanear la tabla completa (`ADR-013` §Índices).
 
 **Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-013` §Decisiones pendientes): conversaciones grupales (`conversation_participants`), fotos/archivos adjuntos, actualización en tiempo real (WebSockets/Flask-SocketIO en vez de polling), borrado de mensajes/conversaciones, confirmación de lectura visible para el remitente ("visto").
+
+---
+
+### 5.11 `refresh_tokens`
+
+> Undécima entidad con definición formal, ratificada por `ADR-017-jwt-session-policy.md` (implementada el 2026-10-02).
+
+**Propósito.** Sostener las sesiones de larga vida: un refresh token rotativo por login/dispositivo, revocable por reuso, logout o cambio de contraseña.
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` |
+| `user_id` | **UUID**, FK → `users.id` | No | Dueño del token. `ON DELETE CASCADE` |
+| `family_id` | **UUID** | No | Cadena de renovaciones de un mismo login. Se revoca entera ante reuso o logout |
+| `token_hash` | **VARCHAR(64)** | No | SHA-256 hexadecimal del `jti` del JWT. Nunca el token ni su `jti` en claro (`ADR-017` §4.1) |
+| `created_at` | **TIMESTAMPTZ** | No | `DEFAULT now()` |
+| `expires_at` | **TIMESTAMPTZ** | No | 30 días desde la emisión (configurable) |
+| `used_at` | **TIMESTAMPTZ** | Sí | Se fija al consumirlo en una renovación |
+| `revoked_at` | **TIMESTAMPTZ** | Sí | Se fija en toda la familia ante reuso, logout o cambio de contraseña |
+| `replaced_by_id` | **UUID** | Sí | Sucesor emitido al consumirlo (trazabilidad) |
+
+**Relaciones.** `users (1) ←→ (N) refresh_tokens`.
+
+**Constraints e índices**
+- **`uq_refresh_tokens_token_hash`** — `UNIQUE (token_hash)`: lookup de `POST /api/refresh` y `/api/logout`.
+- **`uq_refresh_tokens_active_family`** — índice único parcial sobre `family_id` `WHERE used_at IS NULL AND revoked_at IS NULL`: a lo sumo un token activo por familia (`ADR-017` §4.3), defensa de última línea contra dos rotaciones simultáneas.
+- `ix_refresh_tokens_user_id` (revocar todas las sesiones de un usuario) y `ix_refresh_tokens_family_id`.
+
+**Pendiente (no decidido):** limpieza periódica de filas expiradas o revocadas — hoy se acumulan.
 
 ---
 

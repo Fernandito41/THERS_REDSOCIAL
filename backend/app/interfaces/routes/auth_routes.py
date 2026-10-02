@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from app.application.auth.forgot_password_use_case import forgot_password
 from app.application.auth.google_auth_use_case import authenticate_with_google
@@ -7,6 +7,11 @@ from app.application.auth.login_use_case import login_user
 from app.application.auth.register_use_case import register_user
 from app.application.auth.resend_registration_code_use_case import resend_registration_code
 from app.application.auth.reset_password_use_case import reset_password
+from app.application.auth.session_use_cases import (
+    issue_session,
+    logout_session,
+    rotate_session,
+)
 from app.application.auth.verify_registration_code_use_case import verify_registration_code
 from app.application.auth.verify_reset_code_use_case import verify_reset_code
 from app.application.email.email_service import EmailService
@@ -19,6 +24,7 @@ from app.domain.auth.exceptions import (
     InvalidCredentialsError,
     InvalidGoogleCredentialError,
     InvalidOrExpiredResetTokenError,
+    InvalidRefreshTokenError,
     InvalidRegistrationCodeError,
     InvalidResetCodeError,
     UsernameAlreadyExistsError,
@@ -34,12 +40,16 @@ from app.domain.auth.validators import (
     parse_birth_date,
 )
 from app.infrastructure.auth.google_id_token_verifier import GoogleIdTokenVerifier
+from app.infrastructure.auth.session_tokens import FAMILY_CLAIM, JwtSessionTokens
 from app.infrastructure.email.factory import create_email_sender
 from app.infrastructure.persistence.repositories.email_verification_repository import (
     SQLAlchemyEmailVerificationTokenRepository,
 )
 from app.infrastructure.persistence.repositories.password_reset_repository import (
     SQLAlchemyPasswordResetTokenRepository,
+)
+from app.infrastructure.persistence.repositories.refresh_token_repository import (
+    SQLAlchemyRefreshTokenRepository,
 )
 from app.infrastructure.persistence.repositories.user_identity_repository import (
     SQLAlchemyUserIdentityRepository,
@@ -58,6 +68,8 @@ _user_repository = SQLAlchemyUserRepository()
 _password_reset_token_repository = SQLAlchemyPasswordResetTokenRepository()
 _email_verification_token_repository = SQLAlchemyEmailVerificationTokenRepository()
 _user_identity_repository = SQLAlchemyUserIdentityRepository()
+_refresh_token_repository = SQLAlchemyRefreshTokenRepository()
+_session_tokens = JwtSessionTokens()
 
 # EmailSender se decide una sola vez, al importar este módulo (mismo momento
 # en que Config ya resolvió RESEND_API_KEY desde el entorno) -- Resend real
@@ -183,10 +195,13 @@ def login():
 
     # Identity del JWT: user.id (UUID de PostgreSQL), no email — ver
     # BACKEND_ARCHITECTURE.md §9 nota de impacto sobre esta migración.
-    token = create_access_token(identity=user["id"])
+    # ADR-017: además del access token, se abre una sesión con refresh token
+    # rotativo. Cambio aditivo -- `token` y `user` siguen igual.
+    session = issue_session(user["id"], _refresh_token_repository, _session_tokens)
 
     return jsonify({
-        "token": token,
+        "token": session["token"],
+        "refresh_token": session["refresh_token"],
         "user": user
     }), 200
 
@@ -269,6 +284,7 @@ def reset_password_route():
             _user_repository,
             _password_reset_token_repository,
             _email_service,
+            _refresh_token_repository,
         )
     except InvalidOrExpiredResetTokenError:
         # Mismo mensaje/código sin importar si la autorización no existe,
@@ -371,6 +387,43 @@ def google_auth_route():
     # THERS lo emite exclusivamente este backend, con `identity=user["id"]`
     # -- ningún endpoint protegido (incluido GET /api/users/me) necesita ni
     # acepta un token de Google (FASE 15 de la tarea origen).
-    token = create_access_token(identity=user["id"])
+    session = issue_session(user["id"], _refresh_token_repository, _session_tokens)
 
-    return jsonify({"token": token, "user": user}), 200
+    return jsonify(
+        {"token": session["token"], "refresh_token": session["refresh_token"], "user": user}
+    ), 200
+
+
+@auth_bp.route("/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh_route():
+    # ADR-017-jwt-session-policy.md. Se autentica con el REFRESH token en
+    # `Authorization: Bearer <refresh>` (un access token aquí da 401, y un
+    # refresh en cualquier endpoint protegido también). Cada llamada consume
+    # el refresh presentado y devuelve un par nuevo; reusar uno ya consumido
+    # revoca toda la sesión.
+    claims = get_jwt()
+    try:
+        session = rotate_session(
+            get_jwt_identity(),
+            claims.get("jti"),
+            claims.get(FAMILY_CLAIM),
+            _refresh_token_repository,
+            _user_repository,
+            _session_tokens,
+        )
+    except InvalidRefreshTokenError:
+        return jsonify({"msg": "La sesión no es válida o expiró"}), 401
+
+    return jsonify(session), 200
+
+
+@auth_bp.route("/logout", methods=["POST"])
+@jwt_required(refresh=True)
+def logout_route():
+    # Revoca la sesión (familia) del refresh token presentado. Idempotente.
+    # Si el refresh ya expiró, la librería responde 401 antes de llegar aquí:
+    # el cliente igual debe limpiar su almacenamiento local.
+    logout_session(get_jwt().get("jti"), _refresh_token_repository)
+
+    return jsonify({"msg": "Sesión cerrada"}), 200

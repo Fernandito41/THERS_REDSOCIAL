@@ -90,8 +90,9 @@ Estructura (espeja las convenciones de `Frontend/`, §10):
 - **No reutilizar los `.jsx` del Frontend**: son DOM + Tailwind. Sí son portables los módulos puros
   (validadores, i18n, formatters) y los tokens de `tokens.css` como constantes TS.
 - **Sin NativeWind ni biblioteca visual**, por decisión explícita del encargo.
-- `ADR-017-jwt-session-policy.md` (**aceptado**, sin implementar) es su dependencia de sesión: hasta
-  entonces la sesión móvil muere a los 15 minutos, y eso es esperado, no un defecto.
+- `ADR-017-jwt-session-policy.md` (**aceptado e implementado**, verificado en un teléfono real el
+  2026-10-02) es su política de sesión: access de 15 min + refresh rotativo de 30 días, con
+  renovación automática, logout contra el servidor y pantalla «Sin conexión» en un arranque sin red.
 - Documentación operativa en `docs/mobile/`: `READINESS.md`, `ANDROID_SETUP.md` (entorno Windows y
   trampas reales del SDK CLI), `VALIDATION.md`, `ROADMAP.md`.
 
@@ -143,7 +144,7 @@ Ningún cambio de arquitectura o diseño se decide de forma aislada dentro de un
 - **34 rutas registradas** (verificado contra `app.url_map`, incluida la ruta estática de Flask, 2026-10-02; 32 antes de `ADR-017`). Catálogo completo y autoritativo en `API_CONTRACT.md` §4 (v0.21) — **no replicar aquí la lista**, se desactualiza. Resumen por familia: auth (`register`, `login`, `auth/google`, recuperación y verificación por OTP), perfil (`GET`/`PATCH /api/users/me`, avatar y portada), social (posts, likes, comentarios, follows), notificaciones, mensajes directos (incluido borrado y "escribiendo") y media local.
 - El Frontend ya consume todas esas familias end-to-end.
 - **Sin tiempo real:** no hay Flask-SocketIO ni WebSocket en el backend (verificado por búsqueda). Mensajes y notificaciones se refrescan por *polling* HTTP desde el Frontend. No asumir Socket.IO.
-- **Sesión:** `JWT_ACCESS_TOKEN_EXPIRES` es de **15 minutos** (default de la librería, verificado en ejecución) y con `ADR-017-jwt-session-policy.md` hay **refresh token rotativo de 30 días** (`POST /api/refresh`, `POST /api/logout`, tabla `refresh_tokens`): **backend implementado el 2026-10-02 (rama `feature/refresh-tokens`, pendiente de merge)**. El cliente móvil y la web todavía no lo usan, así que su sesión sigue muriendo a los 15 minutos hasta que se haga el PR 2.
+- **Sesión:** `JWT_ACCESS_TOKEN_EXPIRES` es de **15 minutos** (default de la librería, verificado en ejecución) y con `ADR-017-jwt-session-policy.md` hay **refresh token rotativo de 30 días** (`POST /api/refresh`, `POST /api/logout`, tabla `refresh_tokens`): **backend (rama `feature/refresh-tokens`) y cliente móvil (rama `feature/mobile-android-app`) implementados y verificados en dispositivo el 2026-10-02, pendientes de merge**. La web todavía no lo usa (adopción opcional): su sesión sigue muriendo a los 15 minutos.
 - Todo endpoint nuevo se documenta en `API_CONTRACT.md` el mismo día del PR (`HB-001` §15.1).
 
 ### DevOps

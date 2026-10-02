@@ -12,7 +12,7 @@
 | Ítem | Estado |
 |---|---|
 | `ADR-016` stack móvil | **RATIFICADO** 2026-10-01 |
-| `ADR-017` política de sesión JWT | **ACEPTADO** 2026-10-01, implementación pendiente |
+| `ADR-017` política de sesión JWT | **ACEPTADO** 2026-10-01; backend y móvil **implementados y verificados en dispositivo** 2026-10-02 (pendiente de merge) |
 | Base de datos, migraciones, backend sirviendo | **VERIFICADO** |
 | Suite de backend verde (292/292) | **VERIFICADO** |
 | Lint del Frontend sin errores | **VERIFICADO** |
@@ -47,8 +47,9 @@ Estado al 2026-10-01:
 | Login, `/users/me`, SecureStore, persistencia, logout, fallo de red y `401` en dispositivo | **VERIFICADO** (`VALIDATION.md` §1.3; el `401` por inferencia) |
 | Caso `403` + `email_verified:false` en dispositivo | **VERIFICADO** 2026-10-02 (aviso propio, sin token guardado) |
 | Repetir en el **Samsung A16 5G** | **PENDIENTE** |
-| Caché HTTP de RN guarda el JSON de `/users/me` | **ABIERTO** — decidir `Cache-Control: no-store` o limpiar en logout |
-| Arranque en frío sin red muestra el login aunque el token siga | **ABIERTO** — decidir comportamiento |
+| Caché HTTP de RN guarda el JSON de `/users/me` | **CERRADO** 2026-10-02 — `Cache-Control: no-store`, verificado en el teléfono |
+| Arranque en frío sin red | **CERRADO** 2026-10-02 — pantalla «Sin conexión» con *Reintentar*; la sesión no se cierra |
+| Refresh token (renovación automática, arranque en frío, logout del servidor) | **VERIFICADO** 2026-10-02 (`VALIDATION.md` §1.3) |
 | **APK interna con el bundle incluido** | **PENDIENTE** |
 
 **Criterio de salida (casi cumplido):** la primera pantalla autenticada muestra datos reales de
@@ -56,8 +57,8 @@ Estado al 2026-10-01:
 A16 5G. De los nueve criterios de `VALIDATION.md` §5, cinco están marcados; faltan Atrás/teclado/áreas
 seguras, la APK interna sin Metro y la re-ejecución de los checks de backend y web.
 
-**Dependencia:** si `ADR-017` no está implementado, este hito se entrega con sesiones de 15 minutos,
-documentado como limitación conocida, no como defecto.
+**Dependencia:** `ADR-017` ya está implementado (backend y móvil), así que la sesión ya no muere a los
+15 minutos, pendiente de que se mergeen las ramas.
 
 ## Fase 1b — Refresh token (`ADR-017`)
 

@@ -68,6 +68,12 @@ Metro por túnel USB (`adb reverse tcp:8081`).
 | Fallo de red | ✅ | Wi-Fi apagado + refresco: mismo proceso, token intacto, sigue en el perfil; al volver el Wi-Fi, `/users/me` `200`. La alerta mostrada fue vista por el usuario, no capturada |
 | `401` | ✅ (inferido) | tras la caducidad de 15 min, el refresco devolvió al login y el token se borró. El `401` en sí no quedó en ningún log: se deduce de la hora y de que el backend respondía con normalidad |
 | `403` + `email_verified:false` | ✅ | cuenta de pruebas sin verificar (`qa.harness@example.invalid`, contraseña temporal puesta en la BD de desarrollo). `curl` → `403` con `{"email_verified": false}`; en el teléfono la app muestra el aviso propio de cuenta sin verificar y **no guarda token** (SecureStore vacío) |
+| Refresh token: renovación automática (`ADR-017`) | ✅ | access de **30 s** (solo en la prueba) y refresco con el access vencido. Log del backend, mismo segundo: `GET /users/me` `401` → `POST /refresh` `200` → `GET /users/me` `200`. En la BD, la fila #1 quedó **usada con sucesor** y se creó la #2 de la misma familia. Misma app, sin login |
+| Refresh token: arranque en frío con el access vencido | ✅ | proceso nuevo con sesión guardada y access vencido: `401` → `/refresh` `200` → `200`; la sesión se recupera sola |
+| Logout contra el servidor (`ADR-017` §4.6) | ✅ | `POST /api/logout` `200`; **las dos filas de la familia quedaron `revocadas`** en la BD y SecureStore vacío (`<map />`) |
+| Arranque en frío **sin red** | ✅ | Wi-Fi apagado por `adb` + app cerrada y reabierta (pid nuevo, Metro por el túnel USB): pantalla **«Sin conexión»** con *Reintentar* y *Cerrar sesión*, no el login; los dos tokens siguen en SecureStore y la sesión sigue vigente en la BD; ninguna petición llegó al backend |
+| Recuperación tras volver la red | ✅ | Wi-Fi encendido + *Reintentar*: `401` → `/refresh` `200` → `200`, perfil con datos reales |
+| `Cache-Control: no-store` en respuestas autenticadas | ✅ | tras varias peticiones a `/users/me`, la caché HTTP del teléfono conserva solo la entrada **anterior** al arreglo; las nuevas no se guardan |
 
 **Defectos hallados en esta prueba:**
 
@@ -75,13 +81,16 @@ Metro por túnel USB (`adb reverse tcp:8081`).
    contrato (`API_CONTRACT.md` §4.2) lo envuelve en `{"user": {...}}`. Tras **restaurar la sesión**
    la pantalla salía vacía («@», «Correo verificado: No»). No se veía justo después del login porque
    `POST /login` sí usa `data.user`. Corregido en `AuthContext.tsx` (`request<{ user: User }>`).
-2. **Fuga menor, SIN corregir.** La caché HTTP de React Native (`cache/http-cache/`, almacenamiento
+2. **Fuga menor, CORREGIDA.** La caché HTTP de React Native (`cache/http-cache/`, almacenamiento
    privado de la app) guarda la respuesta de `/users/me` con el JSON del usuario, contra el criterio de
-   `session.ts` de no guardarlo en disco. El JWT y `Authorization` **no** están ahí. Opciones:
-   `Cache-Control: no-store` en respuestas autenticadas, o limpiar esa caché en logout.
-3. **Observación de diseño, no probada.** En un arranque en frío **sin red**, `loadCurrentUser` deja
-   `user = null` y la app muestra el login aunque el token siga en SecureStore: no se pierde la sesión,
-   pero parece cerrada. Pendiente de decidir (ROADMAP).
+   `session.ts` de no guardarlo en disco. El JWT y `Authorization` **no** estaban ahí. Corregido en el
+   backend: `Cache-Control: no-store` en toda respuesta a una petición con `Authorization`; verificado en
+   el teléfono (ver la tabla).
+3. **Arranque en frío sin red, CORREGIDO.** Antes, `loadCurrentUser` dejaba `user = null` y la app
+   habría mostrado el login aunque el token siguiera en SecureStore (la sesión no se perdía, pero
+   parecía cerrada). Ahora `AuthContext` expone `restoreFailed` y `index.tsx` muestra «Sin conexión»
+   con *Reintentar* (verificado, ver la tabla). Un fallo distinto de `401` (red, timeout, `5xx`) nunca
+   cierra la sesión.
 4. **Backend:** con Resend sin dominio verificado, `POST /api/forgot-password` responde `500` para
    cualquier destinatario que no sea el dueño de la cuenta de Resend (`403` del proveedor). El código
    se crea igualmente. No se tocó.
@@ -161,8 +170,8 @@ puede darse por resuelta hasta que haya una prueba en dispositivo.
 - [x] Peticiones sin token o con token caducado reciben rechazo (`401` por caducidad inferido, §1.3).
 - [x] Cerrar y reabrir la app respeta la estrategia de sesión; logout limpia datos privados
       (salvedad: la caché HTTP de RN conserva el JSON de `/users/me`, §1.3 defecto 2).
-- [x] Desconexión no produce bucles de peticiones ni pantallas engañosas (probada con la sesión abierta;
-      el arranque en frío sin red no se probó, §1.3 punto 3).
+- [x] Desconexión no produce bucles de peticiones ni pantallas engañosas (probada con la sesión abierta
+      y en un arranque en frío sin red, que muestra «Sin conexión», §1.3).
 - [ ] Botón Atrás, teclado, áreas seguras y textos permiten completar el flujo. *No evaluado formalmente.*
 - [ ] APK interna abre sin Metro, si se generó. *No generada: solo el APK debug.*
 - [ ] Los checks de web y backend conservan su comportamiento. *`backend/` y `Frontend/` no se

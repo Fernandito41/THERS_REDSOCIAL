@@ -74,6 +74,13 @@ Metro por túnel USB (`adb reverse tcp:8081`).
 | Arranque en frío **sin red** | ✅ | Wi-Fi apagado por `adb` + app cerrada y reabierta (pid nuevo, Metro por el túnel USB): pantalla **«Sin conexión»** con *Reintentar* y *Cerrar sesión*, no el login; los dos tokens siguen en SecureStore y la sesión sigue vigente en la BD; ninguna petición llegó al backend |
 | Recuperación tras volver la red | ✅ | Wi-Fi encendido + *Reintentar*: `401` → `/refresh` `200` → `200`, perfil con datos reales |
 | `Cache-Control: no-store` en respuestas autenticadas | ✅ | tras varias peticiones a `/users/me`, la caché HTTP del teléfono conserva solo la entrada **anterior** al arreglo; las nuevas no se guardan |
+| Sesión anterior a `ADR-025` | ✅ | la app arrancó con una sesión emitida antes del registro de sesiones de Diego: `GET /users/me` `401` → `POST /refresh` `401` → sesión limpiada y login, sin cerrarse ni entrar en bucle. **Efecto único de desplegar `ADR-025`: toda sesión anterior se invalida una vez** |
+| 2FA: login con una cuenta con 2FA (`ADR-026`) | ✅ | cuenta de pruebas dedicada. `POST /login` `200` con `two_factor_required` y **sin token**: la app muestra «Verificación en dos pasos» y SecureStore sigue **vacío** (el desafío vive solo en memoria) |
+| 2FA: código incorrecto | ✅ | «El código no es válido»; sigue en la pantalla y sin sesión (`/2fa/verify` `401`) |
+| 2FA: TOTP correcto | ✅ | `/2fa/verify` `200`: entra al perfil y SecureStore guarda los **dos** tokens. En la BD, la familia de refresh tokens y la fila de `sessions` quedan **enlazadas** (`refresh_family_id`, agente `okhttp`) |
+| 2FA: código de recuperación | ✅ | acepta el código con guion y avisa «Usaste un código de recuperación. Te quedan 9»; en la BD pasó de 10 a 9 sin usar |
+| 2FA: logout contra el servidor | ✅ | `POST /logout` `200`: la sesión de `sessions` queda **revocada** junto con su familia de refresh tokens |
+| 2FA: límite de intentos (`ADR-027`) | ✅ | 5 códigos incorrectos → `401`; el 6º → `429` y la app muestra «Demasiados intentos. Esperá 841 segundos…» con el tiempo real que manda el servidor |
 
 **Defectos hallados en esta prueba:**
 
@@ -102,6 +109,7 @@ Implementado en el backend, **ausente en la app a propósito** (no es un olvido)
 | Función | Por qué no está |
 |---|---|
 | Registro de cuenta | `POST /api/register` exige 8 campos + verificación por OTP (`ADR-011`). Desborda este hito |
+| Configurar o desactivar la 2FA, regenerar códigos de recuperación, ver y cerrar sesiones activas | se hacen desde la web (`ADR-025`/`ADR-026`). **La app solo completa el segundo paso del login** (TOTP o código de recuperación) |
 | Recuperación de contraseña | flujo de 3 pasos (`ADR-010`) |
 | "Continuar con Google" | necesita cliente OAuth de Android y prueba en dispositivo (ROADMAP fase 2) |
 | Editar perfil / completar perfil | `PATCH /api/users/me` existe; la pantalla es fase 3 |

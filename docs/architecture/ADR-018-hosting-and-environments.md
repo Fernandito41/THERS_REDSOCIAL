@@ -1,6 +1,6 @@
 # ADR-018 — Hosting, dominio y entornos
 
-- **Estado:** **`PROPUESTO`** el 2026-10-02 — **pendiente de aprobación del equipo** (`HB-001` §11–12).
+- **Estado:** **`ACEPTADO`** el 2026-10-02 por el equipo (`HB-001` §11–12); ver «Decisión del equipo».
   Lo redactó Claude Code a pedido del propietario del proyecto; no es una decisión ratificada.
 - **Fecha:** 2026-10-02
 - **Por qué existe:** `CLAUDE.md` §5/§15 registra que **DevOps no tiene documentación oficial**
@@ -8,6 +8,18 @@
   escrita sería improvisar una decisión de alto impacto (`CLAUDE.md` §6).
 - **Relacionado:** `ADR-015-profile-media.md` (almacenamiento S3), `ADR-012-google-sign-in.md`,
   `ADR-009`/`ADR-011` (correo vía Resend), `ADR-016-mobile-stack.md`, `docs/LAUNCH_CHECKLIST.md`.
+
+---
+
+## Decisión del equipo (2026-10-02)
+
+El equipo **acepta** esta propuesta con este stack: **Cloudflare** (dominio, DNS y web), **Supabase**
+(PostgreSQL y almacenamiento), **Render** (backend) y **Resend** (correo). Se mantiene lo escrito en §2 a §7.
+
+- **Mensajería:** el equipo **todavía no eligió** servicio para ella. Queda abierto y no bloquea nada de lo
+  anterior; hoy los mensajes se refrescan por *polling* HTTP (`CLAUDE.md` §5).
+- Siguen pendientes los puntos de §7 (región, y si el almacenamiento arranca en Supabase Storage o en R2).
+- Aceptar el ADR **no contrata nada**: cada cuenta se crea con el correo del proyecto y 2FA (§5).
 
 ---
 

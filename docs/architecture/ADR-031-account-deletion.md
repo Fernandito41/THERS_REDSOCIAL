@@ -5,10 +5,65 @@
 | Documento | `docs/architecture/ADR-031-account-deletion.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 02/10/2026 |
-| Estado | **PROPUESTO** — pendiente de aprobación del equipo. **Nada de esto está implementado.** Redactado por Claude Code a pedido del propietario del proyecto |
+| Estado | **ACEPTADO con cambios** el 2026-10-02 (ver «Decisiones del equipo»). **Nada de esto está implementado todavía.** Redactado por Claude Code a pedido del propietario del proyecto |
 | Alcance | `backend/` — nueva tabla `account_deletion_codes`, `POST /api/account-deletion/request` y `/confirm`; `Frontend/` — Configuración › Seguridad y una página pública; `mobile/` — un acceso dentro de la app |
 | Relacionado | `ADR-010` (código OTP), `ADR-017` (refresh tokens), `ADR-025` (sesiones), `ADR-026` (2FA), `ADR-027` (rate limiting), `ADR-028` (exportación), `ADR-032` (reportes), `docs/LAUNCH_CHECKLIST.md` |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §4) |
+
+---
+
+## Decisiones del equipo (2026-10-02)
+
+El equipo revisó este ADR y lo **acepta con los cambios de esta sección**. Donde esta sección y el resto del
+documento difieran, **manda esta sección**. Lo que no se menciona aquí queda como está escrito.
+
+### A. Flujo definitivo: varios pasos, sin atajos
+
+1. La persona entra a Configuración › Seguridad › «Eliminar cuenta» (o a la página pública `/eliminar-cuenta`).
+2. Se le **envía un código de confirmación** al correo de la cuenta (mismo mecanismo de §1).
+3. Introduce el código (y el código de 2FA si la cuenta lo tiene).
+4. **Escribe su correo** en un recuadro y la palabra **`DELETE`** en otro. La validación es **del servidor**:
+   el correo debe coincidir con el de la cuenta y la palabra debe ser exactamente `DELETE` (mayúsculas,
+   sin espacios). Es la acción final que habilita el botón «Eliminar cuenta».
+5. Al pulsar el botón aparece una **última advertencia** de que la eliminación es irreversible y se pide
+   confirmar que está totalmente segura.
+6. En esa misma advertencia se ofrece **suspender la cuenta en lugar de eliminarla** (sección B).
+
+Consecuencia técnica: `POST /api/account-deletion/confirm` pasa a recibir `{email, code, confirmation,
+two_factor_code?}`. La advertencia final del paso 5 es **solo de interfaz** (el servidor no puede saber si
+la persona la leyó); la validación real es la del paso 4.
+
+### B. Suspensión voluntaria (nueva)
+
+Alternativa reversible a eliminar. **No es la suspensión de moderación** de `ADR-032` (`suspended_at`): es
+una decisión de la propia persona y se guarda aparte (`users.deactivated_at`). Mientras está activa, el perfil
+y las publicaciones dejan de ser visibles para los demás. Detalles que se fijan al implementarla y que el
+equipo debe confirmar: cómo se reactiva (propuesta: iniciar sesión con la contraseña), si se cierran las
+sesiones abiertas (propuesta: sí) y si se avisa por correo (propuesta: sí).
+
+### C. Mensajes ya recibidos por la otra persona
+
+Se **conservan** en la bandeja de la otra persona y el remitente eliminado aparece como
+**«Usuario no encontrado»** (sin nombre, sin foto, sin enlace al perfil). Esto **reemplaza** lo dicho en
+§2 («se eliminan en los dos lados») y en §5.2.
+
+Implicaciones, que no son opcionales:
+- `messages.sender_id` y `messages.recipient_id` pasan a ser **anulables** con `ON DELETE SET NULL`. Hay que
+  agregarlos a la lista de excepciones de la prueba de §4 (hoy todo debe ser `CASCADE`).
+- El texto que escribió la persona **sigue existiendo** tras su eliminación. **Debe declararse en la política
+  de privacidad** como retención. Mi recomendación anterior era borrar en los dos lados; el equipo decidió
+  lo contrario y la revisión por una persona con formación legal **sigue siendo recomendable**, porque el
+  mensaje también es dato de quien lo recibió.
+- Pendiente de confirmar por el equipo: qué ve quien **escribió** a la persona eliminada (propuesta: la
+  conversación sigue visible con «Usuario no encontrado» y ya no puede responder).
+
+### D. Decisiones abiertas de §5
+
+| # | Resultado |
+|---|---|
+| 1 | **A: borrado inmediato.** El «período de gracia» lo cubre la suspensión voluntaria (B) |
+| 2 | Resuelta en C |
+| 3, 4, 5 | **Sin respuesta todavía.** Se mantiene la recomendación del documento hasta que el equipo diga otra cosa |
 
 ---
 

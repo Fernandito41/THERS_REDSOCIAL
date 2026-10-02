@@ -5,10 +5,57 @@
 | Documento | `docs/architecture/ADR-032-content-reports-and-moderation.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 02/10/2026 |
-| Estado | **PROPUESTO** — pendiente de aprobación del equipo. **Nada de esto está implementado.** Redactado por Claude Code a pedido del propietario del proyecto |
+| Estado | **ACEPTADO con cambios** el 2026-10-02 (ver «Decisiones del equipo»). La fase 1 está en una rama sin fusionar; el resto **no está implementado**. Redactado por Claude Code a pedido del propietario del proyecto |
 | Alcance | `backend/` — tabla `reports`, columnas nuevas en `users`, `POST /api/reports`, rutas de moderación; `Frontend/` — menú «Reportar» y una página de moderación; `mobile/` — el mismo menú cuando exista contenido de usuarios |
 | Relacionado | `ADR-022` (cuentas privadas), `ADR-025` (sesiones), `ADR-027` (rate limiting), **`ADR-029` (bloqueo y restricción)**, `ADR-031` (eliminación de cuenta), `docs/LAUNCH_CHECKLIST.md` |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §4) |
+
+---
+
+## Decisiones del equipo (2026-10-02)
+
+El equipo revisó este ADR y lo **acepta con lo siguiente**. Donde esta sección y el resto del documento
+difieran, **manda esta sección**.
+
+### A. Quién modera
+
+Dos personas del equipo: **Fernando** y **Cristopher**. Son las únicas con `is_moderator = true`
+(asignado por línea de comandos, nunca por la API). Se cubre la decisión 1 de «Decisiones que necesitan al
+equipo»; **falta fijar el plazo de respuesta** (propuesta: revisar cada reporte en 24 a 48 horas).
+
+### B. Qué revisan y bajo qué normas
+
+Revisan los **reportes** y también **perfiles maliciosos** o que infrinjan las normas de seguridad, aunque
+nadie los haya reportado. Esto añade una vía **sin reporte** (por ejemplo `POST /api/moderation/users/<id>/warn`
+y `.../suspend`), que el diseño original no tenía. **Las normas las escribe el equipo** (términos de uso y
+normas de la comunidad) y deben estar publicadas **antes** de sancionar a nadie: no se puede suspender por una
+regla que el usuario nunca pudo leer.
+
+### C. Escalera de sanciones
+
+1. **Revisión** por un moderador.
+2. **Aviso o advertencia** al usuario (acción nueva `warn`; queda registrada con quién, cuándo y por qué).
+3. **Suspensión** de la cuenta, tras advertencias que no se atendieron. Las faltas graves pueden saltarse
+   la advertencia; **el equipo debe escribir cuáles** (propuesta: amenazas, contenido sexual con menores,
+   suplantación).
+
+### D. Apelación
+
+- Al suspender, la persona dispone de **48 horas** para escribir a soporte por correo con las pruebas que
+  demuestren que el equipo se equivocó.
+- La apelación **pasa por varios filtros** (a detallar por el equipo). Recomendación: la revise **el otro
+  moderador**, no quien impuso la sanción, para que nadie sea juez y parte.
+- Faltan por definir: la **dirección de correo de soporte** (no existe todavía; con Cloudflare se puede
+  crear una gratis por reenvío), qué ocurre si pasan las 48 horas sin contacto y el plazo en que se responde
+  la apelación.
+
+### E. Decisiones abiertas
+
+| # | Resultado |
+|---|---|
+| 1 | Resuelta en A (falta el plazo) |
+| 4 | Resuelta en D (faltan los detalles indicados) |
+| 2, 3, 5 | **Sin respuesta todavía.** Se mantiene la recomendación del documento |
 
 ---
 

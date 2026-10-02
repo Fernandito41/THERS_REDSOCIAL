@@ -1,6 +1,6 @@
 # ADR-033 — Base de SEO del Frontend
 
-- **Estado:** **`PROPUESTO`** el 2026-10-02 — **pendiente de aprobación del equipo** (`HB-001` §11–12).
+- **Estado:** **`ACEPTADO`** el 2026-10-02 por el equipo (`HB-001` §11–12); ver «Decisión del equipo».
   Lo redactó Claude Code a pedido del propietario del proyecto; no es una decisión ratificada.
 - **Fecha:** 2026-10-02
 - **Por qué existe:** el Frontend es una SPA sin ninguna señal para buscadores: `<title>THERS</title>`
@@ -9,6 +9,14 @@
   delgado. Se arregla la base **antes** de publicar, para no indexar basura que luego cueste retirar.
 - **Relacionado:** `docs/LAUNCH_CHECKLIST.md` §3, `ADR-018-hosting-domain-environments.md` (dominio),
   `FRONTEND_ARCHITECTURE.md`.
+
+---
+
+## Decisión del equipo (2026-10-02)
+
+El equipo **acepta** este ADR, incluida la **recomendación de prerender en el build** (§4) como dirección.
+La implementación del prerender queda para después de tener dominio y staging (`ADR-018`): hoy se
+publica la base ya fusionada y se mide con Search Console.
 
 ---
 

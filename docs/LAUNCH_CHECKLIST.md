@@ -14,9 +14,10 @@
 
 | Requisito | Estado | Evidencia |
 |---|---|---|
-| **Borrado de cuenta** (en la app y con un enlace web). Play lo exige a las apps con registro de cuentas | ❌ | No hay ninguna ruta de borrado de cuenta; las únicas `DELETE` son follow, like, mensaje, avatar y portada |
-| **Reportar y bloquear** contenido y usuarios (apps con contenido de usuarios) | ❌ | No hay rutas de reporte ni de bloqueo |
-| **Moderación** y términos de uso aplicables | ❌ | Sin documento ni proceso; hay páginas legales en `Frontend/src/features/legal` (⚠️ revisar su contenido) |
+| **Borrado de cuenta** (en la app y con un enlace web). Play lo exige a las apps con registro de cuentas | ❌ | No existe ninguna ruta de borrado. **`ADR-031` (propuesto)** define un flujo por código al correo, público y sin sesión. Las 22 claves foráneas a `users` ya son `CASCADE`, pero los archivos de avatar y portada no se borran solos |
+| **Bloquear** usuarios | ✅ | `ADR-029`: aplicado en el servidor, simétrico, sin revelárselo al bloqueado |
+| **Reportar** contenido y usuarios (apps con contenido de usuarios) | ❌ | No existe ruta ni tabla de reportes. **`ADR-032` (propuesto)** |
+| **Moderación** y términos de uso aplicables | ❌ | No existe ningún rol de moderador, y el registro enlaza a `/terms` pero **el backend no guarda la aceptación**. **`ADR-032` (propuesto)**. Además hay que tener **quién atienda la cola** y revisar que `Terms.jsx` defina el contenido censurable |
 | **Política de privacidad pública** con URL estable | ⚠️ | Hay página legal en la web; confirmar que cubre email, teléfono y fecha de nacimiento, y que la URL es pública |
 | Edad mínima declarada y coherente con `MIN_AGE_YEARS` | ⚠️ | Existe en el backend (`ADR-002`); declararla en el cuestionario de Play |
 | Sesión estable en el móvil | ❌ | `ADR-017` sin implementar: hoy la sesión muere a los 15 min |
@@ -66,7 +67,7 @@
 1. Dominio y cuenta de Play (plazos largos) + aprobación de `ADR-018`.
 2. Staging mínimo con HTTPS y dominio en Resend.
 3. `ADR-017` (refresh token) — sin sesión estable, las pruebas cerradas no sirven.
-4. Borrado de cuenta, reportar/bloquear, términos y política de privacidad (**ADR propio**: cambia contrato y esquema).
+4. Borrado de cuenta (`ADR-031`), reportar y moderar con aceptación de términos (`ADR-032`), y política de privacidad: **ADR propuestos, pendientes de aprobación del equipo**; cambian contrato y esquema.
 5. AAB firmado, ficha de Play y pruebas cerradas.
 6. SEO de las páginas públicas y Search Console.
 7. Producción.

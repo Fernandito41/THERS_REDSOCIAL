@@ -10,10 +10,14 @@
 # único punto que conoce tanto el caso de uso (application/) como la
 # implementación concreta del repositorio (infrastructure/).
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.application.auth.get_current_user_use_case import get_current_user
+from app.application.auth.update_profile_media_use_case import (
+    remove_profile_image,
+    set_profile_image,
+)
 from app.application.auth.update_profile_use_case import update_profile
 from app.domain.auth.exceptions import (
     UserNotFoundError,
@@ -24,9 +28,12 @@ from app.domain.auth.validators import (
     is_valid_country_code,
     is_valid_phone,
     is_valid_username,
+    is_valid_website,
     meets_minimum_age,
     parse_birth_date,
 )
+from app.domain.media.storage import ImageTooLargeError, InvalidImageError
+from app.infrastructure.media.image_processor import process_image
 from app.infrastructure.persistence.repositories.follow_repository import (
     SQLAlchemyFollowRepository,
 )
@@ -51,6 +58,8 @@ _follow_repository = SQLAlchemyFollowRepository()
 # nunca `**data`, nunca se pasa el body directo al caso de uso/repositorio
 # (ADR-003 §Seguridad: defensa concreta contra mass assignment/overposting).
 _MAX_NAME_LENGTH = 120
+# ADR-015-profile-media.md: texto opcional del perfil; cadena vacía = borrar (NULL).
+_TEXT_LIMITS = {"bio": 160, "location": 60, "website": 100}
 
 
 @users_bp.route("/users/me", methods=["GET"])
@@ -124,6 +133,22 @@ def update_me():
             return jsonify({"msg": "Debes tener al menos 13 años"}), 400
         fields["birth_date"] = birth_date
 
+    for field, limit in _TEXT_LIMITS.items():
+        if field not in data:
+            continue
+        value = data.get(field)
+        if value is None:
+            fields[field] = None
+            continue
+        if not isinstance(value, str):
+            return jsonify({"msg": f"El campo {field} no es válido"}), 400
+        value = value.strip()
+        if len(value) > limit:
+            return jsonify({"msg": f"El campo {field} no puede superar {limit} caracteres"}), 400
+        if field == "website" and value and not is_valid_website(value):
+            return jsonify({"msg": "El sitio web no es válido"}), 400
+        fields[field] = value or None
+
     if not fields:
         return jsonify({"msg": "No se recibió ningún campo para actualizar"}), 400
 
@@ -139,3 +164,70 @@ def update_me():
         ), 400
 
     return jsonify({"user": user}), 200
+
+
+# --- Foto de perfil y portada (ADR-015-profile-media.md) ---
+# multipart/form-data con el campo `file`. Identidad solo del JWT.
+
+def _upload_image(kind):
+    user_id = get_jwt_identity()
+    upload = request.files.get("file")
+    if upload is None:
+        return jsonify({"msg": "No se recibió ninguna imagen"}), 400
+
+    try:
+        user = set_profile_image(
+            user_id,
+            kind,
+            upload.read(),
+            process_image,
+            current_app.extensions["media_storage"],
+            _user_repository,
+            _follow_repository,
+        )
+    except InvalidImageError:
+        return jsonify({"msg": "El archivo debe ser una imagen JPEG, PNG o WebP válida"}), 400
+    except ImageTooLargeError:
+        return jsonify({"msg": "La imagen no puede superar 5 MB"}), 413
+    except UserNotFoundError:
+        return jsonify({"msg": "Usuario no encontrado"}), 404
+
+    return jsonify({"user": user}), 200
+
+
+def _delete_image(kind):
+    try:
+        user = remove_profile_image(
+            get_jwt_identity(),
+            kind,
+            current_app.extensions["media_storage"],
+            _user_repository,
+            _follow_repository,
+        )
+    except UserNotFoundError:
+        return jsonify({"msg": "Usuario no encontrado"}), 404
+    return jsonify({"user": user}), 200
+
+
+@users_bp.route("/users/me/avatar", methods=["POST"])
+@jwt_required()
+def upload_avatar():
+    return _upload_image("avatar")
+
+
+@users_bp.route("/users/me/avatar", methods=["DELETE"])
+@jwt_required()
+def delete_avatar():
+    return _delete_image("avatar")
+
+
+@users_bp.route("/users/me/cover", methods=["POST"])
+@jwt_required()
+def upload_cover():
+    return _upload_image("cover")
+
+
+@users_bp.route("/users/me/cover", methods=["DELETE"])
+@jwt_required()
+def delete_cover():
+    return _delete_image("cover")

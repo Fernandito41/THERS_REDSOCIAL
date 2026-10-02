@@ -17,13 +17,59 @@ import { MOODS } from "../data/mockData";
 // (Frontend/src/assets/editar.png): identidad arriba, campos agrupados,
 // contador de caracteres en la presentación.
 //
-// name/username se persisten de verdad (PATCH /api/users/me, ADR-003); el
-// resto es local (ver lib/profileStorage.js). "Cambiar foto" no existe como
-// tal: no hay almacenamiento de archivos en el backend, así que lo editable
-// es el color del avatar y la portada -- no se simula una subida que no
-// funciona.
+// name/username (ADR-003) y bio/ubicación/enlace (ADR-015) se persisten en el
+// servidor; la foto de perfil y la portada se suben al guardar
+// (POST/DELETE /api/users/me/{avatar,cover}, ADR-015). Mood, intereses,
+// canción, degradé y color de avatar siguen locales (lib/profileStorage.js).
+// Los degradés y el color del avatar quedan como respaldo cuando no hay foto.
 
 const NAME_MAX = 120; // Mismo límite que valida el backend (_MAX_NAME_LENGTH).
+
+// Mismos límites que el backend (infrastructure/media/image_processor.py); el
+// servidor vuelve a validar por contenido -- esto solo evita subidas inútiles.
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+// Elección pendiente de imagen: null (sin cambios) | File (nueva) | "remove".
+// Nada se sube hasta pulsar «Guardar».
+function useImageChoice(currentUrl) {
+  const [change, setChange] = useState(null);
+  const [error, setError] = useState("");
+  const preview = useMemo(
+    () => (change instanceof File ? URL.createObjectURL(change) : null),
+    [change]
+  );
+
+  useEffect(() => {
+    if (!preview) return undefined;
+    return () => URL.revokeObjectURL(preview);
+  }, [preview]);
+
+  const choose = (file) => {
+    if (!file) return;
+    if (!IMAGE_TYPES.includes(file.type)) {
+      setError("Usa una imagen JPEG, PNG o WebP.");
+      return;
+    }
+    if (file.size > IMAGE_MAX_BYTES) {
+      setError("La imagen no puede superar 5 MB.");
+      return;
+    }
+    setError("");
+    setChange(file);
+  };
+
+  const remove = () => {
+    setError("");
+    setChange("remove");
+  };
+
+  const url = change === "remove" ? null : preview ?? currentUrl ?? null;
+  return { change, url, error, choose, remove };
+}
+
+const mediaButtonClass =
+  "min-h-[36px] cursor-pointer rounded-full border border-line px-3.5 text-xs font-semibold text-ink transition hover:bg-surface dark:border-line-dark dark:text-ink-dark dark:hover:bg-surface-dark";
 
 const inputClass =
   "w-full rounded-xl border border-line bg-canvas px-3.5 py-2.5 text-sm text-ink placeholder-muted transition focus:border-ink focus:outline-none dark:border-line-dark dark:bg-canvas-dark dark:text-ink-dark dark:focus:border-ink-dark";
@@ -67,6 +113,10 @@ export default function EditProfileModal({ user, profile, onSave, onClose }) {
     cover: profile.cover,
     accent: profile.accent,
   }));
+  const avatarChoice = useImageChoice(user.avatar_url);
+  const coverChoice = useImageChoice(user.cover_url);
+  const avatarInputRef = useRef(null);
+  const coverInputRef = useRef(null);
   const [interestDraft, setInterestDraft] = useState("");
   const [errors, setErrors] = useState({});
   const [isSaving, setSaving] = useState(false);
@@ -85,8 +135,10 @@ export default function EditProfileModal({ user, profile, onSave, onClose }) {
       draft.mood !== profile.mood ||
       draft.cover !== profile.cover ||
       draft.accent !== profile.accent ||
+      avatarChoice.change !== null ||
+      coverChoice.change !== null ||
       draft.interests.join("|") !== profile.interests.join("|"),
-    [draft, user, profile]
+    [draft, user, profile, avatarChoice.change, coverChoice.change]
   );
 
   // El scroll de la página se bloquea mientras la hoja está abierta, para que
@@ -122,7 +174,7 @@ export default function EditProfileModal({ user, profile, onSave, onClose }) {
       if (event.key !== "Tab" || !panelRef.current) return;
 
       const focusables = panelRef.current.querySelectorAll(
-        "a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled])"
+        "a[href], button:not([disabled]), input:not([disabled]):not([type=file]), textarea:not([disabled])"
       );
       if (!focusables.length) return;
 
@@ -186,6 +238,7 @@ export default function EditProfileModal({ user, profile, onSave, onClose }) {
           cover: draft.cover,
           accent: draft.accent,
         },
+        media: { avatar: avatarChoice.change, cover: coverChoice.change },
       });
     } finally {
       setSaving(false);
@@ -275,11 +328,52 @@ export default function EditProfileModal({ user, profile, onSave, onClose }) {
             </div>
           )}
 
-          <section className="flex items-center gap-4 rounded-2xl bg-canvas p-4 dark:bg-canvas-dark">
-            <Avatar name={draft.name || user.name} size="w-16 h-16 text-xl" color={draft.accent} />
-            <fieldset className="min-w-0">
-              <legend className="mb-2 text-sm font-semibold text-ink dark:text-ink-dark">
-                Color de tu avatar
+          <section className="rounded-2xl bg-canvas p-4 dark:bg-canvas-dark">
+            <div className="flex items-center gap-4">
+              <Avatar
+                name={draft.name || user.name}
+                photo={avatarChoice.url}
+                size="w-16 h-16 text-xl"
+                color={draft.accent}
+              />
+              <div className="min-w-0">
+                <p className="mb-2 text-sm font-semibold text-ink dark:text-ink-dark">Foto de perfil</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    className={mediaButtonClass}
+                  >
+                    {avatarChoice.url ? "Cambiar foto" : "Subir foto"}
+                  </button>
+                  {avatarChoice.url && (
+                    <button type="button" onClick={avatarChoice.remove} className={mediaButtonClass}>
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept={IMAGE_TYPES.join(",")}
+                  tabIndex={-1}
+                  className="hidden"
+                  onChange={(event) => {
+                    avatarChoice.choose(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+              </div>
+            </div>
+            {avatarChoice.error && (
+              <p role="alert" className="mt-2 text-xs font-medium text-ember-600">
+                {avatarChoice.error}
+              </p>
+            )}
+
+            <fieldset className="mt-4">
+              <legend className="mb-2 text-xs font-semibold text-muted dark:text-muted-dark">
+                Color de fondo de las iniciales (sin foto)
               </legend>
               <div className="flex flex-wrap gap-2">
                 {ACCENTS.map(({ value, label }) => {
@@ -306,29 +400,75 @@ export default function EditProfileModal({ user, profile, onSave, onClose }) {
             </fieldset>
           </section>
 
-          <fieldset>
-            <legend className="mb-2 text-sm font-semibold text-ink dark:text-ink-dark">Portada</legend>
-            <div className="grid grid-cols-5 gap-2">
-              {Object.entries(COVERS).map(([id, cover]) => {
-                const selected = draft.cover === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => set({ cover: id })}
-                    aria-pressed={selected}
-                    title={cover.label}
-                    className={`h-12 cursor-pointer rounded-xl border-2 transition ${
-                      selected ? "border-ink dark:border-ink-dark" : "border-line dark:border-line-dark"
-                    }`}
-                    style={{ backgroundImage: cover.gradient }}
-                  >
-                    <span className="sr-only">{cover.label}</span>
-                  </button>
-                );
-              })}
+          <section>
+            <p className="mb-2 text-sm font-semibold text-ink dark:text-ink-dark">Portada</p>
+            <div
+              className="h-24 w-full overflow-hidden rounded-2xl border border-line bg-cover bg-center dark:border-line-dark"
+              style={{
+                backgroundImage: coverChoice.url
+                  ? `url("${coverChoice.url}")`
+                  : COVERS[draft.cover]?.gradient,
+              }}
+              role="img"
+              aria-label="Vista previa de la portada"
+            />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                className={mediaButtonClass}
+              >
+                {coverChoice.url ? "Cambiar portada" : "Subir portada"}
+              </button>
+              {coverChoice.url && (
+                <button type="button" onClick={coverChoice.remove} className={mediaButtonClass}>
+                  Quitar
+                </button>
+              )}
             </div>
-          </fieldset>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept={IMAGE_TYPES.join(",")}
+              tabIndex={-1}
+              className="hidden"
+              onChange={(event) => {
+                coverChoice.choose(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            {coverChoice.error && (
+              <p role="alert" className="mt-2 text-xs font-medium text-ember-600">
+                {coverChoice.error}
+              </p>
+            )}
+
+            <fieldset className="mt-3">
+              <legend className="mb-2 text-xs font-semibold text-muted dark:text-muted-dark">
+                Degradé (sin foto de portada)
+              </legend>
+              <div className="grid grid-cols-5 gap-2">
+                {Object.entries(COVERS).map(([id, cover]) => {
+                  const selected = draft.cover === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => set({ cover: id })}
+                      aria-pressed={selected}
+                      title={cover.label}
+                      className={`h-12 cursor-pointer rounded-xl border-2 transition ${
+                        selected ? "border-ink dark:border-ink-dark" : "border-line dark:border-line-dark"
+                      }`}
+                      style={{ backgroundImage: cover.gradient }}
+                    >
+                      <span className="sr-only">{cover.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </section>
 
           <Field id={`${uid}-name`} label="Nombre" error={errors.name}>
             <input

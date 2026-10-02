@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 
 from .config import Config
@@ -15,6 +15,25 @@ def create_app():
     jwt.init_app(app)
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # Almacenamiento de imágenes de perfil (ADR-015-profile-media.md).
+    from app.application.media.media_url import configure_media_url
+    from app.infrastructure.media.factory import build_media_storage
+
+    app.extensions["media_storage"] = build_media_storage(app.config)
+    configure_media_url(app.config["MEDIA_PUBLIC_BASE_URL"])
+
+    @app.after_request
+    def _no_store_for_authenticated_requests(response):
+        # Hallazgo de la validación en dispositivo (2026-10-02): la capa de red
+        # de React Native (OkHttp) guardaba en su caché de disco la respuesta de
+        # GET /api/users/me -- el JSON del usuario -- aunque `session.ts`
+        # decide no persistirlo. Una respuesta a una petición autenticada nunca
+        # debe cachearse en el cliente. Los recursos públicos (p. ej. imágenes
+        # de /api/media, que se piden sin Authorization) conservan su caché.
+        if request.headers.get("Authorization") and "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     from app.interfaces.error_handlers import register_error_handlers
     register_error_handlers(app)
@@ -46,5 +65,11 @@ def create_app():
 
     from app.interfaces.routes.message_routes import messages_bp
     app.register_blueprint(messages_bp, url_prefix="/api")
+
+    # Servir imágenes desde disco solo con STORAGE_BACKEND=local (en s3 las
+    # sirve el proveedor directamente desde su URL pública).
+    if (app.config.get("STORAGE_BACKEND") or "local").lower() == "local":
+        from app.interfaces.routes.media_routes import media_bp
+        app.register_blueprint(media_bp, url_prefix="/api")
 
     return app

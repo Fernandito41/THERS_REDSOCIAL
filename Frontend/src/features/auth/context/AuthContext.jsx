@@ -107,17 +107,35 @@ export function AuthProvider({ children }) {
   // persistida por el backend (ADR-003, API_CONTRACT.md §4.2). La respuesta
   // de PATCH /api/users/me reemplaza `user` por completo -- misma fuente de
   // verdad que login()/loadCurrentUser(), nunca un merge parcial local.
-  const updateProfile = async (patch) => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    const res = await api.patch("/users/me", patch, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const updatedUser = withUsername(res.data.user);
+  const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` });
 
+  const applyUser = (rawUser) => {
+    const updatedUser = withUsername(rawUser);
     localStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
     setUser(updatedUser);
-
     return updatedUser;
+  };
+
+  const updateProfile = async (patch) => {
+    const res = await api.patch("/users/me", patch, { headers: authHeaders() });
+    return applyUser(res.data.user);
+  };
+
+  // Foto de perfil / portada (ADR-015-profile-media.md, API_CONTRACT.md).
+  // `kind`: "avatar" | "cover". multipart/form-data con el campo `file`; el
+  // navegador fija el boundary del Content-Type por sí solo.
+  const uploadProfileImage = async (kind, file) => {
+    const body = new FormData();
+    body.append("file", file);
+    const res = await api.post(`/users/me/${kind}`, body, {
+      headers: { ...authHeaders(), "Content-Type": "multipart/form-data" },
+    });
+    return applyUser(res.data.user);
+  };
+
+  const removeProfileImage = async (kind) => {
+    const res = await api.delete(`/users/me/${kind}`, { headers: authHeaders() });
+    return applyUser(res.data.user);
   };
 
   const value = {
@@ -130,6 +148,8 @@ export function AuthProvider({ children }) {
     logout,
     loadCurrentUser,
     updateProfile,
+    uploadProfileImage,
+    removeProfileImage,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

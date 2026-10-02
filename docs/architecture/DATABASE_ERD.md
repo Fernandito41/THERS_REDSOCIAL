@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ERD.md` |
 | Identificador propuesto | `DB-002` (acompaña a `DB-001` / `DATABASE_ARCHITECTURE.md`) — **pendiente de ratificación** |
-| Versión | 0.13 |
+| Versión | 0.14 |
 | Estado | **Borrador — representa solo el modelo conceptual ratificado hasta hoy** |
 | Depende de | `DATABASE_ARCHITECTURE.md` (fuente de verdad directa), `HB-001`, `REPOSITORY_STRUCTURE.md` |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
@@ -250,6 +250,7 @@ Notación de cardinalidad de Mermaid `erDiagram`, para lectura futura cuando exi
 | `notifications` |  Ratificada — v0.8 (solo `like`/`comment`/`follow`) | `GET /api/notifications`/`PATCH /api/notifications/<id>/read` listan y marcan como leídas notificaciones reales, generadas como efecto secundario de like/comentario/follow, respaldadas por PostgreSQL (`ADR-008-notifications-minimal-model.md`) | `id` UUID (PK), `recipient_id` UUID (FK → `users.id`), `actor_id` UUID (FK → `users.id`), `type` VARCHAR(20), `post_id` UUID (FK → `posts.id`, nullable), `read_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
 | `password_reset_tokens` |  Ratificada — v0.10 (reconstruida, `ADR-010-password-reset-otp-flow.md`) | `POST /api/forgot-password`/`POST /api/verify-reset-code`/`POST /api/reset-password` crean, verifican y consumen solicitudes reales de recuperación por código OTP, respaldadas por PostgreSQL | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `code_hash` TEXT, `attempts` INTEGER, `expires_at` TIMESTAMPTZ, `verified_at` TIMESTAMPTZ (nullable), `reset_authorization_hash` VARCHAR(64) (nullable), `reset_authorization_expires_at` TIMESTAMPTZ (nullable), `used_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
 | `email_verification_tokens` |  Ratificada — v0.11 (reconstruida, `ADR-011-mandatory-email-verification.md`) | `POST /api/register`/`POST /api/verify-registration-code`/`POST /api/resend-registration-code` crean, verifican y consumen códigos reales de verificación por OTP, respaldados por PostgreSQL | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `code_hash` TEXT, `attempts` INTEGER, `expires_at` TIMESTAMPTZ, `used_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ |
+| `refresh_tokens` |  Ratificada — v0.14 (`ADR-017-jwt-session-policy.md`) | Sesiones con refresh token rotativo, en uso real por login/Google/`/api/refresh`/`/api/logout` | `id` UUID (PK), `user_id` UUID (FK → `users.id`, CASCADE), `family_id` UUID, `token_hash` VARCHAR(64), `created_at`, `expires_at`, `used_at`, `revoked_at`, `replaced_by_id` |
 | `user_identities` |  Ratificada — v0.12 (`ADR-012-google-sign-in.md`) | `POST /api/auth/google` crea/consulta identidades externas vinculadas reales, respaldadas por PostgreSQL | `id` UUID (PK), `user_id` UUID (FK → `users.id`), `provider` VARCHAR(20), `provider_subject` TEXT, `created_at` TIMESTAMPTZ, `UNIQUE (provider, provider_subject)` |
 | `messages` |  Ratificada — v0.13 (mitad 1:1, `ADR-013-messages-minimal-model.md`) | `POST`/`GET /api/users/<id>/messages` y `GET /api/conversations` crean y listan mensajes directos reales, respaldados por PostgreSQL | `id` UUID (PK), `sender_id` UUID (FK → `users.id`), `recipient_id` UUID (FK → `users.id`), `content` TEXT, `read_at` TIMESTAMPTZ (nullable), `created_at` TIMESTAMPTZ, `CHECK (sender_id <> recipient_id)` |
 

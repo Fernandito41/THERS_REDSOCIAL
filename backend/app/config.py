@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -162,3 +163,47 @@ class Config:
             "Console para probar Google Sign-In de verdad.",
             file=sys.stderr,
         )
+
+# --- Imágenes de perfil (ADR-015-profile-media.md) ---
+# Se asignan sobre la clase ya definida arriba (mismo archivo, mismo patrón
+# de lectura de entorno que el resto).
+Config.MAX_CONTENT_LENGTH = 6 * 1024 * 1024  # techo HTTP; el límite real de imagen es 5 MiB
+Config.STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")
+Config.UPLOAD_DIR = os.environ.get(
+    "UPLOAD_DIR", str(Path(__file__).resolve().parent.parent / "uploads")
+)
+# Base pública de las URLs de medios. Local: la propia API. S3/Supabase/R2:
+# la URL pública del bucket (p. ej. https://<proyecto>.supabase.co/storage/v1/object/public/<bucket>).
+Config.MEDIA_PUBLIC_BASE_URL = os.environ.get(
+    "MEDIA_PUBLIC_BASE_URL", "http://127.0.0.1:5000/api/media"
+)
+Config.S3_BUCKET = os.environ.get("S3_BUCKET")
+Config.S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
+Config.S3_ACCESS_KEY_ID = os.environ.get("S3_ACCESS_KEY_ID")
+Config.S3_SECRET_ACCESS_KEY = os.environ.get("S3_SECRET_ACCESS_KEY")
+Config.S3_REGION = os.environ.get("S3_REGION")
+
+
+# --- Sesión JWT (ADR-017-jwt-session-policy.md) ---------------------------
+# Explícitas, no el default accidental de la librería. Sobreescribibles por
+# entorno para poder probar la renovación en un dispositivo con un access de
+# segundos (p. ej. JWT_ACCESS_TOKEN_EXPIRES_SECONDS=30 solo en local/staging).
+def _positive_int_env(name, default):
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise RuntimeError(f"{name} debe ser un entero positivo (recibido: {raw!r}).")
+    if value < 1:
+        raise RuntimeError(f"{name} debe ser un entero positivo (recibido: {value}).")
+    return value
+
+
+Config.JWT_ACCESS_TOKEN_EXPIRES = timedelta(
+    seconds=_positive_int_env("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", 15 * 60)
+)
+Config.JWT_REFRESH_TOKEN_EXPIRES = timedelta(
+    days=_positive_int_env("JWT_REFRESH_TOKEN_EXPIRES_DAYS", 30)
+)

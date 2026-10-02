@@ -55,7 +55,7 @@ export default function CreateCapsuleFlow({ currentUser, onClose, onSubmit }) {
 
         <div className="p-5">
           <div className="flex items-center gap-3 mb-4">
-            <Avatar name={currentUser.name} size="w-10 h-10" />
+            <Avatar name={currentUser.name} photo={currentUser.avatar_url} size="w-10 h-10" />
             <div>
               <p className="text-ink dark:text-ink-dark font-medium text-sm">{currentUser.name}</p>
               <p className="text-muted text-xs">@{currentUser.username}</p>

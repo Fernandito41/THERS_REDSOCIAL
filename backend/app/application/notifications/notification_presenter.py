@@ -6,15 +6,14 @@
 # password_hash ni otros campos privados.
 
 
+from app.application.auth.user_presenter import to_author_summary
+
+
 def to_public_notification(notification):
     return {
         "id": str(notification.id),
         "type": notification.type,
-        "actor": {
-            "id": str(notification.actor.id),
-            "username": notification.actor.username,
-            "name": notification.actor.name,
-        },
+        "actor": to_author_summary(notification.actor),
         "post_id": str(notification.post_id) if notification.post_id else None,
         # Se expone como booleano, nunca como el timestamp `read_at` crudo
         # -- mismo criterio que `username_changed_at` nunca cruza la

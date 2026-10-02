@@ -4,13 +4,32 @@
 # cualquier DATABASE_URL heredada del entorno (p. ej. apuntando a
 # thers_dev), para que un test nunca pueda tocar datos de desarrollo por
 # accidente. TEST_DATABASE_URL permite apuntar a otra instancia si hace falta.
+#
+# El puerto NO está hardcodeado a 5432: `docker-compose.yml` publica el
+# contenedor en `${POSTGRES_PORT:-5432}`, y en cualquier máquina con un
+# PostgreSQL nativo instalado el 5432 del host ya está ocupado (CLAUDE.md §11
+# documenta justamente ese caso y recomienda 5433). Con el puerto fijo, correr
+# `pytest` en una máquina así no fallaba de forma obvia: intentaba conectarse
+# al PostgreSQL **nativo** en vez de al del proyecto. Se lee la misma variable
+# que usa Compose, desde el `.env` de la raíz del repositorio, para que un solo
+# valor gobierne los dos lados.
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# `.env` de la RAÍZ (el que lee Compose), no `backend/.env` -- ahí vive
+# POSTGRES_PORT. `override=False` (default): una variable ya presente en el
+# entorno real siempre gana.
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
+_POSTGRES_PORT = os.environ.get("POSTGRES_PORT", "5432")
 
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-not-for-real-use"
 os.environ["DATABASE_URL"] = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql+psycopg://thers:changeme@localhost:5432/thers_test",
+    f"postgresql+psycopg://thers:changeme@localhost:{_POSTGRES_PORT}/thers_test",
 )
 
 # Fijada explícitamente en vacío, ANTES del primer import de `app` (que
@@ -23,6 +42,14 @@ os.environ["DATABASE_URL"] = os.environ.get(
 # configurado para desarrollo intentaría enviar correos reales durante la
 # suite -- exactamente lo que DATABASE_URL de arriba ya evita para Postgres.
 os.environ["RESEND_API_KEY"] = ""
+
+# Imágenes de perfil (ADR-015): siempre disco local en un directorio
+# temporal, nunca el backend/uploads real ni un bucket S3 del entorno.
+import tempfile
+
+os.environ["STORAGE_BACKEND"] = "local"
+os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="thers_test_uploads_")
+os.environ["MEDIA_PUBLIC_BASE_URL"] = "http://testserver/api/media"
 
 import psycopg
 import pytest
@@ -99,9 +126,20 @@ def _clean_tables(app):
     with app.app_context():
         db.session.execute(
             db.text(
-                "TRUNCATE TABLE password_reset_tokens, email_verification_tokens, "
+                "TRUNCATE TABLE refresh_tokens, password_reset_tokens, email_verification_tokens, "
                 "user_identities, notifications, messages, comments, likes, follows, "
                 "posts, users"
             )
         )
         db.session.commit()
+
+
+@pytest.fixture(autouse=True)
+def _clean_uploads():
+    # ADR-015: cada test parte con el directorio de imágenes vacío.
+    import shutil
+
+    yield
+    root = os.environ["UPLOAD_DIR"]
+    for entry in os.listdir(root):
+        shutil.rmtree(os.path.join(root, entry), ignore_errors=True)

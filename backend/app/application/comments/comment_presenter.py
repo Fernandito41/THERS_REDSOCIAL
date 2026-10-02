@@ -5,15 +5,14 @@
 # password_hash ni otros campos privados.
 
 
+from app.application.auth.user_presenter import to_author_summary
+
+
 def to_public_comment(comment):
     return {
         "id": str(comment.id),
         "post_id": str(comment.post_id),
-        "author": {
-            "id": str(comment.author.id),
-            "username": comment.author.username,
-            "name": comment.author.name,
-        },
+        "author": to_author_summary(comment.author),
         "content": comment.content,
         "created_at": comment.created_at.isoformat(),
     }

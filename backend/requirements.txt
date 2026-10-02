@@ -43,3 +43,10 @@ google-auth==2.58.0
 # a `load_dotenv()` explícitamente para que ambos caminos de arranque se
 # comporten igual (ver detalle en ese archivo).
 python-dotenv==1.2.3
+
+# Imagenes de perfil (ADR-015-profile-media.md). Pillow valida por contenido real
+# y re-codifica cada imagen subida (descarta EXIF). boto3 es el cliente S3 para
+# Supabase Storage / Cloudflare R2 / S3. Ambos se importan solo desde
+# infrastructure/media/ (mismo principio que confina `resend` a infrastructure/email/).
+Pillow==12.3.0
+boto3==1.43.103

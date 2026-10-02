@@ -77,6 +77,18 @@ class User(db.Model):
         db.Boolean, nullable=False, server_default=text("true")
     )
 
+    # Perfil público extendido y medios (ADR-015-profile-media.md). Todas
+    # nullable: `NULL` = "la persona no lo definió" (nunca un texto vacío ni
+    # un valor inventado). `avatar_path`/`cover_path` guardan la CLAVE del
+    # objeto en el almacenamiento (p. ej. "avatars/<uuid>.webp"), no una URL:
+    # la URL pública depende del entorno (disco local, Supabase, R2) y se
+    # resuelve al presentar (application/media/media_url.py).
+    bio = db.Column(db.String(160), nullable=True)
+    location = db.Column(db.String(60), nullable=True)
+    website = db.Column(db.String(100), nullable=True)
+    avatar_path = db.Column(db.String(255), nullable=True)
+    cover_path = db.Column(db.String(255), nullable=True)
+
     # CITEXT (case-insensitive text, extensión de PostgreSQL) en vez de VARCHAR:
     # el UNIQUE sobre email ignora mayúsculas/minúsculas a nivel de motor, sin
     # normalizar manualmente en la capa de aplicación. Requiere
@@ -656,3 +668,68 @@ class UserIdentity(db.Model):
 
     def __repr__(self):
         return f"<UserIdentity provider={self.provider!r} user_id={self.user_id}>"
+
+
+class RefreshToken(db.Model):
+    __tablename__ = "refresh_tokens"
+
+    # ADR-017-jwt-session-policy.md. Una fila por refresh token emitido. Cada
+    # login abre una familia (`family_id`); cada renovación consume la fila
+    # vigente y crea la siguiente de la misma familia (rotación, ADR-017 §2).
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Identifica la cadena de renovaciones de un mismo login/dispositivo. Se
+    # revoca entera ante reuso de un token consumido o ante logout.
+    family_id = db.Column(PG_UUID(as_uuid=True), nullable=False)
+
+    # SHA-256 hexadecimal del `jti` del refresh token (ADR-017 §7 decisión 3):
+    # el `jti` es un UUID v4 aleatorio dentro de un JWT firmado, de alta
+    # entropía, así que no hace falta un hash lento (a diferencia de los OTP
+    # de 6 dígitos). Nunca se guarda el token ni su `jti` en claro.
+    token_hash = db.Column(db.String(64), nullable=False)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    # NULL = vigente. Se fija al consumirlo en una renovación.
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # NULL = no revocado. Se fija en toda la familia ante reuso, logout o
+    # cambio de contraseña.
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Sucesor emitido al consumir este token (trazabilidad de la cadena).
+    replaced_by_id = db.Column(PG_UUID(as_uuid=True), nullable=True)
+
+    __table_args__ = (
+        # Lookup de POST /api/refresh y /api/logout por el hash del `jti`.
+        db.Index("uq_refresh_tokens_token_hash", "token_hash", unique=True),
+        db.Index("ix_refresh_tokens_user_id", "user_id"),
+        db.Index("ix_refresh_tokens_family_id", "family_id"),
+        # ADR-017 §4.3: a lo sumo UN token activo (sin usar y sin revocar) por
+        # familia -- defensa de última línea contra dos rotaciones
+        # simultáneas del mismo token. Mismo patrón que
+        # `uq_password_reset_tokens_active_user` (ADR-010).
+        db.Index(
+            "uq_refresh_tokens_active_family",
+            "family_id",
+            unique=True,
+            postgresql_where=text("used_at IS NULL AND revoked_at IS NULL"),
+        ),
+    )
+
+    def __repr__(self):
+        return f"<RefreshToken user_id={self.user_id} family_id={self.family_id}>"

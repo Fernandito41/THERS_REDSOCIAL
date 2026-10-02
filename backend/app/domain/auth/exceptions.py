@@ -98,3 +98,11 @@ class IdentityAlreadyLinkedError(Exception):
     simultáneas del mismo `POST /api/auth/google` para una cuenta de Google
     que todavía no existía en THERS), ya que `find_by_provider_and_subject`
     ya se consulta antes de intentar crear (`ADR-012` §Seguridad)."""
+
+
+class InvalidRefreshTokenError(Exception):
+    """POST /api/refresh (ADR-017-jwt-session-policy.md) recibió un refresh
+    token que no se puede usar: nunca registrado, revocado, expirado, o ya
+    consumido (reuso, que además revoca la familia entera). Se traduce a
+    401 sin distinguir el motivo -- mismo criterio que el resto de tokens de
+    esta app (no darle a un atacante información sobre cuál fue el fallo)."""

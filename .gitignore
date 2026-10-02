@@ -30,3 +30,7 @@ docs/*.canvas
 # oficial versionada -- se dejan fuera para no inflar el repo con binarios.
 docs/desing-reference/
 docs/qa/
+
+# Imagenes subidas en desarrollo (ADR-015, STORAGE_BACKEND=local) y logs locales
+backend/uploads/
+backend/*.log

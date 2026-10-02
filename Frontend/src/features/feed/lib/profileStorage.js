@@ -1,9 +1,10 @@
-// Perfil extendido (bio, ubicación, sitio web, mood, intereses, portada,
-// acento): exclusivamente local (localStorage). PATCH /api/users/me solo
-// acepta name/username/phone/country_code/birth_date (ADR-003 §Campos
-// editables), y no hay columnas ratificadas para el resto
-// (DATABASE_ARCHITECTURE.md §4.B), así que no se inventa contrato: estos
-// campos viven en el navegador hasta que el equipo los ratifique por ADR.
+// Perfil extendido LOCAL (localStorage): mood, intereses, canción favorita,
+// degradé de portada y acento del avatar. Bio, ubicación y sitio web pasaron
+// al servidor (ADR-015-profile-media.md) -- aquí solo se leen para migrar
+// lo que la versión anterior dejó guardado en este navegador (ver
+// pages/Profile.jsx). Los campos que siguen locales no tienen columnas
+// ratificadas (DATABASE_ARCHITECTURE.md §4.B), así que no se inventa
+// contrato: viven en el navegador hasta que el equipo los ratifique por ADR.
 //
 // Nunca se precarga con datos inventados: todo empieza vacío hasta que la
 // persona lo completa ella misma.

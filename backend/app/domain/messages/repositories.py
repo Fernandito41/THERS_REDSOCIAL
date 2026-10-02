@@ -45,6 +45,15 @@ class MessageRepository(ABC):
         -- el caso de uso traduce False a 404 sin distinguir cuál de los
         dos ocurrió, mismo criterio que NotificationRepository.mark_as_read."""
 
+    @abstractmethod
+    def update_content(self, message_id, sender_id, content):
+        """Reemplaza el texto del mensaje `message_id` solo si lo mandó
+        `sender_id`, y marca `edited_at`. Devuelve el mensaje actualizado,
+        o None si no existía o lo mandó otra persona -- mismo criterio que
+        PostRepository.update_content (ADR-021-content-editing.md). No toca
+        `read_at`: editar un mensaje ya leído no lo devuelve a no leído
+        (ADR-021 §Decisión)."""
+
 
 class TypingRepository(ABC):
     """Puerto del indicador de 'escribiendo...' (ADR-014-messages-ux-improvements.md).

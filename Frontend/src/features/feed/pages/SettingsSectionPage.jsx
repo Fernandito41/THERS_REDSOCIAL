@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useOutletContext, useParams } from "react-router-dom";
+import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import Icon from "@shared/components/Icon";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
@@ -7,6 +7,19 @@ import { api, getErrorMessage } from "@shared/lib/api";
 import { getStoredToken } from "@features/auth";
 import { SETTINGS_CONTENT } from "../data/settingsSections";
 import { loadSettings, saveSetting } from "../lib/settingsStorage";
+import { usePrivacySettings } from "../hooks/usePrivacySettings";
+import FollowRequestsRow from "../components/settings/FollowRequestsRow";
+import MutedKeywordsRow from "../components/settings/MutedKeywordsRow";
+import TwoFactorRow from "../components/settings/TwoFactorRow";
+import ActiveSessionsRow from "../components/settings/ActiveSessionsRow";
+import MutedTopicsRow from "../components/settings/MutedTopicsRow";
+import RestrictedAccountsRow from "../components/settings/RestrictedAccountsRow";
+import {
+  DataExportHistoryRow,
+  DataExportRequestRow,
+  useDataExports,
+} from "../components/settings/DataExportRow";
+import { useSecuritySettings } from "../hooks/useSecuritySettings";
 import {
   ActionRow,
   ChoiceRow,
@@ -32,6 +45,35 @@ import {
  *                           `email_verified` de la sesión
  *  · `profileLink`       -> enlace a la edición de perfil ya existente
  *  · `switch` / `choice` -> preferencia guardada en este navegador
+ *
+ * Filas de privacidad, que se aplican en el SERVIDOR (no en este navegador):
+ *  · `privacySwitch` / `privacyChoice` -> PATCH /api/users/me/privacy
+ *                           (ADR-022-private-accounts.md, ADR-023-mentions.md,
+ *                           ADR-024-content-filters-and-privacy-preferences.md)
+ *  · `followRequests`    -> GET/POST/DELETE /api/follow-requests (ADR-022)
+ *  · `mutedKeywords`     -> GET/POST/DELETE /api/users/me/muted-keywords (ADR-024)
+ *
+ * Filas de seguridad, que también se aplican en el SERVIDOR:
+ *  · `securitySwitch`    -> PATCH /api/users/me/security (ADR-025-session-registry.md)
+ *  · `activeSessions`    -> GET/DELETE /api/sessions (ADR-025)
+ *  · `twoFactor`         -> GET/POST /api/2fa/... (ADR-026-two-factor-authentication.md)
+ *
+ * Preferencias de contenido y feed, también en el SERVIDOR (ADR-030):
+ *  · `privacySwitch hide_sensitive_content` -> PATCH /api/users/me/privacy
+ *  · `mutedKeywords` (ya existía, ADR-024) y `mutedTopics` ->
+ *                           GET/POST/DELETE /api/users/me/muted-topics
+ *
+ * Bloqueo y restricción de cuentas, también en el SERVIDOR:
+ *  · `restrictedAccounts` -> GET/POST/DELETE /api/users/me/blocks y
+ *                           /api/users/me/restrictions (ADR-029-blocked-and-restricted-accounts.md)
+ *
+ * Exportación de datos, también en el SERVIDOR:
+ *  · `dataExportRequest` / `dataExportHistory` -> POST/GET /api/data-exports y
+ *                           GET /api/data-exports/<id>/download (ADR-028-data-export.md)
+ *
+ * El objeto de privacidad se carga UNA vez por sección (no una por fila) y se
+ * pasa a cada control: cuatro interruptores pidiendo lo mismo al montarse
+ * serían cuatro peticiones idénticas.
  */
 export default function SettingsSectionPage() {
   const { section } = useParams();
@@ -39,6 +81,16 @@ export default function SettingsSectionPage() {
   const content = SETTINGS_CONTENT[section];
 
   const [prefs, setPrefs] = useState(() => loadSettings(currentUser.username));
+  // Preferencias reales del servidor. Se piden siempre, no solo en la sección
+  // de privacidad: el hook es barato y así no hace falta condicionar un hook
+  // al valor de `section` (lo que violaría las reglas de hooks de React).
+  const privacySettings = usePrivacySettings();
+  // Mismo criterio que `privacySettings`: se carga una vez por sección, no una
+  // por fila, y el hook se llama siempre (condicionarlo al valor de `section`
+  // violaría las reglas de hooks de React).
+  const securitySettings = useSecuritySettings();
+  // Solo carga el historial en la sección de descarga de datos (ADR-028).
+  const dataExports = useDataExports({ enabled: section === "data" });
 
   useEffect(() => {
     setPrefs(loadSettings(currentUser.username));
@@ -86,6 +138,9 @@ export default function SettingsSectionPage() {
               prefs={prefs}
               setPref={setPref}
               currentUser={currentUser}
+              privacySettings={privacySettings}
+              securitySettings={securitySettings}
+              dataExports={dataExports}
             />
           ))}
         </SettingGroup>
@@ -94,8 +149,86 @@ export default function SettingsSectionPage() {
   );
 }
 
-function SettingRowRenderer({ row, prefs, setPref, currentUser }) {
+function SettingRowRenderer({
+  row,
+  prefs,
+  setPref,
+  currentUser,
+  privacySettings,
+  securitySettings,
+  dataExports,
+}) {
   switch (row.type) {
+    // --- Temas silenciados: se aplica en el servidor (ADR-030) ---
+    case "mutedTopics":
+      return <MutedTopicsRow />;
+
+    // --- Bloqueo y restricción: se aplica en el servidor (ADR-029) ---
+    case "restrictedAccounts":
+      return <RestrictedAccountsRow kind={row.kind} />;
+
+    // --- Exportación de datos: se aplica en el servidor (ADR-028) ---
+    case "dataExportRequest":
+      return <DataExportRequestRow state={dataExports} />;
+
+    case "dataExportHistory":
+      return <DataExportHistoryRow state={dataExports} />;
+
+    // --- Seguridad: se aplica en el servidor (ADR-025/ADR-026) ---
+    case "securitySwitch":
+      return (
+        <SwitchRow
+          label={row.label}
+          description={row.description}
+          checked={securitySettings.security?.[row.key] ?? false}
+          disabled={securitySettings.loading}
+          hint="Se aplica en el servidor"
+          onChange={(value) => securitySettings.update(row.key, value)}
+        />
+      );
+
+    case "activeSessions":
+      return <ActiveSessionsRow />;
+
+    case "twoFactor":
+      return <TwoFactorRow />;
+
+    // --- Privacidad: se aplica en el servidor (ADR-022/ADR-023/ADR-024) ---
+    case "privacySwitch":
+      return (
+        <SwitchRow
+          label={row.label}
+          description={row.description}
+          // Mientras carga se muestra apagado y deshabilitado: dibujarlo
+          // encendido por defecto afirmaría una protección que no sabemos si
+          // está activa.
+          checked={privacySettings.privacy?.[row.key] ?? false}
+          disabled={privacySettings.loading}
+          hint="Se aplica en el servidor"
+          onChange={(value) => privacySettings.update(row.key, value)}
+        />
+      );
+
+    case "privacyChoice":
+      return (
+        <ChoiceRow
+          id={`privacy-${row.key}`}
+          label={row.label}
+          description={row.description}
+          value={privacySettings.privacy?.[row.key] ?? row.options[0].value}
+          options={row.options}
+          disabled={privacySettings.loading}
+          hint="Se aplica en el servidor"
+          onChange={(value) => privacySettings.update(row.key, value)}
+        />
+      );
+
+    case "followRequests":
+      return <FollowRequestsRow onResolved={privacySettings.decrementPendingRequests} />;
+
+    case "mutedKeywords":
+      return <MutedKeywordsRow />;
+
     case "switch":
       return (
         <SwitchRow
@@ -169,18 +302,18 @@ function ProfileLinkRow({ currentUser }) {
 /** POST /api/forgot-password — flujo real (ADR-009). */
 function PasswordResetRow({ currentUser }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
 
   async function handleRequest() {
     setLoading(true);
     try {
       await api.post("/forgot-password", { email: currentUser.email });
-      setSent(true);
-      // El contrato usa un mensaje neutro a propósito: no revela si el correo
-      // está registrado (archivo maestro §10.1). No se afirma "correo enviado".
-      toast.success("Si la dirección está registrada, recibirás instrucciones.");
+      // Mismo flujo que /forgot-password (ADR-010): el código de 6 dígitos se
+      // ingresa en /verify-reset-code, que recibe el correo por router state
+      // (no por la URL).
+      navigate("/verify-reset-code", { state: { email: currentUser.email } });
     } catch (error) {
       toast.error(getErrorMessage(error, t));
     } finally {
@@ -189,22 +322,14 @@ function PasswordResetRow({ currentUser }) {
   }
 
   return (
-    <>
-      <ActionRow
-        label="Cambiar contraseña"
-        description="Te enviamos un enlace de restablecimiento a la dirección de tu cuenta."
-        action={sent ? "Volver a enviar" : "Enviar enlace"}
-        onAction={handleRequest}
-        loading={loading}
-        variant="primary"
-      />
-      {sent && (
-        <p className="pb-4 text-body-sm text-th-fg-muted">
-          El envío real de correo depende de que `RESEND_API_KEY` esté configurada en el servidor;
-          sin ella el backend registra el intento pero no manda nada.
-        </p>
-      )}
-    </>
+    <ActionRow
+      label="Cambiar contraseña"
+      description="Te enviamos un código de 6 dígitos a la dirección de tu cuenta."
+      action="Enviar código"
+      onAction={handleRequest}
+      loading={loading}
+      variant="primary"
+    />
   );
 }
 

@@ -62,3 +62,46 @@ def generate_otp_code():
     trivial e instantánea); el mismo hash lento (scrypt) que ya protege
     `password_hash` sí vuelve ese ataque costoso."""
     return "".join(secrets.choice(string.digits) for _ in range(_OTP_LENGTH))
+
+
+# Longitud de un codigo de recuperacion de 2FA
+# (ADR-026-two-factor-authentication.md). Diez caracteres de un alfabeto
+# base32 sin ambiguedades visuales (sin I/L/O/0/1) = ~48 bits de entropia:
+# muy por encima de los 10^6 de un OTP de 6 digitos, porque un codigo de
+# recuperacion NO expira -- vive hasta que se usa, asi que no puede depender
+# de una ventana de tiempo corta para ser seguro.
+_RECOVERY_CODE_LENGTH = 10
+_RECOVERY_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+# Donde se parte el codigo con un guion, solo para que sea legible al
+# transcribirlo. El guion NO forma parte del valor que se hashea.
+_RECOVERY_CODE_GROUP = 5
+
+
+def generate_recovery_code():
+    """Genera un codigo de recuperacion de 2FA, criptograficamente seguro.
+
+    Pensado para que una persona lo transcriba desde una captura o un papel,
+    igual que `generate_otp_code()` -- de ahi el alfabeto sin caracteres que
+    se confunden entre si (I/L/1, O/0) y el guion cada cinco caracteres.
+
+    Se hashea con scrypt (`domain/auth/auth_service.hash_password`), no con
+    `hash_token()`: aunque tiene mucha mas entropia que un OTP, sigue siendo
+    un valor corto y sobre todo **sin expiracion**, asi que una tabla filtrada
+    tendria tiempo ilimitado para atacarlo -- el hash lento es lo que vuelve
+    ese ataque costoso.
+    """
+    raw = "".join(
+        secrets.choice(_RECOVERY_CODE_ALPHABET) for _ in range(_RECOVERY_CODE_LENGTH)
+    )
+    return f"{raw[:_RECOVERY_CODE_GROUP]}-{raw[_RECOVERY_CODE_GROUP:]}"
+
+
+def normalize_recovery_code(value):
+    """Forma canonica de un codigo de recuperacion para compararlo: en
+    mayusculas y sin guiones ni espacios. Que alguien lo escriba en minusculas
+    o sin el guion no deberia dejarlo fuera de su propia cuenta."""
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip().upper().replace("-", "").replace(" ", "")
+    return cleaned or None

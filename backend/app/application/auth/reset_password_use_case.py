@@ -23,6 +23,7 @@ def reset_password(
     user_repository,
     password_reset_token_repository,
     email_service,
+    session_repository=None,
     refresh_token_repository=None,
 ):
     request_row = password_reset_token_repository.find_valid_by_reset_authorization_hash(
@@ -40,8 +41,15 @@ def reset_password(
     user_repository.update(user.id, {"password_hash": hash_password(new_password)})
     password_reset_token_repository.mark_used(request_row.id)
 
-    # ADR-017 §7 decisión 1: cambiar la contraseña cierra todas las sesiones
-    # abiertas (si alguien tenía la contraseña vieja, pierde su acceso).
+    # Cambiar la contraseña cierra TODAS las sesiones
+    # (ADR-025-session-registry.md §Decisión; ADR-017 §7 decisión 1). Antes del
+    # registro de sesiones esto era imposible -- un token firmado valía hasta
+    # expirar -- y era un agujero concreto: quien restablecía su contraseña
+    # justamente porque sospechaba un acceso ajeno no echaba a ese acceso. Los
+    # repositorios son opcionales para no romper a quien ya llamaba a este caso
+    # de uso sin ellos.
+    if session_repository is not None:
+        session_repository.revoke_all_for_user(user.id)
     if refresh_token_repository is not None:
         refresh_token_repository.revoke_all_for_user(user.id)
 

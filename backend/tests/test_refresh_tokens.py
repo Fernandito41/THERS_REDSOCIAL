@@ -330,3 +330,43 @@ class TestAuthenticatedResponsesAreNotCacheable:
         response = client.post("/api/login", json={"email": "nadie@example.com", "password": "x"})
 
         assert "Cache-Control" not in response.headers
+
+
+class TestRefreshWithSessionRegistry:
+    # Integración ADR-017 (refresh rotativo) + ADR-025 (registro de sesiones):
+    # una fila de `sessions` por login, enlazada a la familia del refresh token.
+
+    def test_refresh_keeps_a_single_session_row(self, client):
+        _register_verified(client)
+        first = _login(client)
+
+        renewed = _refresh(client, first["refresh_token"]).get_json()
+
+        sessions = client.get("/api/sessions", headers=_bearer(renewed["token"])).get_json()
+        assert len(sessions["sessions"]) == 1
+        # El access token anterior ya no está vinculado a la sesión.
+        assert client.get("/api/users/me", headers=_bearer(first["token"])).status_code == 401
+        assert client.get("/api/users/me", headers=_bearer(renewed["token"])).status_code == 200
+
+    def test_closing_the_session_from_settings_blocks_its_refresh_token(self, client):
+        _register_verified(client)
+        session = _login(client)
+        listed = client.get("/api/sessions", headers=_bearer(session["token"])).get_json()
+        session_id = listed["sessions"][0]["id"]
+
+        assert (
+            client.delete(f"/api/sessions/{session_id}", headers=_bearer(session["token"])).status_code
+            == 200
+        )
+
+        assert _refresh(client, session["refresh_token"]).status_code == 401
+
+    def test_logout_closes_the_session_registry_row(self, client):
+        _register_verified(client)
+        first = _login(client)
+        other = _login(client)  # segundo dispositivo, queda abierto
+
+        assert client.post("/api/logout", headers=_bearer(first["refresh_token"])).status_code == 200
+
+        sessions = client.get("/api/sessions", headers=_bearer(other["token"])).get_json()
+        assert len(sessions["sessions"]) == 1

@@ -6,16 +6,21 @@ import { getErrorMessage } from "@shared/lib/api";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 
-// POST /api/posts (ADR-004-posts-minimal-model.md) solo acepta `content` --
-// mood/imagen/hashtags/ubicación que este composer ofrecía antes no tienen
-// dónde persistirse todavía, así que se quitan del formulario en vez de
-// dejar que la persona los llene y se pierdan en silencio (peor que no
-// mostrarlos). Vuelven cuando cada uno tenga su propio ADR/columna.
+// POST /api/posts (ADR-004-posts-minimal-model.md) acepta `content` y, desde
+// ADR-030, `is_sensitive` -- mood/imagen/ubicación que este composer ofrecía
+// antes no tienen dónde persistirse todavía, así que se quitan del formulario
+// en vez de dejar que la persona los llene y se pierdan en silencio (peor que
+// no mostrarlos). Vuelven cuando cada uno tenga su propio ADR/columna. Los
+// hashtags no necesitan campo: se escriben en el texto (`#viajes`) y es ahí
+// donde los reconocen los temas silenciados.
 const MAX_CONTENT_LENGTH = 2000;
 
 export default function CreateCapsuleFlow({ currentUser, onClose, onSubmit }) {
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Lo que el autor declara (ADR-030): quien tenga activado el filtro de
+  // contenido sensible no verá esta cápsula en su feed.
+  const [isSensitive, setIsSensitive] = useState(false);
   const toast = useToast();
   const { t } = useLanguage();
 
@@ -27,7 +32,7 @@ export default function CreateCapsuleFlow({ currentUser, onClose, onSubmit }) {
 
     setIsSubmitting(true);
     try {
-      await onSubmit(content.trim());
+      await onSubmit(content.trim(), isSensitive);
     } catch (error) {
       toast.error(getErrorMessage(error, t));
     } finally {
@@ -72,6 +77,22 @@ export default function CreateCapsuleFlow({ currentUser, onClose, onSubmit }) {
             aria-label="Contenido de la cápsula"
             className="w-full bg-transparent text-ink dark:text-ink-dark placeholder-muted resize-none focus:outline-none text-lg disabled:opacity-60"
           />
+
+          <label className="flex items-start gap-2 mt-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isSensitive}
+              onChange={(e) => setIsSensitive(e.target.checked)}
+              disabled={isSubmitting}
+              className="mt-0.5 h-4 w-4 accent-pulse-600"
+            />
+            <span className="text-sm text-ink dark:text-ink-dark">
+              Contenido sensible
+              <span className="block text-xs text-muted dark:text-muted-dark">
+                Quien tenga activado el filtro de contenido sensible no la verá en su feed.
+              </span>
+            </span>
+          </label>
 
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-muted dark:text-muted-dark">

@@ -14,7 +14,7 @@ export const api = axios.create({
 });
 
 // Traduce errores de axios a un mensaje entendible para el usuario, siguiendo
-// el contrato de error documentado en API_CONTRACT.md (400/401/409,
+// el contrato de error documentado en API_CONTRACT.md (400/401/409/429,
 // body {"msg": "..."}). Nunca expone detalles internos (stack traces, texto
 // crudo del error de red).
 //
@@ -29,6 +29,22 @@ export function getErrorMessage(error, t) {
   }
 
   const { status, data } = error.response;
+
+  if (status === 429) {
+    // Rate limiting (ADR-027-rate-limiting.md). Se construye el mensaje acá en
+    // vez de usar el `msg` del backend porque ese texto no puede incluir la
+    // espera ya formateada -- y decir "demasiados intentos" sin decir cuánto
+    // esperar deja a la persona reintentando a ciegas.
+    //
+    // `retry_after_seconds` viaja en el body además del header `Retry-After`
+    // justamente para esto: leer headers desde axios es posible pero el body ya
+    // está a mano en todos los llamadores.
+    const seconds = Number(data?.retry_after_seconds) || 0;
+    if (seconds >= 60) {
+      return t("errors.tooManyAttemptsMinutes", { minutes: Math.ceil(seconds / 60) });
+    }
+    return t("errors.tooManyAttemptsSeconds", { seconds: Math.max(1, seconds) });
+  }
 
   if (status === 401) {
     return t("errors.invalidCredentials");

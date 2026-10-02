@@ -34,6 +34,15 @@ resend==2.45.0
 # decodifica el token "a mano" ni se confía en su payload sin validar.
 google-auth==2.58.0
 
+# TOTP (RFC 6238) para la verificación en dos pasos
+# (ADR-026-two-factor-authentication.md) -- el único punto del backend que la
+# importa es infrastructure/auth/pyotp_totp_provider.py
+# (BACKEND_ARCHITECTURE.md §17, mismo principio que confina `google-auth` y
+# `resend` a infrastructure/). No se implementa TOTP a mano: es un algoritmo de
+# autenticación, y `pyotp` ya resuelve la ventana de desfase de reloj y la
+# comparación en tiempo constante.
+pyotp==2.10.0
+
 # `flask db ...` (Flask-Migrate) ya cargaba backend/.env solo, vía el
 # auto-load interno del CLI de Flask (detecta python-dotenv instalado). Un
 # script plano como `python run.py` -- el punto de entrada real de THERS,

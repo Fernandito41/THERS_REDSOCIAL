@@ -55,7 +55,11 @@ export default function Profile() {
     onToggleLike,
     onLoadComments,
     onPostComment,
+    onDeleteComment,
+    onEditComment,
     onToggleFollowAuthor,
+    onDeleteCapsule,
+    onEditCapsule,
   } = useOutletContext();
   const toast = useToast();
   const { t } = useLanguage();
@@ -195,7 +199,11 @@ export default function Profile() {
             onToggleLike={onToggleLike}
             onLoadComments={onLoadComments}
             onPostComment={onPostComment}
+            onDeleteComment={onDeleteComment}
+            onEditComment={onEditComment}
             onToggleFollowAuthor={onToggleFollowAuthor}
+            onDeleteCapsule={onDeleteCapsule}
+            onEditCapsule={onEditCapsule}
           />
         ))}
       </div>

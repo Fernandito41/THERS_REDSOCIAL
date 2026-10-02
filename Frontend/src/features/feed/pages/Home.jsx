@@ -39,7 +39,11 @@ export default function Home() {
     onToggleLike,
     onLoadComments,
     onPostComment,
+    onDeleteComment,
+    onEditComment,
     onToggleFollowAuthor,
+    onDeleteCapsule,
+    onEditCapsule,
   } = useOutletContext();
 
   return (
@@ -88,7 +92,11 @@ export default function Home() {
                 onToggleLike={onToggleLike}
                 onLoadComments={onLoadComments}
                 onPostComment={onPostComment}
+                onDeleteComment={onDeleteComment}
+                onEditComment={onEditComment}
                 onToggleFollowAuthor={onToggleFollowAuthor}
+                onDeleteCapsule={onDeleteCapsule}
+                onEditCapsule={onEditCapsule}
               />
             ))
           )}

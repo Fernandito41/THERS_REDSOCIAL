@@ -24,11 +24,15 @@ class SQLAlchemyNotificationRepository(NotificationRepository):
         db.session.commit()
         return notification
 
-    def list_for_user(self, user_id, limit):
+    def list_for_user(self, user_id, limit, excluded_actor_ids=()):
+        conditions = [Notification.recipient_id == user_id]
+        if excluded_actor_ids:
+            conditions.append(Notification.actor_id.not_in(list(excluded_actor_ids)))
+
         return (
             db.session.execute(
                 select(Notification)
-                .where(Notification.recipient_id == user_id)
+                .where(*conditions)
                 .order_by(Notification.created_at.desc())
                 .limit(limit)
             )

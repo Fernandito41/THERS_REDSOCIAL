@@ -17,6 +17,9 @@ def to_public_message(message):
         # -- mismo criterio que `notifications.read` (ADR-008).
         "read": message.read_at is not None,
         "created_at": message.created_at.isoformat(),
+        # Booleano, nunca el timestamp `edited_at` crudo -- mismo criterio
+        # que `read` en messages/notifications (ADR-021-content-editing.md).
+        "edited": message.edited_at is not None,
     }
 
 
@@ -24,7 +27,24 @@ def to_public_conversation(conversation):
     other_user = conversation["other_user"]
     last_message = conversation["last_message"]
     return {
-        "user": to_author_summary(other_user),
+        "user": {
+            **to_author_summary(other_user),
+            # Estado de actividad (ADR-024-content-filters-and-privacy-preferences.md).
+            # `null` si la otra persona lo tiene oculto O si nunca registró
+            # actividad -- los dos casos son indistinguibles a propósito: si
+            # solo se omitiera cuando está oculto, el propio hecho de faltar
+            # delataría que alguien lo apagó (ADR-024 §Seguridad).
+            #
+            # Acá SÍ viaja el timestamp, a diferencia de `read`/`edited` que se
+            # exponen como booleanos: "activo hace 3 horas" necesita la hora,
+            # y un booleano "está activo" obligaría al servidor a decidir el
+            # umbral en vez del Frontend.
+            "last_seen_at": (
+                other_user.last_seen_at.isoformat()
+                if other_user.show_activity_status and other_user.last_seen_at
+                else None
+            ),
+        },
         "last_message": {
             "content": last_message.content,
             "sender_id": str(last_message.sender_id),

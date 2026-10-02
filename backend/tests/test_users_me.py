@@ -69,16 +69,29 @@ class TestGetCurrentUser:
         assert response.status_code == 401
         assert "msg" in response.get_json()
 
-    def test_nonexistent_user_returns_404(self, app, client):
-        # Token válido (firma correcta, no expirado) pero cuyo `sub` no
-        # corresponde a ningún usuario real -- p. ej. la cuenta fue borrada
-        # después de emitirse el token.
+    def test_token_without_a_registered_session_returns_401(self, app, client):
+        # Token válido (firma correcta, no expirado) pero emitido sin pasar por
+        # `POST /api/login`, así que no tiene fila en `sessions`.
+        #
+        # **Antes de ADR-025-session-registry.md esto devolvía 404**: el JWT era
+        # puramente stateless, llegaba a la route y ahí se descubría que su `sub`
+        # no correspondía a ningún usuario. Desde el registro de sesiones, un
+        # token sin sesión viva ya no autentica nada y se rechaza con 401 antes
+        # de llegar al handler -- que es precisamente lo que hace posible
+        # "cerrar sesión en ese dispositivo".
+        #
+        # Efecto colateral honesto: la rama 404 de GET /api/users/me quedó
+        # **inalcanzable en la práctica**. `sessions.user_id` es una FK con
+        # ON DELETE CASCADE, así que si la cuenta se borra su sesión se borra
+        # con ella y el token cae en este mismo 401. La rama se conserva en el
+        # código como defensa, no porque haya un camino que la produzca
+        # (ADR-025 §Consecuencias).
         with app.app_context():
             token = create_access_token(identity=str(uuid.uuid4()))
 
         response = client.get("/api/users/me", headers={"Authorization": f"Bearer {token}"})
 
-        assert response.status_code == 404
+        assert response.status_code == 401
         assert "msg" in response.get_json()
 
     def test_response_contains_expected_public_fields(self, client):

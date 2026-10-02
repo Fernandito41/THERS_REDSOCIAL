@@ -5,6 +5,7 @@ export { default as ForgotPassword } from "./pages/ForgotPassword";
 export { default as VerifyResetCode } from "./pages/VerifyResetCode";
 export { default as ResetPassword } from "./pages/ResetPassword";
 export { default as VerifyRegistrationCode } from "./pages/VerifyRegistrationCode";
+export { default as TwoFactorChallenge } from "./pages/TwoFactorChallenge";
 export { default as CompleteProfile } from "./pages/CompleteProfile";
 export { AuthProvider, useAuth, getStoredToken } from "./context/AuthContext";
 export { useOAuthNotice } from "./hooks/useOAuthNotice";

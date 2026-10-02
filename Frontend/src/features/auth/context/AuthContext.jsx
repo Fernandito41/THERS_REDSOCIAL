@@ -61,15 +61,51 @@ export function AuthProvider({ children }) {
     loadCurrentUser();
   }, []);
 
-  const login = async (data) => {
-    const res = await api.post("/login", data);
-    const loggedInUser = withUsername(res.data.user);
-
-    localStorage.setItem(TOKEN_KEY, res.data.token);
+  // Guarda la sesión a partir de una respuesta `{token, user}`. Lo comparten
+  // los tres caminos que la producen (login, Google y verificación de 2FA) --
+  // tenerlo en un solo lugar evita que uno de ellos olvide persistir algo.
+  const storeSession = (data) => {
+    const loggedInUser = withUsername(data.user);
+    localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(loggedInUser));
     setUser(loggedInUser);
-
     return loggedInUser;
+  };
+
+  // Desde ADR-026-two-factor-authentication.md, `POST /api/login` tiene DOS
+  // respuestas posibles con 200: la sesión de siempre, o un desafío de segundo
+  // factor (`two_factor_required`). En el segundo caso **no hay token todavía**
+  // y no se guarda nada -- la sesión no existe hasta que el código valide.
+  //
+  // Se devuelve un objeto discriminado en vez de lanzar una excepción: que la
+  // cuenta tenga 2FA no es un error, es el camino normal del login para esa
+  // persona.
+  const login = async (data) => {
+    const res = await api.post("/login", data);
+
+    if (res.data.two_factor_required) {
+      return { twoFactorRequired: true, twoFactorToken: res.data.two_factor_token };
+    }
+
+    return { twoFactorRequired: false, user: storeSession(res.data) };
+  };
+
+  // Segundo paso del login con 2FA. `code` puede ser un TOTP de la app
+  // autenticadora o un código de recuperación -- el backend acepta los dos y no
+  // distingue cuál falló, así que acá tampoco se adivina.
+  const verifyTwoFactor = async (twoFactorToken, code) => {
+    const res = await api.post("/2fa/verify", {
+      two_factor_token: twoFactorToken,
+      code,
+    });
+
+    return {
+      user: storeSession(res.data),
+      // Para poder avisar "usaste un código de recuperación, te quedan N" en
+      // vez de dejarlo pasar inadvertido.
+      usedRecoveryCode: res.data.used_recovery_code,
+      recoveryCodesRemaining: res.data.recovery_codes_remaining,
+    };
   };
 
   // "Continuar con Google" (ADR-012-google-sign-in.md) -- mismo contrato de
@@ -80,13 +116,15 @@ export function AuthProvider({ children }) {
   // que es quien lo verifica de verdad.
   const loginWithGoogle = async (credential) => {
     const res = await api.post("/auth/google", { credential });
-    const loggedInUser = withUsername(res.data.user);
 
-    localStorage.setItem(TOKEN_KEY, res.data.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(loggedInUser));
-    setUser(loggedInUser);
+    // Google autenticó la identidad, pero si la cuenta tiene 2FA ese segundo
+    // factor también aplica acá -- si no, "Continuar con Google" sería una
+    // puerta que lo saltea (ADR-026 §Seguridad).
+    if (res.data.two_factor_required) {
+      return { twoFactorRequired: true, twoFactorToken: res.data.two_factor_token };
+    }
 
-    return loggedInUser;
+    return { twoFactorRequired: false, user: storeSession(res.data) };
   };
 
   // El registro no inicia sesión (el backend no lo hace -- API_CONTRACT.md §4.1
@@ -143,6 +181,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     isLoading,
     login,
+    verifyTwoFactor,
     loginWithGoogle,
     register,
     logout,

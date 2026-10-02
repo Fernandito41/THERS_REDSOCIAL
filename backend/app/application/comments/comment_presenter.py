@@ -6,13 +6,19 @@
 
 
 from app.application.auth.user_presenter import to_author_summary
+from app.application.mentions.mention_presenter import to_public_mentions
 
 
-def to_public_comment(comment):
+def to_public_comment(comment, mentions=None):
     return {
         "id": str(comment.id),
         "post_id": str(comment.post_id),
         "author": to_author_summary(comment.author),
         "content": comment.content,
         "created_at": comment.created_at.isoformat(),
+        # Mismo criterio y misma forma que `post.mentions` (ADR-023).
+        "mentions": to_public_mentions(mentions),
+        # Booleano, nunca el timestamp `edited_at` crudo -- mismo criterio
+        # que `read` en messages/notifications (ADR-021-content-editing.md).
+        "edited": comment.edited_at is not None,
     }

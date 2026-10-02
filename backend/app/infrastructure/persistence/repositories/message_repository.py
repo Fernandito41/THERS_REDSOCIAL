@@ -115,3 +115,19 @@ class SQLAlchemyMessageRepository(MessageRepository):
         )
         db.session.commit()
         return result.rowcount > 0
+
+    def update_content(self, message_id, sender_id, content):
+        # Mismo criterio que SQLAlchemyPostRepository.update_content
+        # (ADR-021-content-editing.md). `read_at` no aparece en los values:
+        # editar un mensaje que la otra persona ya leyó no lo devuelve a no
+        # leído (ADR-021 §Decisión).
+        result = db.session.execute(
+            update(Message)
+            .where(Message.id == message_id, Message.sender_id == sender_id)
+            .values(content=content, edited_at=func.now())
+        )
+        db.session.commit()
+        if result.rowcount == 0:
+            return None
+
+        return db.session.get(Message, message_id)

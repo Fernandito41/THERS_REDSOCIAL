@@ -17,6 +17,19 @@
 _BRAND_COLOR = "#6C4DF6"  # mismo morado de marca que Frontend/tailwind.config.js (pulse-600)
 
 
+def _escape(value):
+    """Escapa el texto antes de interpolarlo en el HTML de un correo.
+
+    Hasta ADR-025 ninguna plantilla interpolaba un valor que no controlara el
+    servidor (nombres y códigos venían validados). `login_alert_email` sí: el
+    `User-Agent` es texto arbitrario que manda el cliente, así que sin escapar
+    podría inyectar HTML en el correo de otra persona.
+    """
+    from html import escape
+
+    return escape(str(value), quote=True)
+
+
 def _shell(preheader, title, body_html, footer_note):
     # `preheader`: texto oculto que muchos clientes de correo muestran como
     # resumen junto al asunto en la bandeja de entrada -- mejora la
@@ -157,6 +170,63 @@ def registration_code_email(name, code, ttl_minutes):
     return subject, _shell(
         preheader=f"Tu código de verificación de THERS: {code}",
         title="Verificá tu correo electrónico",
+        body_html=body,
+        footer_note=footer,
+    )
+
+
+def login_alert_email(name, user_agent, ip_address, when):
+    # ADR-025-session-registry.md. Se manda solo cuando el `user_agent` no se
+    # había visto antes en esta cuenta -- no en cada login, que convertiría la
+    # alerta en ruido y haría que nadie la leyera.
+    #
+    # Deliberadamente NO lleva un enlace de "no fui yo, bloquear esta sesión":
+    # un enlace accionable desde un correo es un vector de phishing, y además
+    # exigiría un token de un solo uso propio. Se dirige a la pantalla de
+    # Seguridad, donde la persona ya autenticada puede cerrar la sesión.
+    subject = "Nuevo inicio de sesión en tu cuenta de THERS"
+
+    # `user_agent` es texto que mandó el cliente: se escapa antes de
+    # interpolarlo en el HTML. Es la única plantilla que interpola un valor que
+    # no controla el servidor.
+    safe_user_agent = _escape(user_agent) if user_agent else "Dispositivo desconocido"
+    safe_ip = _escape(ip_address) if ip_address else "desconocida"
+    when_text = when.strftime("%d/%m/%Y %H:%M UTC") if when else "hace unos instantes"
+
+    body = f"""
+        <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
+          Hola {_escape(name)},
+        </p>
+        <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
+          Detectamos un inicio de sesión en tu cuenta de THERS desde un
+          dispositivo que no habíamos visto antes.
+        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+               style="margin:0 0 16px;width:100%;background:#f6f6f6;border-radius:8px;">
+          <tr><td style="padding:14px 16px;font-size:13px;color:#333333;line-height:1.7;">
+            <strong>Cuándo:</strong> {when_text}<br>
+            <strong>Dispositivo:</strong> {safe_user_agent}<br>
+            <strong>Dirección IP:</strong> {safe_ip}
+          </td></tr>
+        </table>
+        <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
+          Si fuiste vos, no hace falta hacer nada.
+        </p>
+        <p style="margin:0;font-size:13px;color:#666666;line-height:1.6;">
+          Si no reconocés este acceso, entrá a THERS y abrí
+          <strong>Configuración &rsaquo; Seguridad y contraseña</strong> para
+          cerrar esa sesión y cambiar tu contraseña. No incluimos enlaces de
+          acción en este correo a propósito: así nadie puede imitarlo para
+          robarte la cuenta.
+        </p>
+    """
+    footer = (
+        "Este es un mensaje automático de THERS. Podés desactivar estas alertas "
+        "en Configuración > Seguridad y contraseña."
+    )
+    return subject, _shell(
+        preheader="Nuevo inicio de sesión detectado",
+        title="Nuevo inicio de sesión",
         body_html=body,
         footer_note=footer,
     )

@@ -46,7 +46,7 @@ class TestFollowUser:
         response = client.post(f"/api/users/{id_b}/follow", headers=_auth_headers(token_a))
 
         assert response.status_code == 200
-        assert response.get_json() == {"following": True}
+        assert response.get_json() == {"following": True, "follow_status": "accepted"}
 
     def test_follow_user_without_token_returns_401(self, client):
         _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
@@ -63,7 +63,7 @@ class TestFollowUser:
         response = client.post(f"/api/users/{id_b}/follow", headers=_auth_headers(token_a))
 
         assert response.status_code == 200
-        assert response.get_json() == {"following": True}
+        assert response.get_json() == {"following": True, "follow_status": "accepted"}
 
     def test_follow_self_returns_400(self, client):
         token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
@@ -97,7 +97,7 @@ class TestUnfollowUser:
         response = client.delete(f"/api/users/{id_b}/follow", headers=_auth_headers(token_a))
 
         assert response.status_code == 200
-        assert response.get_json() == {"following": False}
+        assert response.get_json() == {"following": False, "follow_status": None}
 
     def test_unfollow_when_not_following_is_idempotent_noop(self, client):
         token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
@@ -106,7 +106,7 @@ class TestUnfollowUser:
         response = client.delete(f"/api/users/{id_b}/follow", headers=_auth_headers(token_a))
 
         assert response.status_code == 200
-        assert response.get_json() == {"following": False}
+        assert response.get_json() == {"following": False, "follow_status": None}
 
     def test_unfollow_without_token_returns_401(self, client):
         _, id_b = _register_and_login(client, username="user_b", email="b@example.com")

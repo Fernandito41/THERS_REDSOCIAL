@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FaApple } from "react-icons/fa";
 import {
   IoArrowBack,
   IoCheckmarkCircleOutline,
   IoCloseCircleOutline,
-  IoInformationCircleOutline,
   IoSparklesOutline,
 } from "react-icons/io5";
-import { useAuth, useOAuthNotice } from "@features/auth";
+import { useAuth } from "@features/auth";
 import { getErrorMessage } from "@shared/lib/api";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
@@ -29,7 +27,6 @@ import { calculateAge, isValidISODate, MIN_AGE_YEARS } from "../lib/dateUtils";
 export default function Register() {
   const navigate = useNavigate();
   const { register, loginWithGoogle } = useAuth();
-  const { notice, notify } = useOAuthNotice();
   const toast = useToast();
   const { t } = useLanguage();
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
@@ -43,7 +40,13 @@ export default function Register() {
     if (isGoogleSubmitting) return;
     setIsGoogleSubmitting(true);
     try {
-      const googleUser = await loginWithGoogle(credential);
+      const googleResult = await loginWithGoogle(credential);
+      if (googleResult.twoFactorRequired) {
+        // ADR-026: la cuenta tiene 2FA, falta el segundo factor.
+        navigate("/two-factor", { state: { twoFactorToken: googleResult.twoFactorToken } });
+        return;
+      }
+      const googleUser = googleResult.user;
       navigate(googleUser.profile_completed ? "/feed" : "/complete-profile");
     } catch (error) {
       console.error(error);
@@ -233,35 +236,11 @@ export default function Register() {
             </p>
           </header>
 
-          {/* GOOGLE -- ADR-012-google-sign-in.md, botón real. APPLE sigue sin
-              backend real, ver useOAuthNotice */}
-          <div className="space-y-3">
-            <GoogleSignInButton
-              onCredential={handleGoogleCredential}
-              disabled={isGoogleSubmitting}
-            />
-
-            <button
-              type="button"
-              onClick={() => notify("apple")}
-              className="w-full flex items-center justify-center gap-3 bg-black text-white border border-line-dark py-3 rounded-full font-semibold hover:bg-gray-900 active:scale-[0.99] transition"
-            >
-              <FaApple size={18} />
-              {t("auth.oauthAppleRegister")}
-            </button>
-          </div>
-
-          {notice && (
-            <p
-              role="status"
-              className="flex items-start gap-1.5 text-xs text-muted-dark bg-black/30 rounded-lg px-3 py-2 mt-3 animate-float-in"
-            >
-              <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
-              {/* Solo Apple puede disparar este aviso ahora -- ver
-                  useOAuthNotice.js */}
-              {t("auth.oauthNoticeRegister", { provider: t("auth.providerApple") })}
-            </p>
-          )}
+          {/* GOOGLE -- ADR-012-google-sign-in.md, botón real */}
+          <GoogleSignInButton
+            onCredential={handleGoogleCredential}
+            disabled={isGoogleSubmitting}
+          />
 
           <div className="flex items-center my-6">
             <div className="flex-1 h-px bg-line-dark" />

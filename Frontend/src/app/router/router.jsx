@@ -8,6 +8,7 @@ import {
   VerifyResetCode,
   ResetPassword,
   VerifyRegistrationCode,
+  TwoFactorChallenge,
   CompleteProfile,
 } from "@features/auth";
 import { Terms, Privacy, Cookies } from "@features/legal";
@@ -48,6 +49,10 @@ export default function AppRouter() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-registration-code" element={<VerifyRegistrationCode />} />
+        {/* Segundo paso del login con 2FA (ADR-026). Ruta pública: en este
+            punto todavía no hay sesión -- el token de desafío viaja por
+            router state, no por localStorage. */}
+        <Route path="/two-factor" element={<TwoFactorChallenge />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-reset-code" element={<VerifyResetCode />} />
         <Route path="/reset-password" element={<ResetPassword />} />

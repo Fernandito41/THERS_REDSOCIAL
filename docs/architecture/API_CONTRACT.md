@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.19 (Propuesta) |
+| Versión | 0.20 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -43,6 +43,8 @@
 > **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
+>
+> **v0.20 — corrección retroactiva: imágenes y bio de perfil (`ADR-015-profile-media.md`):** este documento quedó atrasado respecto al código (no al revés), igual que en v0.9. `ADR-015` ya estaba implementado en el backend y consumido por el Frontend sin figurar aquí, contra `HB-001` §15.1. Se documentan: el objeto `user` gana `bio`, `location`, `website`, `avatar_url` y `cover_url`; `PATCH /api/users/me` acepta `bio`/`location`/`website`; y cuatro rutas nuevas (`POST`/`DELETE /api/users/me/avatar`, `POST`/`DELETE /api/users/me/cover`) más `GET /api/media/<ruta>` (§4.11). Se verificaron contra el código y la suite del backend, no contra el ADR.
 >
 > **v0.19 — borrado de mensajes, corte de no-leídos y "escribiendo..." (`ADR-014-messages-ux-improvements.md`, extiende `ADR-013`):** se agregan `DELETE /api/messages/<message_id>` (borra un mensaje propio, sin placeholder) y `POST`/`GET /api/users/<user_id>/typing` (§4.10) — a partir de feedback real probando el chat entre el equipo. `GET /api/users/<user_id>/messages` **no cambia de forma**, pero corrige cuándo se evalúa `read`: ahora refleja el estado antes de que esa misma llamada marque como leído (antes, por cómo Flask-SQLAlchemy expira sus objetos tras un `commit()`, ya aparecía en `true` para los mensajes recién marcados) — permite que el Frontend ubique un separador de "mensajes no leídos". El indicador de "escribiendo" vive en memoria del proceso del backend, no en PostgreSQL — es información efímera, sin migración ni tabla nueva; no sobrevive un reinicio ni se comparte entre varios workers (`ADR-014` §Riesgos). El Frontend (`Messages.jsx`) hace *polling* de `GET .../typing` cada 2 segundos mientras un hilo está abierto (más rápido que el *polling* general del chat, 4s) y manda `POST .../typing` con *debounce* mientras el usuario escribe. Verificado con 13 pruebas nuevas + la suite completa (276/276, ejecutada contra PostgreSQL 16 real).
 >
@@ -1019,6 +1021,51 @@ Lista vacía (`[]`) si nunca mandó ni recibió ningún mensaje.
 
 ---
 
+### 4.11 Imágenes de perfil (`ADR-015`)
+
+Documentado en v0.20 de forma retroactiva (ver el changelog). Todo el contenido de esta sección se verificó contra el código y las pruebas del backend.
+
+#### `POST /api/users/me/avatar` y `POST /api/users/me/cover`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** |
+| Blueprint | `users_bp` |
+| Auth requerida | Sí (access token) |
+
+**Request:** `multipart/form-data` con un campo **`file`** que contiene la imagen. Formatos aceptados: JPEG, PNG o WebP. Tamaño máximo **5 MB** y 40 millones de píxeles. El backend **vuelve a codificar** la imagen (se descartan los metadatos EXIF) y guarda una versión WebP.
+
+**Response — éxito (200)**
+```json
+{ "user": { "...": "objeto user completo (§5), con avatar_url o cover_url ya actualizado" } }
+```
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | No se envió `file`, o no es una imagen JPEG/PNG/WebP válida | `{"msg": "..."}` |
+| `401` | Sin token, token inválido o expirado | `{"msg": "..."}` |
+| `404` | El usuario del token ya no existe | `{"msg": "..."}` |
+| `413` | La imagen supera 5 MB | `{"msg": "..."}` |
+
+#### `DELETE /api/users/me/avatar` y `DELETE /api/users/me/cover`
+
+Mismo blueprint y autenticación. Sin body. Quita la imagen y devuelve `200` con `{"user": {...}}` (con la URL en `null`). `401` y `404` como arriba.
+
+#### `GET /api/media/<ruta>`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** — solo con `STORAGE_BACKEND=local` |
+| Auth requerida | **No** (las imágenes son públicas) |
+
+Sirve las imágenes guardadas en disco. Responde con `Cache-Control: public, max-age=31536000, immutable` y `X-Content-Type-Options: nosniff`. Con `STORAGE_BACKEND=s3` esta ruta **no se registra**: las imágenes las sirve directamente el proveedor desde su URL pública. El almacenamiento local no sirve en un host con disco efímero (`ADR-018`).
+
+#### `PATCH /api/users/me` — campos nuevos
+
+Además de los de §4.2, acepta `bio` (≤ 160), `location` (≤ 60) y `website` (≤ 100, debe ser una URL válida). Una cadena vacía **borra** el valor (queda `null`). Superar el límite o una URL inválida da `400`.
+
+---
+
 ## 5. Modelo de datos expuesto por la API
 
 Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) pero sí documenta **qué forma tiene el dato tal como cruza la frontera HTTP**, que puede no coincidir 1:1 con el modelo de persistencia:
@@ -1037,7 +1084,7 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | `message` (en response de `POST`/`GET /api/users/<id>/messages`) | `id`, `sender_id`, `recipient_id`, `content`, `read`, `created_at` | `ADR-013-messages-minimal-model.md`; coincide con `messages` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` (internamente un timestamp) — mismo criterio que `notification.read` |
 | `conversation` (en response de `GET /api/conversations`) — no es una entidad propia, es una vista derivada de `messages` agrupada por "la otra persona" | `user` (misma forma reducida que `actor`/`author`), `last_message` (`content`/`sender_id`/`created_at`), `unread_count` | `ADR-013-messages-minimal-model.md` §Opciones consideradas: sin tabla `conversations`/`conversation_participants` en esta versión |
 
-`avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
+**Perfil ampliado (v0.20, `ADR-015`):** además de los campos de la fila `user` de arriba, el objeto `user` expone `bio` (≤ 160 caracteres), `location` (≤ 60), `website` (≤ 100, URL válida), `avatar_url` y `cover_url` — los cuatro primeros `null` mientras no se definan, y las dos URL son absolutas (resueltas con `MEDIA_PUBLIC_BASE_URL`) o `null`. La forma reducida de autor (`author`, `actor`, `user` de `conversation`) incluye `avatar_url`. Las rutas que los gestionan están en §4.11.
 
 ---
 

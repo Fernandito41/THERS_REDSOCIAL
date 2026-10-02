@@ -83,7 +83,7 @@ export default function CapsuleCard({
   return (
     <article className="flex flex-col gap-4 rounded-th-card border border-th-border bg-th-surface p-6 shadow-th-card transition-colors hover:border-th-border-strong">
       <header className="flex items-start gap-3">
-        <Avatar name={capsule.author.name} size="w-10 h-10" />
+        <Avatar name={capsule.author.name} photo={capsule.author.avatar_url} size="w-10 h-10" />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -178,7 +178,7 @@ export default function CapsuleCard({
             <ul className="flex flex-col gap-3">
               {comments?.map((comment) => (
                 <li key={comment.id} className="flex items-start gap-2.5">
-                  <Avatar name={comment.author.name} size="w-7 h-7" />
+                  <Avatar name={comment.author.name} photo={comment.author.avatar_url} size="w-7 h-7" />
                   <div className="min-w-0 flex-1 rounded-th-card bg-th-surface-subtle px-3.5 py-2">
                     <p className="text-label-md font-bold text-th-fg-strong">
                       {comment.author.name}{" "}

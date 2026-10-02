@@ -162,3 +162,22 @@ class Config:
             "Console para probar Google Sign-In de verdad.",
             file=sys.stderr,
         )
+
+# --- Imágenes de perfil (ADR-015-profile-media.md) ---
+# Se asignan sobre la clase ya definida arriba (mismo archivo, mismo patrón
+# de lectura de entorno que el resto).
+Config.MAX_CONTENT_LENGTH = 6 * 1024 * 1024  # techo HTTP; el límite real de imagen es 5 MiB
+Config.STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")
+Config.UPLOAD_DIR = os.environ.get(
+    "UPLOAD_DIR", str(Path(__file__).resolve().parent.parent / "uploads")
+)
+# Base pública de las URLs de medios. Local: la propia API. S3/Supabase/R2:
+# la URL pública del bucket (p. ej. https://<proyecto>.supabase.co/storage/v1/object/public/<bucket>).
+Config.MEDIA_PUBLIC_BASE_URL = os.environ.get(
+    "MEDIA_PUBLIC_BASE_URL", "http://127.0.0.1:5000/api/media"
+)
+Config.S3_BUCKET = os.environ.get("S3_BUCKET")
+Config.S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL")
+Config.S3_ACCESS_KEY_ID = os.environ.get("S3_ACCESS_KEY_ID")
+Config.S3_SECRET_ACCESS_KEY = os.environ.get("S3_SECRET_ACCESS_KEY")
+Config.S3_REGION = os.environ.get("S3_REGION")

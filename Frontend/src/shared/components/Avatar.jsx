@@ -22,10 +22,9 @@ function colorFrom(name) {
   return PALETTE[sum % PALETTE.length];
 }
 
-// `photo`: solo para personas mock (Momentos, sugerencias, conversaciones,
-// notificaciones) -- el usuario autenticado real nunca tiene una foto real
-// disponible (sin backend de almacenamiento de archivos todavía), así que
-// jamás se le pasa esta prop: se queda en iniciales, nunca en una foto inventada.
+// `photo`: URL de la foto de perfil (`avatar_url`, ADR-015-profile-media.md); sin ella
+// se muestran las iniciales. Solo personas mock (Momentos, sugerencias) pasan
+// además fotos de ejemplo.
 // `color`: override opcional (usado en Profile.jsx para el acento personalizable).
 export default function Avatar({ name, size = "w-10 h-10", ring = false, className = "", photo, color }) {
   const initials = initialsFrom(name || "?");

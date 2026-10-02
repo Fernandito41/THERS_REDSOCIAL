@@ -124,8 +124,12 @@ export default function Sidebar({
           to="/profile"
           className="flex min-w-0 items-center gap-2 rounded-th-sm th-focus-ring"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-th-pill bg-th-brand text-headline-sm font-bold text-th-on-brand">
-            {initialsOf(currentUser)}
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-th-pill bg-th-brand text-headline-sm font-bold text-th-on-brand">
+            {currentUser?.avatar_url ? (
+              <img src={currentUser.avatar_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initialsOf(currentUser)
+            )}
           </span>
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-label-md font-semibold text-th-fg-strong">

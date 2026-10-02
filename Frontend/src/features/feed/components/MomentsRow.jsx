@@ -39,7 +39,7 @@ export default function MomentsRow({ currentUser }) {
         {/* Tarjeta de creación propia */}
         <div className="group relative flex h-[184px] w-[128px] shrink-0 snap-start cursor-pointer flex-col justify-between overflow-hidden rounded-th-card border-2 border-dashed border-th-border bg-th-surface p-2 shadow-th-card transition-all hover:border-th-border-strong hover:shadow-th-hover">
           <div className="relative w-fit">
-            <Avatar name={currentUser?.name} size="w-10 h-10 text-sm" />
+            <Avatar name={currentUser?.name} photo={currentUser?.avatar_url} size="w-10 h-10 text-sm" />
             <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-th-pill bg-th-brand shadow-th-card">
               <Icon name="add" size={14} className="text-th-on-brand" />
             </span>

@@ -77,6 +77,18 @@ class User(db.Model):
         db.Boolean, nullable=False, server_default=text("true")
     )
 
+    # Perfil público extendido y medios (ADR-015-profile-media.md). Todas
+    # nullable: `NULL` = "la persona no lo definió" (nunca un texto vacío ni
+    # un valor inventado). `avatar_path`/`cover_path` guardan la CLAVE del
+    # objeto en el almacenamiento (p. ej. "avatars/<uuid>.webp"), no una URL:
+    # la URL pública depende del entorno (disco local, Supabase, R2) y se
+    # resuelve al presentar (application/media/media_url.py).
+    bio = db.Column(db.String(160), nullable=True)
+    location = db.Column(db.String(60), nullable=True)
+    website = db.Column(db.String(100), nullable=True)
+    avatar_path = db.Column(db.String(255), nullable=True)
+    cover_path = db.Column(db.String(255), nullable=True)
+
     # CITEXT (case-insensitive text, extensión de PostgreSQL) en vez de VARCHAR:
     # el UNIQUE sobre email ignora mayúsculas/minúsculas a nivel de motor, sin
     # normalizar manualmente en la capa de aplicación. Requiere

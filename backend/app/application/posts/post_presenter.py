@@ -7,6 +7,9 @@
 # campos privados de `users`.
 
 
+from app.application.auth.user_presenter import to_author_summary
+
+
 def to_public_post(
     post, likes_count=0, liked_by_me=False, comments_count=0, is_followed_by_me=False
 ):
@@ -17,12 +20,7 @@ def to_public_post(
     # recién creado siempre es del propio autor autenticado.
     return {
         "id": str(post.id),
-        "author": {
-            "id": str(post.author.id),
-            "username": post.author.username,
-            "name": post.author.name,
-            "is_followed_by_me": is_followed_by_me,
-        },
+        "author": {**to_author_summary(post.author), "is_followed_by_me": is_followed_by_me},
         "content": post.content,
         "created_at": post.created_at.isoformat(),
         "likes_count": likes_count,

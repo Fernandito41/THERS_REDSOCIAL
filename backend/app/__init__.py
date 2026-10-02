@@ -16,6 +16,13 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
+    # Almacenamiento de imágenes de perfil (ADR-015-profile-media.md).
+    from app.application.media.media_url import configure_media_url
+    from app.infrastructure.media.factory import build_media_storage
+
+    app.extensions["media_storage"] = build_media_storage(app.config)
+    configure_media_url(app.config["MEDIA_PUBLIC_BASE_URL"])
+
     from app.interfaces.error_handlers import register_error_handlers
     register_error_handlers(app)
 
@@ -46,5 +53,11 @@ def create_app():
 
     from app.interfaces.routes.message_routes import messages_bp
     app.register_blueprint(messages_bp, url_prefix="/api")
+
+    # Servir imágenes desde disco solo con STORAGE_BACKEND=local (en s3 las
+    # sirve el proveedor directamente desde su URL pública).
+    if (app.config.get("STORAGE_BACKEND") or "local").lower() == "local":
+        from app.interfaces.routes.media_routes import media_bp
+        app.register_blueprint(media_bp, url_prefix="/api")
 
     return app

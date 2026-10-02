@@ -19,9 +19,9 @@ import { websiteHref } from "../lib/profileStorage";
  *  · Nombre, usuario           REALES (GET/PATCH /api/users/me, ADR-002/003)
  *  · Seguidores, Siguiendo     REALES (GET /api/users/me, ADR-007)
  *  · Publicaciones             REAL   (contadas sobre GET /api/posts, ADR-004)
- *  · Bio, ubicación, enlace    LOCALES (localStorage) — no hay columnas
- *                              ratificadas (DATABASE_ARCHITECTURE.md §4.B).
- *                              Ya era así en este repositorio; no se cambia.
+ *  · Bio, ubicación, enlace    REALES (`users`, ADR-015-profile-media.md);
+ *                              llegan ya fusionadas en `profile` por Profile.jsx
+ *  · Foto de perfil            REAL   (`avatar_url`, ADR-015)
  *
  * NO se reproducen de la maqueta:
  *  · «Miembro desde Noviembre 2024» — `to_public_user` no expone `created_at`
@@ -82,7 +82,7 @@ export default function ProfileIdentity({
           {/* `rounded-th-pill`: el anillo debe seguir la silueta circular del
               avatar; un radio de caja dejaba un marco rectangular visible. */}
           <div className="shrink-0 rounded-th-pill ring-4 ring-th-bg">
-            <Avatar name={user.name} size="w-28 h-28 text-3xl" />
+            <Avatar name={user.name} photo={user.avatar_url} color={profile.accent} size="w-28 h-28 text-3xl" />
           </div>
 
           <div className="flex min-w-0 flex-col gap-1.5 pb-1">

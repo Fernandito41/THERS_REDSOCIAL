@@ -8,27 +8,21 @@ import { coverGradient } from "../data/profileIdentity";
  * degradado oscuro sobre la imagen y botón «Cambiar portada» arriba a la
  * derecha.
  *
- * QUÉ CAMBIA RESPECTO DE LA MAQUETA, y por qué:
+ * `coverUrl` es la foto subida por la persona (`cover_url`, ADR-015); sin
+ * ella se usa el degradé elegido (`cover`), nunca una foto inventada.
  *
- *  · La referencia usa una FOTOGRAFÍA de portada. No existe subida de
- *    archivos ni columna de portada ratificada (DATABASE_ARCHITECTURE.md
- *    §4.B), así que se conserva el sistema de degradados que la persona ya
- *    elige en este repositorio (`data/profileIdentity.js`). Inventar una foto
- *    sería fabricar contenido del usuario; el archivo maestro §5.7 prohíbe
- *    además descargar imágenes nuevas para sustituir las referencias.
- *
- *  · La referencia muestra abajo a la derecha un indicador «Audio Espacial
- *    48kHz · Lossless» con un punto verde pulsante. NO se reproduce: el
- *    archivo maestro §8.7 exige que «Lossless», «48kHz» y «audio espacial»
- *    describan capacidades reales comprobadas, y §10.2 prohíbe presentar un
- *    estado «en vivo» fijo del cliente.
+ * NO se reproduce de la maqueta el indicador «Audio Espacial 48kHz ·
+ * Lossless»: el archivo maestro §8.7/§10.2 exige que describa capacidades
+ * reales comprobadas.
  */
-export default function ProfileCover({ cover, onChangeCover }) {
+export default function ProfileCover({ cover, coverUrl, onChangeCover }) {
   return (
     <div className="relative h-44 w-full overflow-hidden rounded-th-card border border-th-border bg-th-surface-raised shadow-th-card sm:h-56 lg:h-72">
       <div
         className="h-full w-full bg-cover bg-center"
-        style={{ backgroundImage: coverGradient(cover) }}
+        style={{
+          backgroundImage: coverUrl ? `url("${coverUrl}")` : coverGradient(cover),
+        }}
         aria-hidden="true"
       />
       <div

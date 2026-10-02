@@ -3,10 +3,8 @@
 // ya sabe renderizar (heredada de mockNotifications) -- así ese componente
 // no necesita reescribirse, solo dejar de recibir datos inventados.
 //
-// `photo`: nunca se completa -- no existe `avatar_url` ratificada todavía
-// (DATABASE_ARCHITECTURE.md §4.B › Perfil, PENDIENTE DE DECISIÓN), mismo
-// motivo por el que ningún post/comentario real la tiene. Avatar.jsx ya
-// renderiza iniciales sin esta prop.
+// `photo`: `actor.avatar_url` (ADR-015-profile-media.md); sin foto, Avatar.jsx
+// renderiza iniciales.
 import { formatRelativeTime } from "./formatRelativeTime";
 
 const DETAIL_BY_TYPE = {
@@ -28,6 +26,7 @@ export function mapNotification(raw) {
     id: raw.id,
     type: raw.type,
     actor: raw.actor.name,
+    photo: raw.actor.avatar_url,
     detail: DETAIL_BY_TYPE[raw.type] || "",
     time: formatRelativeTime(raw.created_at),
     important: IMPORTANT_TYPES.has(raw.type),

@@ -4,6 +4,9 @@
 # application/notifications/notification_presenter.py.
 
 
+from app.application.auth.user_presenter import to_author_summary
+
+
 def to_public_message(message):
     return {
         "id": str(message.id),
@@ -21,11 +24,7 @@ def to_public_conversation(conversation):
     other_user = conversation["other_user"]
     last_message = conversation["last_message"]
     return {
-        "user": {
-            "id": str(other_user.id),
-            "username": other_user.username,
-            "name": other_user.name,
-        },
+        "user": to_author_summary(other_user),
         "last_message": {
             "content": last_message.content,
             "sender_id": str(last_message.sender_id),

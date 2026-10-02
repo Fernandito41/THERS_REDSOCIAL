@@ -28,7 +28,7 @@ export default function Settings() {
 
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <Avatar name={currentUser.name} size="w-12 h-12" />
+            <Avatar name={currentUser.name} photo={currentUser.avatar_url} size="w-12 h-12" />
             <div className="min-w-0">
               <p className="text-ink dark:text-ink-dark font-medium truncate">{currentUser.name}</p>
               <p className="text-muted text-sm truncate">@{currentUser.username}</p>

@@ -41,15 +41,38 @@ export type User = {
   has_password: boolean;
 };
 
-/** Respuesta de `POST /api/login` y `POST /api/auth/google` (API_CONTRACT §4.1/§4.9). */
-export type LoginResponse = {
+/** Sesión emitida: `POST /api/login`, `POST /api/auth/google` y `POST /api/2fa/verify`. */
+export type SessionResponse = {
   token: string;
   /** Desde API_CONTRACT v0.21 (`ADR-017`). Opcional por tolerancia a un backend anterior. */
   refresh_token?: string;
   user: User;
 };
 
-/** Respuesta de `POST /api/refresh` (API_CONTRACT §4.11). */
+/**
+ * Segundo paso pendiente: la cuenta tiene 2FA (`ADR-026`). Esta respuesta **no
+ * trae sesión**: ni `token` ni `user`. El `two_factor_token` es un token de
+ * desafío de 5 minutos que no sirve en ningún endpoint protegido.
+ */
+export type TwoFactorChallenge = {
+  two_factor_required: true;
+  two_factor_token: string;
+};
+
+/** Respuesta de `POST /api/login`: una sesión o un desafío de 2FA (API_CONTRACT §4.1, §4.12). */
+export type LoginResponse = SessionResponse | TwoFactorChallenge;
+
+/** Respuesta de `POST /api/2fa/verify`: la sesión más el estado de los códigos de recuperación. */
+export type TwoFactorVerifyResponse = SessionResponse & {
+  used_recovery_code: boolean;
+  recovery_codes_remaining: number;
+};
+
+export function isTwoFactorChallenge(response: LoginResponse): response is TwoFactorChallenge {
+  return 'two_factor_required' in response && response.two_factor_required === true;
+}
+
+/** Respuesta de `POST /api/refresh` (API_CONTRACT §4.16). */
 export type RefreshResponse = {
   token: string;
   refresh_token: string;

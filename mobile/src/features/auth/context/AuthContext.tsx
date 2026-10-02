@@ -19,7 +19,14 @@ import type { ReactNode } from 'react';
 import { ApiError, request, revokeSessionOnServer, waitForRefresh } from '@shared/lib/api';
 import { clearSession, getRefreshToken, getToken, setSession } from '@shared/lib/session';
 
-import type { LoginResponse, User } from '../types';
+import { isTwoFactorChallenge } from '../types';
+import type { LoginResponse, TwoFactorVerifyResponse, User } from '../types';
+
+/** Resultado de `login`: una sesión abierta, o falta el segundo factor (`ADR-026`). */
+export type LoginResult = { status: 'authenticated' } | { status: 'two_factor' };
+
+/** Resultado de `verifyTwoFactor`: para avisar si se gastó un código de recuperación. */
+export type TwoFactorOutcome = { usedRecoveryCode: boolean; recoveryCodesRemaining: number };
 
 type AuthState = {
   user: User | null;
@@ -31,7 +38,18 @@ type AuthState = {
    * reintentar, no mandar al login.
    */
   restoreFailed: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  /**
+   * `true` si el login pidió el segundo factor y falta verificarlo. El token de
+   * desafío NO sale de este contexto: ni por parámetros de ruta ni a disco (no
+   * es una sesión, y vive solo 5 minutos). Se pierde al cerrar la app, y eso es
+   * lo correcto: se vuelve a iniciar sesión.
+   */
+  hasPendingTwoFactor: boolean;
+  /** Completa el login con un TOTP de 6 dígitos o un código de recuperación. */
+  verifyTwoFactor: (code: string) => Promise<TwoFactorOutcome>;
+  /** Abandona el segundo factor y descarta el desafío. */
+  cancelTwoFactor: () => void;
   logout: () => Promise<void>;
   /** Vuelve a pedir `GET /api/users/me`. Devuelve `false` si la sesión ya no vale. */
   refreshUser: () => Promise<boolean>;
@@ -43,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
   const [restoreFailed, setRestoreFailed] = useState(false);
+  const [pendingTwoFactorToken, setPendingTwoFactorToken] = useState<string | null>(null);
 
   /**
    * Única lectura de la identidad actual. `request()` ya renueva el access
@@ -95,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loadCurrentUser]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     // `.trim()` solo en el email, igual que el backend (`auth_routes.py`): un
     // espacio final de autocompletado hacía que `find_by_email()` no coincida.
     // La contraseña NUNCA se normaliza -- alteraría su valor real.
@@ -104,12 +123,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: { email: email.trim(), password },
     });
 
+    // Cuenta con 2FA: el servidor responde 200 SIN sesión. No se guarda nada en
+    // SecureStore y no hay `user`: solo se recuerda el desafío, en memoria.
+    if (isTwoFactorChallenge(data)) {
+      setPendingTwoFactorToken(data.two_factor_token);
+      return { status: 'two_factor' };
+    }
+
     // Los tokens se persisten ANTES de publicar el user: si `setSession` falla,
     // no se deja la app "logueada" con una sesión que no sobrevive al cierre.
     await setSession({ accessToken: data.token, refreshToken: data.refresh_token });
+    setPendingTwoFactorToken(null);
     setRestoreFailed(false);
     setUser(data.user);
+    return { status: 'authenticated' };
   }, []);
+
+  const verifyTwoFactor = useCallback(
+    async (code: string): Promise<TwoFactorOutcome> => {
+      if (!pendingTwoFactorToken) {
+        throw new ApiError('La verificación expiró. Iniciá sesión de nuevo.', 401);
+      }
+
+      // Endpoint público (no `authenticated`): todavía no hay sesión. Solo se
+      // recorta el código: el servidor normaliza mayúsculas, guiones y espacios
+      // de los códigos de recuperación (`ADR-026`), y un TOTP son solo dígitos.
+      const data = await request<TwoFactorVerifyResponse>('/2fa/verify', {
+        method: 'POST',
+        body: { two_factor_token: pendingTwoFactorToken, code: code.trim() },
+      });
+
+      await setSession({ accessToken: data.token, refreshToken: data.refresh_token });
+      setPendingTwoFactorToken(null);
+      setRestoreFailed(false);
+      setUser(data.user);
+
+      return {
+        usedRecoveryCode: data.used_recovery_code,
+        recoveryCodesRemaining: data.recovery_codes_remaining,
+      };
+    },
+    [pendingTwoFactorToken],
+  );
+
+  const cancelTwoFactor = useCallback(() => setPendingTwoFactorToken(null), []);
 
   const logout = useCallback(async () => {
     // ADR-017 §4.6: el logout limpia los DOS lados. Primero se espera a una
@@ -123,11 +180,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearSession();
     setUser(null);
     setRestoreFailed(false);
+    setPendingTwoFactorToken(null);
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ user, isRestoring, restoreFailed, login, logout, refreshUser: loadCurrentUser }),
-    [user, isRestoring, restoreFailed, login, logout, loadCurrentUser],
+    () => ({
+      user,
+      isRestoring,
+      restoreFailed,
+      login,
+      hasPendingTwoFactor: pendingTwoFactorToken !== null,
+      verifyTwoFactor,
+      cancelTwoFactor,
+      logout,
+      refreshUser: loadCurrentUser,
+    }),
+    [
+      user,
+      isRestoring,
+      restoreFailed,
+      login,
+      pendingTwoFactorToken,
+      verifyTwoFactor,
+      cancelTwoFactor,
+      logout,
+      loadCurrentUser,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

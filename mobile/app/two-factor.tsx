@@ -1,7 +1,8 @@
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,67 +15,84 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@features/auth/context/AuthContext';
-import { isValidEmail } from '@features/auth/lib/validators';
 import { ApiError } from '@shared/lib/api';
 import { colors, fontSize, radius, space } from '@shared/design/tokens';
 
-export default function Login() {
-  const { login } = useAuth();
+/**
+ * Segundo paso del login para cuentas con 2FA (`ADR-026`).
+ *
+ * El `two_factor_token` NO pasa por esta pantalla: vive solo en `AuthContext`
+ * (memoria), igual que en la web, que lo guarda en el estado del router y no en
+ * `localStorage`. Aquí solo se escribe el código.
+ *
+ * El campo acepta **un TOTP de 6 dígitos o un código de recuperación**, y no se
+ * valida el formato en el cliente: el servidor prueba primero el TOTP y luego la
+ * recuperación, y responde con un único error para los dos (distinguirlos
+ * revelaría qué espera). Adivinar el formato acá solo bloquearía a quien escribe
+ * un código de recuperación con guion.
+ */
+export default function TwoFactor() {
+  const { user, hasPendingTwoFactor, verifyTwoFactor, cancelTwoFactor } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Sin desafío pendiente no hay nada que verificar: p. ej. la app se cerró y se
+  // reabrió (el desafío vive solo 5 minutos y solo en memoria), o se llegó sin
+  // pasar por el login.
+  if (user) return <Redirect href="/profile" />;
+  if (!hasPendingTwoFactor) return <Redirect href="/login" />;
+
+  function goBackToLogin() {
+    cancelTwoFactor();
+    router.replace('/login');
+  }
+
   async function handleSubmit() {
-    // Guarda contra doble toque: sin esto, dos pulsaciones rápidas disparan dos
-    // POST /api/login.
     if (isSubmitting) return;
 
     setError(null);
-
-    if (!email.trim() || !password) {
-      setError('Email y contraseña son obligatorios.');
-      return;
-    }
-    if (!isValidEmail(email)) {
-      setError('El email no es válido.');
+    if (!code.trim()) {
+      setError('Escribí el código de tu app de autenticación o un código de recuperación.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const result = await login(email, password);
-      if (result.status === 'two_factor') {
-        // Cuenta con 2FA (`ADR-026`): faltan el segundo paso y la sesión. `push`
-        // para que Atrás desde esa pantalla vuelva a este login.
-        router.push('/two-factor');
-        return;
+      const outcome = await verifyTwoFactor(code);
+
+      if (outcome.usedRecoveryCode) {
+        // Avisarlo, no dejarlo pasar: un código de recuperación se consume.
+        Alert.alert(
+          'Usaste un código de recuperación',
+          `Te quedan ${outcome.recoveryCodesRemaining}. Generá códigos nuevos desde la web de THERS ` +
+            'cuando puedas.',
+          [{ text: 'Entendido', onPress: () => router.replace('/profile') }],
+          { cancelable: false },
+        );
+      } else {
+        router.replace('/profile');
       }
-      // `replace`, no `push`: el login no debe quedar en la pila: el botón
-      // Atrás desde el perfil no puede volver a una pantalla de credenciales.
-      router.replace('/profile');
     } catch (e) {
-      if (e instanceof ApiError) {
-        // `403` con `email_verified: false` es un caso propio del contrato
-        // (`ADR-011`): las credenciales ERAN correctas, falta verificar el
-        // correo. Se distingue por el cuerpo, nunca parseando el texto.
-        const body = e.body as { email_verified?: boolean } | null;
-        if (e.status === 403 && body?.email_verified === false) {
-          setError(
-            'Tu correo todavía no fue verificado. Verificá tu cuenta desde la web de THERS ' +
-              'para poder iniciar sesión.',
-          );
-        } else {
-          setError(e.message);
-        }
+      if (e instanceof ApiError && e.status === 429) {
+        // ADR-027: 429 con `retry_after_seconds`. Sin decir cuándo volver, la
+        // persona reintenta a ciegas y empeora el bloqueo.
+        const body = e.body as { retry_after_seconds?: number } | null;
+        const seconds = body?.retry_after_seconds;
+        setError(
+          seconds
+            ? `Demasiados intentos. Esperá ${seconds} segundos antes de volver a probar.`
+            : e.message,
+        );
+      } else if (e instanceof ApiError) {
+        setError(e.message);
       } else {
         setError('Ocurrió un error inesperado. Intentá de nuevo.');
       }
     } finally {
-      // En `finally`: si no, un error deja el botón cargando para siempre.
       setIsSubmitting(false);
     }
   }
@@ -92,40 +110,27 @@ export default function Login() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.brand}>THERS</Text>
-        <Text style={styles.subtitle}>Iniciá sesión para continuar</Text>
+        <Text style={styles.title}>Verificación en dos pasos</Text>
+        <Text style={styles.subtitle}>
+          Escribí el código de 6 dígitos de tu app de autenticación, o uno de tus códigos de
+          recuperación.
+        </Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>Código</Text>
           <TextInput
             style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="tu@email.com"
+            value={code}
+            onChangeText={setCode}
+            placeholder="123456"
             placeholderTextColor={colors.fgDisabled}
             autoCapitalize="none"
             autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            editable={!isSubmitting}
-            returnKeyType="next"
-          />
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.label}>Contraseña</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor={colors.fgDisabled}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="password"
+            textContentType="oneTimeCode"
             editable={!isSubmitting}
             returnKeyType="go"
             onSubmitEditing={handleSubmit}
+            autoFocus
           />
         </View>
 
@@ -149,19 +154,18 @@ export default function Login() {
           {isSubmitting ? (
             <ActivityIndicator color={colors.onBrand} />
           ) : (
-            <Text style={styles.buttonText}>Entrar</Text>
+            <Text style={styles.buttonText}>Verificar</Text>
           )}
         </Pressable>
 
-        {/*
-          Registro, recuperación de contraseña y "Continuar con Google" existen
-          en el backend pero NO en esta entrega (ROADMAP fase 1/2). No se pone
-          un botón que no hace nada: una pantalla que aparenta una función
-          inexistente es peor que su ausencia.
-        */}
-        <Text style={styles.note}>
-          Por ahora, crear cuenta y recuperar contraseña se hacen desde la web de THERS.
-        </Text>
+        <Pressable
+          style={({ pressed }) => [styles.linkButton, pressed && styles.linkPressed]}
+          onPress={goBackToLogin}
+          disabled={isSubmitting}
+          accessibilityRole="button"
+        >
+          <Text style={styles.linkText}>Volver al inicio de sesión</Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -180,6 +184,13 @@ const styles = StyleSheet.create({
     color: colors.brand,
     textAlign: 'center',
     letterSpacing: 1,
+  },
+  title: {
+    fontSize: fontSize.headlineMd,
+    fontWeight: '700',
+    color: colors.fg,
+    textAlign: 'center',
+    marginTop: space[6],
   },
   subtitle: {
     fontSize: fontSize.bodyMd,
@@ -201,10 +212,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.input,
     paddingHorizontal: space[4],
-    // Android e iOS necesitan alturas distintas para verse igual.
     paddingVertical: Platform.OS === 'ios' ? space[4] : space[3],
     fontSize: fontSize.bodyLg,
     color: colors.fg,
+    letterSpacing: 2,
   },
   errorBox: {
     backgroundColor: colors.dangerSurface,
@@ -230,11 +241,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.bodyLg,
     fontWeight: '700',
   },
-  note: {
-    fontSize: fontSize.bodySm,
-    color: colors.fgMuted,
-    textAlign: 'center',
-    marginTop: space[6],
-    lineHeight: 18,
-  },
+  linkButton: { marginTop: space[4], padding: space[3], alignItems: 'center' },
+  linkPressed: { opacity: 0.6 },
+  linkText: { color: colors.fgSecondary, fontSize: fontSize.bodyMd, fontWeight: '600' },
 });

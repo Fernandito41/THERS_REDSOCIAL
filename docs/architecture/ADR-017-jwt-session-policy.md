@@ -1,9 +1,11 @@
 # ADR-017 — Política de expiración y refresh de tokens JWT
 
 - **Estado:** **`ACEPTADO`** el 2026-10-01 (decisión tomada junto a `ADR-016`).
-  **Backend implementado el 2026-10-02** en la rama `feature/refresh-tokens` (sin commit
-  ni merge todavía; 316 pruebas verdes). **Pendientes:** cliente móvil (§7, PR 2), adopción en la
-  web (opcional) y mergear después de `ADR-015` (la migración encadena con `a5c8e2d71f34`).
+  **Implementado el 2026-10-02:** backend (rama `feature/refresh-tokens`, 319 pruebas verdes) y
+  cliente móvil (rama `feature/mobile-android-app`), **verificados en un teléfono real** (renovación
+  automática, arranque en frío, logout del servidor y arranque sin red; ver
+  `docs/mobile/VALIDATION.md` §1.3). **Pendientes:** adopción en la web (opcional) y mergear en
+  orden, después de `ADR-015` (la migración encadena con `a5c8e2d71f34`).
 - **Fecha:** 2026-10-01
 - **Cierra:** `BACKEND_ARCHITECTURE.md` §20 ítem 9 («Política de expiración y refresh de tokens
   JWT»), registrado como `PENDIENTE DE APROBACIÓN` desde v0.7, y la nota equivalente de

@@ -68,7 +68,11 @@ export default function Search() {
     onToggleLike,
     onLoadComments,
     onPostComment,
+    onDeleteComment,
+    onEditComment,
     onToggleFollowAuthor,
+    onDeleteCapsule,
+    onEditCapsule,
   } = useOutletContext();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -314,7 +318,11 @@ export default function Search() {
                     onToggleLike={onToggleLike}
                     onLoadComments={onLoadComments}
                     onPostComment={onPostComment}
+                    onDeleteComment={onDeleteComment}
+                    onEditComment={onEditComment}
                     onToggleFollowAuthor={onToggleFollowAuthor}
+                    onDeleteCapsule={onDeleteCapsule}
+                    onEditCapsule={onEditCapsule}
                   />
                 </section>
               )}
@@ -341,7 +349,11 @@ export default function Search() {
                     onToggleLike={onToggleLike}
                     onLoadComments={onLoadComments}
                     onPostComment={onPostComment}
+                    onDeleteComment={onDeleteComment}
+                    onEditComment={onEditComment}
                     onToggleFollowAuthor={onToggleFollowAuthor}
+                    onDeleteCapsule={onDeleteCapsule}
+                    onEditCapsule={onEditCapsule}
                   />
                 ))}
               </div>

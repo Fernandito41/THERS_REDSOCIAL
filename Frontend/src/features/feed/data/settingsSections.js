@@ -14,13 +14,12 @@
  *   info    — dato real de solo lectura
  *
  * REGLA APLICADA: nada que dependa de una decisión de servidor se modela como
- * preferencia local. Privacidad efectiva, bloqueo, 2FA, sesiones, pagos,
- * verificación, tokens y exportación son `pending` con su motivo, porque
- * guardar un booleano en el navegador no protege ningún dato
- * (archivo maestro §8.10 y §10.2).
+ * preferencia local. Lo que todavía no tiene soporte de servidor (bloqueo,
+ * pagos, tokens...) es `pending` con su motivo, porque guardar un booleano
+ * en el navegador no protege ningún dato (archivo maestro §8.10 y §10.2).
+ * Privacidad, sesiones, 2FA y exportación de datos ya se aplican en el
+ * servidor (ADR-018..ADR-024) y usan sus propios tipos de fila.
  */
-
-const NO_BACKEND = "No hay endpoint que lo aplique: guardarlo en el navegador no cambiaría nada en el servidor.";
 
 export const SETTINGS_CONTENT = {
   // REF-SET-01
@@ -43,20 +42,21 @@ export const SETTINGS_CONTENT = {
     description:
       "Gestiona la exposición de tu identidad en THERS, define quién puede interactuar con tus resonancias y mantén el control de tu visibilidad.",
     notice: {
-      tone: "warning",
-      text: "Ninguno de estos controles se aplica todavía en el servidor. THERS no tiene aún reglas de privacidad en el backend, así que estas opciones no protegen tus datos: quedan registradas como preferencia hasta que existan.",
+      tone: "info",
+      text: "Estos controles SÍ se aplican en el servidor (ADR-018, ADR-019, ADR-020): filtran cada consulta, deciden permisos y ocultan datos. No son preferencias de este navegador. El único control de esta pantalla que sigue sin soporte es el de canales de audio, porque esa función todavía no existe en el producto.",
     },
     groups: [
       {
         title: "Cuenta privada",
         rows: [
           {
-            type: "pending",
+            type: "privacySwitch",
+            key: "is_private",
             label: "Cuenta privada",
             description:
-              "Solo los usuarios aprobados podrían ver tus cápsulas y resonancias.",
-            reason: "Requiere que el servidor filtre cada consulta por relación de seguimiento.",
+              "Solo los usuarios aprobados pueden ver tus cápsulas. Quien ya te seguía lo sigue haciendo; a partir de ahora, cada persona nueva tiene que pedirlo y aprobarlo vos.",
           },
+          { type: "followRequests" },
         ],
       },
       {
@@ -65,28 +65,36 @@ export const SETTINGS_CONTENT = {
         index: "Sección 01",
         rows: [
           {
-            type: "pending",
+            type: "privacyChoice",
+            key: "who_can_mention",
             label: "Menciones y etiquetas",
-            description: "Qué usuarios pueden etiquetarte en cápsulas compartidas.",
-            reason: "No existe el modelo de menciones ni etiquetas.",
+            description:
+              "Qué usuarios pueden etiquetarte escribiendo @tu_usuario en una cápsula o un comentario. Si no están autorizados, el texto queda como texto plano y no te llega ninguna notificación.",
+            options: [
+              { value: "everyone", label: "Cualquiera" },
+              { value: "followers", label: "Solo mis seguidores" },
+              { value: "nobody", label: "Nadie" },
+            ],
           },
           {
-            type: "pending",
+            type: "privacySwitch",
+            key: "hide_offensive_comments",
             label: "Ocultar comentarios ofensivos",
-            description: "Filtrar automáticamente respuestas agresivas o spam en tus cápsulas.",
-            reason: "No hay moderación de comentarios en el servidor.",
+            description:
+              "Filtra automáticamente los comentarios con insultos o spam evidente en TUS cápsulas, para todo el que las lea. Usa una lista de términos del sistema, revisable por el equipo — no hay moderación humana ni revisión caso por caso.",
           },
+          { type: "mutedKeywords" },
           {
-            type: "pending",
-            label: "Filtros de palabras clave personalizadas",
-            description: "Términos que activarían moderación silenciosa en cualquier hilo.",
-            reason: NO_BACKEND,
-          },
-          {
-            type: "pending",
+            type: "privacyChoice",
+            key: "who_can_message",
             label: "Mensajes directos",
-            description: "Quién puede escribirte y qué peticiones van a solicitudes pendientes.",
-            reason: "No existe mensajería en el backend.",
+            description:
+              "Quién puede escribirte por mensaje directo. A quien no esté autorizado le aparece un aviso al intentar enviarte algo; los mensajes que ya recibiste no se borran.",
+            options: [
+              { value: "everyone", label: "Cualquiera" },
+              { value: "followers", label: "Solo mis seguidores" },
+              { value: "nobody", label: "Nadie" },
+            ],
           },
         ],
       },
@@ -96,10 +104,18 @@ export const SETTINGS_CONTENT = {
         index: "Sección 02",
         rows: [
           {
+            type: "privacySwitch",
+            key: "show_activity_status",
+            label: "Mostrar mi estado de actividad",
+            description:
+              "Deja ver la última vez que estuviste activo a las personas con las que tenés una conversación. Si lo apagas, para ellas se ve igual que si nunca hubieras estado activo — no se nota que lo desactivaste.",
+          },
+          {
             type: "pending",
-            label: "Estado de actividad en el radar sonoro",
+            label: "Estado de actividad en los canales de audio",
             description: "Mostrar cuándo estuviste activo en los canales de audio.",
-            reason: "No hay sistema de presencia ni canales de audio.",
+            reason:
+              "Los canales de audio no existen en el producto: no hay modelo, endpoints ni interfaz. Un interruptor de privacidad sobre una función inexistente no protegería nada. La presencia general sí está implementada, en el control de arriba (ADR-020).",
           },
         ],
       },
@@ -110,6 +126,10 @@ export const SETTINGS_CONTENT = {
   security: {
     title: "Seguridad y contraseña",
     description: "Credenciales de acceso, verificación en dos pasos y control de sesiones.",
+    notice: {
+      tone: "info",
+      text: "Todos los controles de esta pantalla se aplican en el servidor. La verificación en dos pasos usa una app autenticadora (TOTP, ADR-022); las sesiones se registran por dispositivo y cerrarlas invalida su token de inmediato (ADR-021).",
+    },
     groups: [
       {
         title: "Cambiar contraseña",
@@ -122,37 +142,21 @@ export const SETTINGS_CONTENT = {
       },
       {
         title: "Autenticación en dos pasos (2FA)",
-        rows: [
-          {
-            type: "pending",
-            label: "Activar 2FA",
-            description: "Un segundo factor además de la contraseña al iniciar sesión.",
-            reason:
-              "No está implementado. Mostrarlo como activo sería afirmar una protección inexistente (archivo maestro §10.2).",
-          },
-        ],
+        rows: [{ type: "twoFactor" }],
       },
       {
         title: "Sesiones activas",
-        rows: [
-          {
-            type: "pending",
-            label: "Ver y cerrar sesiones",
-            action: "Ver sesiones",
-            description: "Dispositivos con la sesión abierta y opción de revocarlos.",
-            reason:
-              "El JWT no se registra por dispositivo, así que no hay nada que listar ni revocar de verdad.",
-          },
-        ],
+        rows: [{ type: "activeSessions" }],
       },
       {
         title: "Alertas de inicio de sesión",
         rows: [
           {
-            type: "pending",
+            type: "securitySwitch",
+            key: "login_alerts_enabled",
             label: "Avisarme de accesos nuevos",
-            description: "Un correo cuando alguien entre desde un dispositivo desconocido.",
-            reason: "Requiere registro de sesiones, que no existe.",
+            description:
+              "Te mandamos un correo cuando alguien entre a tu cuenta desde un dispositivo que no habíamos visto antes. No se avisa en cada inicio de sesión: solo con dispositivos nuevos, para que el aviso signifique algo.",
           },
         ],
       },
@@ -414,42 +418,41 @@ export const SETTINGS_CONTENT = {
     title: "Descarga de datos y archivo",
     description: "Solicita una copia de tu información y consulta el historial de descargas.",
     notice: {
-      tone: "warning",
-      text: "No se genera ningún archivo. Un ZIP de muestra no sería una exportación real de tus datos (archivo maestro §8.10), así que la función queda declarada como no disponible.",
+      tone: "info",
+      text: "Esta función SÍ se aplica en el servidor (ADR-024): el archivo es un ZIP real con los datos de tu cuenta, generado al momento de pedirlo.",
     },
     groups: [
       {
         title: "Solicitar descarga de información",
-        rows: [
-          {
-            type: "pending",
-            label: "Solicitar mi archivo",
-            action: "Solicitar",
-            description: "Una copia de tus publicaciones, perfil y actividad.",
-            reason: "No existe el trabajo de exportación en el servidor.",
-          },
-        ],
+        rows: [{ type: "dataExportRequest" }],
       },
       {
         title: "Archivos listos para descargar (Historial)",
-        rows: [
-          {
-            type: "pending",
-            label: "Historial de solicitudes",
-            action: "Ver historial",
-            description: "Estado de tus exportaciones anteriores.",
-            reason: "Sin exportaciones que registrar.",
-          },
-        ],
+        rows: [{ type: "dataExportHistory" }],
       },
       {
         title: "Privacidad y seguridad de tu archivo",
         rows: [
           {
-            type: "pending",
-            label: "Protección del archivo",
-            description: "Caducidad del enlace de descarga y cifrado del paquete.",
-            reason: NO_BACKEND,
+            type: "info",
+            label: "Caducidad del enlace",
+            description:
+              "Pasado ese plazo el archivo se elimina del servidor y hay que pedir uno nuevo.",
+            value: "7 días",
+          },
+          {
+            type: "info",
+            label: "Quién puede descargarlo",
+            description:
+              "Solo tu cuenta, con la sesión iniciada. El enlace no sirve sin tu sesión ni para otra persona.",
+            value: "Solo tú",
+          },
+          {
+            type: "info",
+            label: "Cifrado del paquete",
+            description:
+              "El ZIP no está cifrado ni protegido con contraseña: guárdalo en un lugar seguro. No incluye tu contraseña ni el secreto de tu verificación en dos pasos.",
+            value: "Sin cifrar",
           },
         ],
       },
@@ -461,35 +464,17 @@ export const SETTINGS_CONTENT = {
     title: "Cuentas bloqueadas y restringidas",
     description: "Bloquear y restringir son dos cosas distintas y se listan por separado.",
     notice: {
-      tone: "warning",
-      text: "No existe el modelo de bloqueo ni de restricción en la base de datos. Ocultar a alguien solo en la interfaz no le impediría acceder a tu contenido, así que no se simula.",
+      tone: "info",
+      text: "Estos controles SÍ se aplican en el servidor (ADR-025): el bloqueo corta el acceso a tu contenido en cada consulta, no solo en la interfaz. También puedes bloquear o restringir desde el menú de cualquier publicación.",
     },
     groups: [
       {
         title: "¿Qué ocurre al bloquear a alguien?",
-        rows: [
-          {
-            type: "pending",
-            label: "Cuentas bloqueadas",
-            action: "Ver lista",
-            description:
-              "Una cuenta bloqueada no podría ver tu contenido ni interactuar contigo.",
-            reason: "Requiere comprobación de acceso en el servidor, que no existe.",
-          },
-        ],
+        rows: [{ type: "restrictedAccounts", kind: "block" }],
       },
       {
         title: "Protección sutil con Cuentas Restringidas",
-        rows: [
-          {
-            type: "pending",
-            label: "Cuentas restringidas",
-            action: "Ver lista",
-            description:
-              "Una cuenta restringida sigue viendo tu perfil, pero sus comentarios quedan ocultos para los demás.",
-            reason: "Sin modelo de restricción ni moderación de comentarios.",
-          },
-        ],
+        rows: [{ type: "restrictedAccounts", kind: "restrict" }],
       },
     ],
   },
@@ -534,41 +519,30 @@ export const SETTINGS_CONTENT = {
   content: {
     title: "Preferencias de contenido y feed",
     description: "Qué ves en tu feed y qué prefieres no ver.",
+    notice: {
+      tone: "info",
+      text: "Estos filtros SÍ se aplican en el servidor (ADR-020, ADR-026): `GET /api/posts` ya no devuelve lo que ocultaste, no se esconde solo en la interfaz.",
+    },
     groups: [
       {
         title: "Control de contenido sensible",
         rows: [
           {
-            type: "pending",
+            type: "privacySwitch",
+            key: "hide_sensitive_content",
             label: "Filtrar contenido sensible",
-            description: "Ocultar publicaciones marcadas como sensibles.",
-            reason: "No existe clasificación de contenido en el servidor.",
+            description:
+              "Oculta de tu feed las publicaciones que su autor marcó como sensibles al publicar. Es lo que declara quien escribe, no una clasificación automática. Tus propias publicaciones nunca se ocultan.",
           },
         ],
       },
       {
         title: "Palabras y frases ocultas",
-        rows: [
-          {
-            type: "pending",
-            label: "Lista de palabras ocultas",
-            action: "Editar lista",
-            description: "Publicaciones con estos términos no aparecerían en tu feed.",
-            reason: "El feed no admite filtros: `GET /api/posts` devuelve la lista completa.",
-          },
-        ],
+        rows: [{ type: "mutedKeywords" }],
       },
       {
         title: "Temas y etiquetas silenciadas",
-        rows: [
-          {
-            type: "pending",
-            label: "Temas silenciados",
-            action: "Editar",
-            description: "Temas que prefieres no ver.",
-            reason: "No existe el modelo de temas ni etiquetas.",
-          },
-        ],
+        rows: [{ type: "mutedTopics" }],
       },
       {
         title: "Cuentas sugeridas en el feed",
@@ -578,7 +552,7 @@ export const SETTINGS_CONTENT = {
             key: "content.suggestions",
             label: "Mostrar cuentas sugeridas",
             description:
-              "Controla el panel «Personas que resuenan» del feed, que hoy usa datos de ejemplo.",
+              "Muestra u oculta el panel «Personas que resuenan» del feed, que sugiere cuentas reales que todavía no sigues. Es una preferencia de pantalla y se guarda en este navegador.",
             default: true,
           },
         ],

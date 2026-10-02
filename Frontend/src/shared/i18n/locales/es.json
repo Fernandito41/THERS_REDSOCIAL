@@ -154,7 +154,6 @@
       "errorPasswordTooShort": "Usá al menos 8 caracteres.",
       "errorConfirmPasswordMismatch": "Las contraseñas no coinciden."
     },
-
     "verifyResetCode": {
       "title": "Verificá tu código",
       "subtitle": "Te enviamos un código de 6 dígitos a {{email}}",
@@ -168,7 +167,6 @@
       "missingEmailSubtitle": "No encontramos una solicitud de recuperación activa.",
       "missingEmailNotice": "Volvé a pedir un código desde la pantalla de recuperación de contraseña."
     },
-
     "verifyRegistrationCode": {
       "title": "Verificá tu correo",
       "subtitle": "Te enviamos un código de 6 dígitos a {{email}}",
@@ -185,7 +183,6 @@
       "missingEmailNotice": "Volvé a registrarte, o iniciá sesión si ya verificaste tu correo antes.",
       "backToRegister": "Volver a registrarme"
     },
-
     "completeProfile": {
       "title": "Completá tu perfil",
       "subtitle": "Necesitamos estos datos para terminar de crear tu cuenta.",
@@ -196,7 +193,6 @@
       "toastErrorTitle": "No pudimos completar tu perfil",
       "logoutAria": "Cerrar sesión"
     },
-
     "passwordStrength": {
       "label": "Seguridad de la contraseña",
       "levels": [
@@ -262,7 +258,9 @@
     "invalidCredentials": "Email o contraseña incorrectos.",
     "emailInUse": "Ya existe una cuenta con ese email.",
     "checkData": "Revisá los datos ingresados.",
-    "unexpected": "Ocurrió un error inesperado. Intentá de nuevo más tarde."
+    "unexpected": "Ocurrió un error inesperado. Intentá de nuevo más tarde.",
+    "tooManyAttemptsSeconds": "Demasiados intentos. Probá de nuevo en {{seconds}} segundos.",
+    "tooManyAttemptsMinutes": "Demasiados intentos. Probá de nuevo en {{minutes}} minutos."
   },
   "settings": {
     "title": "Configuración",

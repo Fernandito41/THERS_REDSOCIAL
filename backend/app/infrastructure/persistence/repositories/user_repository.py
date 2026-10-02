@@ -6,7 +6,7 @@
 # El `id` de `users` sigue generándose en PostgreSQL (`gen_random_uuid()`,
 # ver models.py) — este repositorio nunca asigna un id manualmente.
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from app.domain.auth.exceptions import EmailAlreadyExistsError, UsernameAlreadyExistsError
@@ -64,6 +64,45 @@ class SQLAlchemyUserRepository(UserRepository):
 
     def find_by_id(self, user_id):
         return db.session.get(User, user_id)
+
+    def find_by_usernames(self, usernames):
+        if not usernames:
+            return []
+        # func.lower() en los dos lados: `username` es case-sensitive en el
+        # esquema (ADR-002 §3), así que la comparación insensible se hace acá
+        # explícitamente y no se delega al tipo de la columna.
+        #
+        # Nota de rendimiento: esto no usa el índice de uq_users_username
+        # (es una expresión sobre la columna). Se acepta porque `usernames`
+        # trae como máximo MAX_MENTIONS_PER_CONTENT (10) elementos y solo
+        # corre al crear/editar contenido, nunca al leer el feed
+        # (ADR-019 §Riesgos).
+        lowered = [u.lower() for u in usernames]
+        return (
+            db.session.execute(
+                select(User).where(func.lower(User.username).in_(lowered))
+            )
+            .scalars()
+            .all()
+        )
+
+    def touch_last_seen(self, user_id, min_interval_seconds):
+        # Un único UPDATE condicional, sin SELECT previo: si la marca es
+        # reciente, el WHERE no matchea y no se escribe nada. Barato y sin
+        # estado en el proceso (ADR-020 §Decisión).
+        db.session.execute(
+            update(User)
+            .where(
+                User.id == user_id,
+                or_(
+                    User.last_seen_at.is_(None),
+                    User.last_seen_at
+                    < func.now() - text(f"interval '{int(min_interval_seconds)} seconds'"),
+                ),
+            )
+            .values(last_seen_at=func.now())
+        )
+        db.session.commit()
 
     def update(self, user_id, fields):
         user = db.session.get(User, user_id)

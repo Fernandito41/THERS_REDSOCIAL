@@ -19,11 +19,23 @@ from app.application.messages.list_conversations_use_case import list_conversati
 from app.application.messages.list_thread_use_case import DEFAULT_LIMIT, list_thread
 from app.application.messages.send_message_use_case import send_message
 from app.application.messages.send_typing_ping_use_case import send_typing_ping
+from app.application.messages.update_message_use_case import update_message
 from app.domain.auth.exceptions import UserNotFoundError
-from app.domain.messages.exceptions import CannotMessageSelfError, MessageNotFoundError
+from app.domain.messages.exceptions import (
+    CannotMessageSelfError,
+    MessageNotFoundError,
+    MessagesNotAllowedError,
+)
 from app.domain.messages.validators import MAX_CONTENT_LENGTH, is_valid_content
+from app.infrastructure.persistence.repositories.follow_repository import (
+    SQLAlchemyFollowRepository,
+)
 from app.infrastructure.persistence.repositories.message_repository import (
     SQLAlchemyMessageRepository,
+)
+from app.domain.restrictions.exceptions import AccountBlockedError
+from app.infrastructure.persistence.repositories.restriction_repository import (
+    SQLAlchemyRestrictionRepository,
 )
 from app.infrastructure.persistence.repositories.user_repository import (
     SQLAlchemyUserRepository,
@@ -37,6 +49,11 @@ messages_bp = Blueprint("messages", __name__)
 _user_repository = SQLAlchemyUserRepository()
 _message_repository = SQLAlchemyMessageRepository()
 _typing_repository = InMemoryTypingIndicatorRepository()
+# ADR-020-content-filters-and-privacy-preferences.md: `who_can_message` en
+# 'followers' obliga a resolver la relación de seguimiento.
+_follow_repository = SQLAlchemyFollowRepository()
+# ADR-025-blocked-and-restricted-accounts.md: un bloqueo corta la mensajería.
+_restriction_repository = SQLAlchemyRestrictionRepository()
 
 
 @messages_bp.route("/users/<uuid:user_id>/messages", methods=["POST"])
@@ -61,12 +78,20 @@ def create(user_id):
 
     try:
         message = send_message(
-            sender_id, str(user_id), content.strip(), _user_repository, _message_repository
+            sender_id, str(user_id), content.strip(), _user_repository,
+            _message_repository, _follow_repository, _restriction_repository,
         )
     except CannotMessageSelfError:
         return jsonify({"msg": "No podés mandarte un mensaje a vos mismo"}), 400
     except UserNotFoundError:
         return jsonify({"msg": "Usuario no encontrado"}), 404
+    except AccountBlockedError:
+        return jsonify({"msg": "Tienes bloqueada a esta cuenta. Desbloquéala para escribirle."}), 409
+    except MessagesNotAllowedError:
+        # 403 y no 404: quien escribe ya sabía que esa cuenta existe, así que
+        # ocultárselo no protegería nada y solo lo haría reintentar
+        # (ADR-020 §Seguridad, a diferencia del 404 de una cuenta privada).
+        return jsonify({"msg": "Esta persona no acepta mensajes tuyos"}), 403
 
     return jsonify({"message": message}), 201
 
@@ -78,7 +103,8 @@ def thread(user_id):
 
     try:
         messages = list_thread(
-            current_user_id, str(user_id), _user_repository, _message_repository, DEFAULT_LIMIT
+            current_user_id, str(user_id), _user_repository, _message_repository,
+            _restriction_repository, DEFAULT_LIMIT,
         )
     except UserNotFoundError:
         return jsonify({"msg": "Usuario no encontrado"}), 404
@@ -94,8 +120,39 @@ def conversations():
     # (mismo principio que GET /api/notifications).
     user_id = get_jwt_identity()
 
-    result = list_conversations(user_id, _message_repository)
+    result = list_conversations(user_id, _message_repository, _restriction_repository)
     return jsonify({"conversations": result}), 200
+
+
+@messages_bp.route("/messages/<uuid:message_id>", methods=["PATCH"])
+@jwt_required()
+def update(message_id):
+    # Ruta plana, igual que DELETE: editar depende de quién mandó el mensaje,
+    # no de con quién es la conversación (ADR-017-content-editing.md). Solo
+    # quien lo mandó puede editarlo -- nunca quien lo recibió.
+    sender_id = get_jwt_identity()
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"msg": "No se enviaron datos"}), 400
+
+    # Whitelist explícita: solo `content` -- nunca `sender_id`/`recipient_id`/
+    # `id`/`read_at`. Editar un mensaje no puede redirigirlo a otra persona ni
+    # cambiar si fue leído.
+    content = data.get("content")
+    if not is_valid_content(content):
+        return jsonify(
+            {"msg": f"El contenido debe tener entre 1 y {MAX_CONTENT_LENGTH} caracteres"}
+        ), 400
+
+    try:
+        message = update_message(
+            str(message_id), sender_id, content.strip(), _message_repository
+        )
+    except MessageNotFoundError:
+        return jsonify({"msg": "Mensaje no encontrado"}), 404
+
+    return jsonify({"message": message}), 200
 
 
 @messages_bp.route("/messages/<uuid:message_id>", methods=["DELETE"])
@@ -122,7 +179,10 @@ def typing_ping(user_id):
     sender_id = get_jwt_identity()
 
     try:
-        send_typing_ping(sender_id, str(user_id), _user_repository, _typing_repository)
+        send_typing_ping(
+            sender_id, str(user_id), _user_repository, _typing_repository,
+            _restriction_repository,
+        )
     except UserNotFoundError:
         return jsonify({"msg": "Usuario no encontrado"}), 404
 
@@ -134,5 +194,7 @@ def typing_ping(user_id):
 def typing_status(user_id):
     current_user_id = get_jwt_identity()
 
-    result = get_typing_status(current_user_id, str(user_id), _typing_repository)
+    result = get_typing_status(
+        current_user_id, str(user_id), _typing_repository, _restriction_repository
+    )
     return jsonify(result), 200

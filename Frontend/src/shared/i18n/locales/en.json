@@ -154,7 +154,6 @@
       "errorPasswordTooShort": "Use at least 8 characters.",
       "errorConfirmPasswordMismatch": "Passwords don't match."
     },
-
     "verifyResetCode": {
       "title": "Verify your code",
       "subtitle": "We sent a 6-digit code to {{email}}",
@@ -168,7 +167,6 @@
       "missingEmailSubtitle": "We couldn't find an active recovery request.",
       "missingEmailNotice": "Request a new code from the password recovery screen."
     },
-
     "verifyRegistrationCode": {
       "title": "Verify your email",
       "subtitle": "We sent a 6-digit code to {{email}}",
@@ -185,7 +183,6 @@
       "missingEmailNotice": "Register again, or log in if you already verified your email before.",
       "backToRegister": "Back to register"
     },
-
     "completeProfile": {
       "title": "Complete your profile",
       "subtitle": "We need a few more details to finish setting up your account.",
@@ -196,7 +193,6 @@
       "toastErrorTitle": "We couldn't complete your profile",
       "logoutAria": "Log out"
     },
-
     "passwordStrength": {
       "label": "Password strength",
       "levels": [
@@ -262,7 +258,9 @@
     "invalidCredentials": "Incorrect email or password.",
     "emailInUse": "An account with that email already exists.",
     "checkData": "Please check the data you entered.",
-    "unexpected": "Something went wrong. Please try again later."
+    "unexpected": "Something went wrong. Please try again later.",
+    "tooManyAttemptsSeconds": "Too many attempts. Try again in {{seconds}} seconds.",
+    "tooManyAttemptsMinutes": "Too many attempts. Try again in {{minutes}} minutes."
   },
   "settings": {
     "title": "Settings",

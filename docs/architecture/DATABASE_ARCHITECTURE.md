@@ -4,13 +4,51 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.17 |
+| Versión | 0.21 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
 | Idioma | Español (documentación oficial), identificadores/código en inglés |
 
 > ⚠️ **Nota de alcance y honestidad de fuentes.** Este documento es un **contrato técnico previo a la implementación**, no una descripción de un esquema ya existente. Al momento de escribirlo (v0.1), el backend **no tenía base de datos, ni ORM, ni driver de PostgreSQL instalado**: la autenticación funcionaba contra credenciales hardcodeadas (ver §4). Todo lo que aquí se define como "decidido" se limita a lo que la documentación oficial ya respalda o a lo que el estado real del código justifica de forma evidente. Todo lo demás está marcado explícitamente como **PENDIENTE DE APROBACIÓN** (§14). No se inventan entidades, columnas, índices ni políticas que el proyecto no necesite hoy.
+>
+> **v0.21 — rate limiting (`ADR-023-rate-limiting.md`):** una migración (`b6e3a9d4f270`) y una tabla nueva, `rate_limit_buckets` (§5.15). Cierra el ítem 8 de `API_CONTRACT.md` §9, que v0.24 de aquel documento había registrado como pendiente tras descubrir que en `POST /api/2fa/verify` la ausencia de límite era explotable.
+>
+> Contador de ventana fija: una fila por (`scope`, `identity_hash`) con `window_started_at` y `attempts`. Tres decisiones de modelo que vale la pena destacar:
+>
+> · **La identidad se guarda hasheada** (SHA-256, `CHAR(64)`), no en claro. La tabla solo necesita **contar**, nunca saber de quién: guardar emails e IPs en claro acumularía datos personales en una tabla puramente operativa cuando un hash cumple la misma función. SHA-256 y no scrypt porque acá no se protege un secreto de baja entropía contra fuerza bruta offline (como `password_hash`), solo se evita el dato en claro -- y corre en el camino caliente de cada intento de login.
+>
+> · **Sin FK a `users`**, a propósito: la identidad puede ser una IP, o el email de una cuenta **que no existe**. Un intento de login contra un email inventado también tiene que contar, porque si no se podría enumerar cuentas sin límite. Atarla a `users` dejaría fuera justo los casos que más interesa limitar. Es la única tabla del esquema sin ninguna relación con el resto.
+>
+> · **Es la única entidad que no modela un hecho del producto** sino una defensa operativa: no aparece en ninguna respuesta de la API, y su contenido es descartable (purgarla no pierde información de nadie).
+>
+> El incremento es una sola sentencia (`INSERT ... ON CONFLICT DO UPDATE ... RETURNING`): crear la fila, reiniciar la ventana vencida y sumar el intento son atómicos, porque la concurrencia es precisamente el escenario de un ataque de fuerza bruta. Nuevo índice `ix_rate_limit_buckets_window_started_at` (§8) -- no lo necesita el UPSERT (ese va por la UNIQUE) sino la purga de ventanas vencidas. Verificado con un ciclo `flask db upgrade`/`downgrade`/`upgrade` contra PostgreSQL 16 real sobre `thers_dev` y `thers_test`, más la suite completa (`backend/tests/`, 476 pruebas).
+>
+> **v0.20 — pantalla de Seguridad: registro de sesiones y 2FA (`ADR-021-session-registry.md`, `ADR-022-two-factor-authentication.md`):** dos migraciones (`f1a4c8e2d573`, `a3c9f5b1e648`), dos tablas nuevas y tres columnas.
+>
+> Nueva tabla **`sessions`** (§5.13), y es **el cambio con más alcance de todo el modelo hasta ahora**: no agrega una entidad al margen, cambia qué significa que un JWT sea válido. `user_id` (FK a `users`, CASCADE), `jti` (`VARCHAR(36)` con `UNIQUE uq_sessions_jti` — el identificador que flask_jwt_extended ya pone en cada token), `user_agent` (`TEXT`, crudo y sin parsear), `ip_address` (`VARCHAR(45)`, longitud máxima de una IPv6 en texto), `created_at`, `last_used_at` (con throttle de 5 min en el propio WHERE, igual que `users.last_seen_at` de ADR-020) y `revoked_at` (nullable, `NULL` = viva). **Revocar marca, no borra:** la fila se conserva para que la heurística de "dispositivo conocido" siga sabiendo que ese navegador ya se había visto -- si se borrara, cerrar sesión y volver a entrar desde el mismo equipo generaría una alerta falsa de dispositivo nuevo. Nuevo índice `ix_sessions_user_id_created_at` (§8): la UNIQUE de `jti` cubre el acceso caliente (una búsqueda por token en cada petición protegida) pero no el de listar las sesiones de una persona, que lidera por otra columna.
+>
+> Nueva tabla **`two_factor_recovery_codes`** (§5.14): `user_id` (FK, CASCADE), `code_hash` (scrypt), `created_at`, `used_at` (nullable, `NULL` = sin usar; se marca en vez de borrar para poder informar cuántos quedan). Sin `UNIQUE` sobre `code_hash`: scrypt usa sal, así que una UNIQUE no garantizaría nada. Nuevo índice `ix_two_factor_recovery_codes_user_id`.
+>
+> `users` gana tres columnas (§5.1): `login_alerts_enabled` (`BOOLEAN NOT NULL DEFAULT true` -- nace **activada**, porque una alerta de seguridad que hay que descubrir y encender no protege a nadie), `two_factor_enabled` (`BOOLEAN NOT NULL DEFAULT false`) y `totp_secret` (`TEXT`, nullable). **`totp_secret` se guarda recuperable, no hasheado, y es inevitable:** verificar un código TOTP exige recalcularlo a partir del secreto, así que un hash lo haría inservible. Es la diferencia estructural con los OTP de ADR-010/ADR-011, que sí se hashean porque el código viaja una vez y solo hay que compararlo. La consecuencia (una fuga de `users` permite generar códigos válidos) está registrada en `ADR-022` §Riesgos, sin cifrado en reposo porque la clave de cifrado acabaría en la misma base o en el mismo `.env` mientras no haya gestión de secretos (`CLAUDE.md` §15).
+>
+> `two_factor_enabled` está **separada** de `totp_secret` a propósito: durante el alta existe un secreto todavía sin confirmar (alguien escaneó el QR pero no probó que su app genera códigos correctos). Sin esa separación, escanear y abandonar dejaría la cuenta exigiendo un código que nadie puede producir.
+>
+> Vigesimoprimera a vigesimotercera relación real entre entidades (§6): `sessions.user_id → users.id` y `two_factor_recovery_codes.user_id → users.id`. Verificado con un ciclo `flask db upgrade`/`downgrade`/`upgrade` contra PostgreSQL 16 real sobre `thers_dev` y `thers_test`, más la suite completa (`backend/tests/`, 456 pruebas).
+>
+> **v0.19 — pantalla de Privacidad: cuentas privadas, menciones y filtros de contenido (`ADR-018-private-accounts.md`, `ADR-019-mentions.md`, `ADR-020-content-filters-and-privacy-preferences.md`):** **la revisión con más cambios de esquema desde la creación de `users`** — tres migraciones (`c3e7b1d9a482`, `d5f9c3e1b764`, `e7b2d4f8c916`), dos tablas nuevas y siete columnas. Resuelve "Menciones" (§4.B › Notificaciones) y habilita la primera regla de **autorización de lectura** del modelo: hasta ahora el esquema decía quién era cada uno, nunca qué podía ver.
+>
+> `users` gana seis columnas de preferencias (§5.1): `is_private` (`BOOLEAN NOT NULL DEFAULT false`), `who_can_mention`/`who_can_message` (`VARCHAR(20) NOT NULL DEFAULT 'everyone'`), `hide_offensive_comments` (`BOOLEAN NOT NULL DEFAULT false`), `show_activity_status` (`BOOLEAN NOT NULL DEFAULT true`) y `last_seen_at` (`TIMESTAMPTZ`, nullable). Todos los DEFAULT preservan el comportamiento previo salvo `show_activity_status`, que nace en `true` porque hasta ahora no existía ningún dato de presencia — `last_seen_at` arranca en `NULL` para todo el mundo, así que no expone nada retroactivo.
+>
+> `follows` gana `status` (`VARCHAR(20) NOT NULL DEFAULT 'accepted'`, §5.5): un follow deja de ser un hecho binario y pasa a tener dos estados ('pending'/'accepted'). El DEFAULT hace de **backfill** — todo follow previo se hizo hacia una cuenta pública, así que ya estaba aceptado de hecho. La `UNIQUE (follower_id, followed_id)` **no cambia**, y es justamente lo que garantiza que una misma pareja nunca tenga a la vez una solicitud pendiente y un follow aceptado: son dos estados de la misma fila, no dos filas (`ADR-018` §Opciones consideradas, descarta una tabla `follow_requests` aparte).
+>
+> Nueva tabla **`mentions`** (§5.11): `mentioned_user_id`+`author_id` (FKs a `users`) y `post_id`/`comment_id` (FKs, ambas nullable) con la **tercera `CHECK` del esquema** (`ck_mentions_exactly_one_target`: `(post_id IS NULL) <> (comment_id IS NULL)`), después de `ck_follows_no_self_follow` (ADR-007) y `ck_messages_no_self_message` (ADR-013) — una tabla con dos targets posibles en vez de dos tablas casi idénticas. Dos `UNIQUE` **parciales** (`uq_mentions_user_post`/`uq_mentions_user_comment`, con `WHERE ... IS NOT NULL`): una `UNIQUE` no parcial sobre las tres columnas no impediría nada, porque en PostgreSQL dos filas con `NULL` en una columna del índice no se consideran duplicadas. Más `ix_mentions_post_id`/`ix_mentions_comment_id`. Sin `updated_at` ni `edited_at`: una mención no se edita — si se edita el texto que la contenía, las menciones se **recalculan**.
+>
+> Nueva tabla **`muted_keywords`** (§5.12): `user_id` (FK) + `keyword` (`VARCHAR(100)`, normalizada a minúsculas por la aplicación) con `UNIQUE (user_id, keyword)`. Tabla y no un array/JSON en `users` porque hay que poder preguntar "¿algún término de este usuario aparece en este texto?" **desde el mismo WHERE** que lista posts/comentarios — con un array habría que filtrar en Python después del LIMIT, que es lo que devuelve páginas cortas. Sin índice extra: la UNIQUE ya lidera por `user_id`, el único patrón de acceso real (mismo razonamiento que `likes`, ADR-005 §Índices).
+>
+> Decimoséptima a vigésima relación real entre entidades (§6): `mentions` referencia dos veces a `users` y una a `posts`/`comments`; `muted_keywords` referencia una vez a `users`. Verificado con un ciclo completo `flask db upgrade`/`downgrade`/`upgrade` contra PostgreSQL 16 real sobre `thers_dev` y `thers_test`, más la suite completa de pruebas (`backend/tests/`, 414 pruebas).
+>
+> **v0.18 — edición de contenido propio: `edited_at` en `posts`, `comments` y `messages` (`ADR-017-content-editing.md`):** "Editar / Eliminar publicaciones" (§4.B › Contenido) queda **resuelta por completo** — el borrado ya lo había cubierto `ADR-015`/`ADR-016`, y la edición la cubre este ADR. **Primera migración que modifica tres tablas ya implementadas a la vez** (`a2c6e9b3f571`): una columna `edited_at` (`TIMESTAMPTZ`, nullable, `NULL` = nunca editado) en `posts` (§5.2), `comments` (§5.4) y `messages` (§5.10). Se expone en la API como el booleano `edited`, nunca como el timestamp crudo — mismo criterio que `notifications.read_at`/`messages.read_at` (`API_CONTRACT.md` §5, v0.22). **No se reutilizó `updated_at`** para esto, aunque `posts`/`comments` ya la tenían: nace igual a `created_at` por su `server_default`, así que "editado" habría que inferirlo de `updated_at > created_at` — una condición implícita que cualquier escritura futura sobre la fila volvería falsa (`ADR-017` §Opciones consideradas, opción B descartada). `updated_at` sigue siendo solo auditoría y sigue sin exponerse; `messages` sigue **sin** `updated_at`. Ninguna entidad, FK, `UNIQUE`, `CHECK` ni índice cambia — la columna es puramente aditiva y nullable, así que las filas existentes quedan en `NULL` sin *backfill*. Verificado con `flask db upgrade` contra PostgreSQL 16 real sobre `thers_dev` y `thers_test`, más la suite completa de pruebas (`backend/tests/`, 338 pruebas).
 >
 > **v0.17 — mensajes directos, `messages` (`ADR-013-messages-minimal-model.md`):** "Conversaciones (privadas y grupales), Participantes" + "Mensajes" (§4.B › Mensajería) se resuelve **solo a medias** — pasa a **implementada** (§4.A, §5.10) únicamente la mitad 1:1: mensaje directo entre dos usuarios reales, sin la tabla puente `conversation_participants` que soportaría grupos (sigue sin ratificar). Nueva tabla `messages`: `sender_id`/`recipient_id` (FKs a `users`, ambas `ON DELETE CASCADE`), `content` (texto, sin límite de esquema — validado en la aplicación, máximo 2000 caracteres), `read_at` (`TIMESTAMPTZ`, nullable, `NULL` = no leído, mismo criterio que `notifications.read_at`), sin `updated_at` (mismo criterio que `likes`/`follows`/`notifications`). **Segunda `CHECK` constraint del esquema** (`ck_messages_no_self_message`: `sender_id <> recipient_id`, mismo criterio que `ck_follows_no_self_follow`). Sin `UNIQUE` — dos mensajes entre las mismas personas son eventos legítimos, no un duplicado a impedir (mismo criterio que `notifications`). Dos índices compuestos nuevos, `ix_messages_sender_recipient_created`/`ix_messages_recipient_sender_created` (§8) — el hilo entre A y B se busca con un `OR` sobre ambos sentidos de la relación, que ninguna `UNIQUE` cubre. Decimocuarta y decimoquinta relación real entre entidades (§6): `messages.sender_id → users.id`, `messages.recipient_id → users.id`. Migración `f7a2c9e4d1b8`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 263 pruebas).
 >
@@ -121,16 +159,16 @@ Se distingue entre:
 
 | Entidad | Estado | Justificación |
 |---|---|---|
-| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`/`GET /api/users/me`/`PATCH /api/users/me`) | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password_hash` reales (columnas de perfil ratificadas por `ADR-002`, v0.5); login autentica consultando `users` por `email`; `PATCH /api/users/me` (`ADR-003`, v0.6) actualiza `name`/`username`/`phone`/`country_code`/`birth_date`, con `username_changed_at` sosteniendo el cooldown de `username`; el backend devuelve el objeto público completo (§5) con datos reales |
-| `posts` | **IMPLEMENTADA — v0.8** (ratificada por `ADR-004-posts-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts`) | Primera entidad de la capa objetivo (§4.B, "Contenido") en pasar a implementada. Modelo deliberadamente mínimo: `author_id` (FK a `users`) y `content` (texto, máximo 2000 caracteres) — sin `visibility`, sin medios, sin ningún otro campo que §4.B seguía listando para "Contenido" |
+| `users` | **IMPLEMENTADA** (ratificada; definición formal en §5; en uso real por `register`/`login`/`GET`/`PATCH /api/users/me` y `GET`/`PATCH /api/users/me/privacy`) | Registro persiste `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password_hash` reales (columnas de perfil ratificadas por `ADR-002`, v0.5); login autentica consultando `users` por `email`; `PATCH /api/users/me` (`ADR-003`, v0.6) actualiza `name`/`username`/`phone`/`country_code`/`birth_date`, con `username_changed_at` sosteniendo el cooldown de `username`; el backend devuelve el objeto público completo (§5) con datos reales. **v0.19:** gana seis columnas de preferencias de privacidad (`is_private`, `who_can_mention`, `who_can_message`, `hide_offensive_comments`, `show_activity_status`, `last_seen_at`) — ADR-018/ADR-019/ADR-020. **v0.20:** gana `login_alerts_enabled`, `two_factor_enabled` y `totp_secret` — ADR-021/ADR-022 |
+| `posts` | **IMPLEMENTADA — v0.8** (ratificada por `ADR-004-posts-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET`/`PATCH`/`DELETE /api/posts`) | Primera entidad de la capa objetivo (§4.B, "Contenido") en pasar a implementada. Modelo deliberadamente mínimo: `author_id` (FK a `users`) y `content` (texto, máximo 2000 caracteres) — sin `visibility`, sin medios, sin ningún otro campo que §4.B seguía listando para "Contenido". **v0.18:** gana `edited_at` (nullable) para soportar la edición del texto (`ADR-017`) |
 | `likes` | **IMPLEMENTADA — v0.9** (ratificada por `ADR-005-likes-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/posts/<id>/like`, agregada en `GET`/`POST /api/posts`) | Segunda entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su versión mínima binaria (like/no-like). Modelo: `post_id`+`user_id` (FKs, `UNIQUE` compuesta) — sin tipos de reacción, sin listar quién dio like |
-| `comments` | **IMPLEMENTADA — v0.10** (ratificada por `ADR-006-comments-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts/<id>/comments`, agregada en `GET`/`POST /api/posts`) | Tercera entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su mitad plana. Modelo: `post_id`+`author_id` (FKs) y `content` (texto, máximo 1000 caracteres) — sin `parent_comment_id`, sin hilos de respuestas |
-| `follows` | **IMPLEMENTADA — v0.11** (ratificada por `ADR-007-follows-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/users/<id>/follow`, agregada en `GET`/`PATCH /api/users/me` y en `GET`/`POST /api/posts`) | Cuarta entidad de la capa objetivo (§4.B, "Relaciones sociales") en pasar a implementada. Modelo: `follower_id`+`followed_id` (FKs, `UNIQUE` compuesta, primera `CHECK` del esquema) — sin listar seguidores/seguidos, sin personalizar el feed |
+| `comments` | **IMPLEMENTADA — v0.10** (ratificada por `ADR-006-comments-minimal-model.md`; definición formal en §5; en uso real por `POST`/`GET /api/posts/<id>/comments`, `PATCH`/`DELETE /api/comments/<id>`, agregada en `GET`/`POST /api/posts`) | Tercera entidad de la capa objetivo (§4.B, "Interacciones") en pasar a implementada, solo en su mitad plana. Modelo: `post_id`+`author_id` (FKs) y `content` (texto, máximo 1000 caracteres) — sin `parent_comment_id`, sin hilos de respuestas. **v0.18:** gana `edited_at` (nullable), igual que `posts` (`ADR-017`) |
+| `follows` | **IMPLEMENTADA — v0.11** (ratificada por `ADR-007-follows-minimal-model.md`; definición formal en §5; en uso real por `POST`/`DELETE /api/users/<id>/follow`, `GET /api/follow-requests` y los dos endpoints de respuesta, agregada en `GET`/`PATCH /api/users/me` y en `GET`/`POST /api/posts`) | Cuarta entidad de la capa objetivo (§4.B, "Relaciones sociales") en pasar a implementada. Modelo: `follower_id`+`followed_id` (FKs, `UNIQUE` compuesta, primera `CHECK` del esquema) — sin listar seguidores/seguidos, sin personalizar el feed. **v0.19:** gana `status` ('pending'/'accepted') para soportar cuentas privadas con aprobación (`ADR-018`); el feed sigue sin personalizarse, pero ahora sí **filtra** por visibilidad |
 | `notifications` | **IMPLEMENTADA — v0.12** (ratificada por `ADR-008-notifications-minimal-model.md`; definición formal en §5; en uso real por `GET /api/notifications`/`PATCH /api/notifications/<id>/read`, generada como efecto secundario de `POST /api/posts/<id>/like`, `POST /api/posts/<id>/comments` y `POST /api/users/<id>/follow`) | Quinta entidad de la capa objetivo (§4.B, "Notificaciones") en pasar a implementada, solo para los tipos `like`/`comment`/`follow`. Modelo: `recipient_id`+`actor_id` (FKs a `users`), `type` (discriminador), `post_id` (FK a `posts`, nullable), `read_at` (nullable) — sin respuestas/menciones/mensajes, sin push/email, sin preferencias configurables |
 | `password_reset_tokens` | **IMPLEMENTADA — v0.14** (reescrita por `ADR-010-password-reset-otp-flow.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/forgot-password`/`POST /api/verify-reset-code`/`POST /api/reset-password`) | Sexta entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `verified_at` (nullable), `reset_authorization_hash`/`_expires_at` (nullable), `used_at` (nullable) — código de un solo uso (10 min), autorización temporal de propósito específico tras verificarlo (10 min), máximo 5 intentos, a lo sumo una solicitud activa por usuario (índice único parcial) |
 | `email_verification_tokens` | **IMPLEMENTADA — v0.15** (reescrita por `ADR-011-mandatory-email-verification.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/register`/`POST /api/verify-registration-code`/`POST /api/resend-registration-code`) | Séptima entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `used_at` (nullable) — código de un solo uso (10 min), máximo 5 intentos, a lo sumo un código activo por usuario (índice único parcial); sin columnas de autorización temporal, a diferencia de `password_reset_tokens` — verificar el código ya es la acción final |
 | `user_identities` | **IMPLEMENTADA — v0.16** (ratificada por `ADR-012-google-sign-in.md`; definición formal en §5.9; en uso real por `POST /api/auth/google`) | Octava entidad de la capa objetivo (§4.B, "Autenticación y cuenta", candidata `oauth_accounts`). Modelo: `user_id` (FK a `users`), `provider` (string libre, `"google"` hoy), `provider_subject` (el claim `sub`, único junto con `provider`) — un usuario puede tener varias identidades vinculadas a la vez (account linking); preparada para Apple/Microsoft sin otra migración de `users` |
-| `messages` | **IMPLEMENTADA — v0.17** (ratificada por `ADR-013-messages-minimal-model.md`; definición formal en §5.10; en uso real por `POST`/`GET /api/users/<id>/messages`, `GET /api/conversations`) | Novena entidad de la capa objetivo (§4.B, "Mensajería") en pasar a implementada, solo su mitad 1:1 — sin `conversation_participants`, sin grupos. Modelo: `sender_id`+`recipient_id` (FKs a `users`), `content` (texto), `read_at` (nullable) — sin fotos/archivos adjuntos, sin tiempo real (polling desde el Frontend) |
+| `messages` | **IMPLEMENTADA — v0.17** (ratificada por `ADR-013-messages-minimal-model.md`; definición formal en §5.10; en uso real por `POST`/`GET /api/users/<id>/messages`, `PATCH`/`DELETE /api/messages/<id>`, `GET /api/conversations`) | Novena entidad de la capa objetivo (§4.B, "Mensajería") en pasar a implementada, solo su mitad 1:1 — sin `conversation_participants`, sin grupos. Modelo: `sender_id`+`recipient_id` (FKs a `users`), `content` (texto), `read_at` (nullable) — sin fotos/archivos adjuntos, sin tiempo real (polling desde el Frontend). **v0.18:** gana `edited_at` (nullable), igual que `posts`/`comments` (`ADR-017`) |
 
 **Ninguna otra entidad está en esta capa.** Todo lo demás pertenece a la capa objetivo (§4.B) o a pendientes (§4.C).
 
@@ -183,7 +221,7 @@ Estados usados en esta capa:
 |---|---|---|---|
 | Posts (solo texto) | Entidad `posts` (`author_id` → `users`, ver §6) | **IMPLEMENTADA — v0.8** (`ADR-004`, §4.A/§5) | — |
 | Fotos, Videos, Reels | Entidad `media` ligada a `posts` (con tipo) **o** tablas separadas | PENDIENTE DE DECISIÓN | Tabla de medios con discriminador vs tablas por tipo; "reel" ¿es tipo de video o entidad propia? |
-| Editar / Eliminar publicaciones | Comportamientos + columnas (`updated_at`, borrado lógico) sobre `posts` | PENDIENTE DE DECISIÓN | Política de borrado lógico vs físico |
+| Editar / Eliminar publicaciones | ~~Comportamientos + columnas (`updated_at`, borrado lógico) sobre `posts`~~ — **resuelta**: eliminar por *hard delete* sin borrado lógico (`ADR-015`, v0.17 de `API_CONTRACT.md`); editar in place con `posts.edited_at` (`ADR-017`, §5.2), no con `updated_at` | **IMPLEMENTADA — v0.18** | — (la política fue *hard delete*; el borrado lógico queda descartado para esta versión, `ADR-015` §Opciones consideradas) |
 | Compartir publicaciones | Entidad de *repost* **vs** evento **vs** compartir externo | PENDIENTE DE DECISIÓN | La semántica de "compartir" (interno/externo) no está definida |
 | Visibilidad de publicaciones | Columna `visibility` (enum) en `posts` | OBJETIVO | Estrategia de enum pendiente (§7) |
 
@@ -193,7 +231,7 @@ Estados usados en esta capa:
 | Likes / reacciones | ~~Entidad `reactions` (N:N usuario↔post, con tipo) — colapsa "like" y "reacción"~~ — **resuelto en v0.9 para el caso binario** (`ADR-005-likes-minimal-model.md`, tabla `likes`, ver §4.A/§5.3); la forma general "con tipo" (❤️/👍/😂/etc.) sigue sin ratificar | OBJETIVO (tipos de reacción) / IMPLEMENTADA (binario) | Modelado de tipos de reacción sin decidir |
 | Comentarios + Respuestas a comentarios | ~~Entidad única `comments`~~ — **la mitad plana resuelta en v0.10** (`ADR-006-comments-minimal-model.md`, ver §4.A/§5.4); auto-referencial (respuesta = comentario con `parent_comment_id`) sigue sin ratificar | OBJETIVO (respuestas) / IMPLEMENTADA (comentario plano) | Modelado de `parent_comment_id`/hilos sin decidir |
 | Guardar publicaciones | Tabla puente `saves` (usuario↔post) | OBJETIVO | — |
-| Menciones | Tabla puente `mentions` **o** parseo en render sin persistir | PENDIENTE DE DECISIÓN | Persistir vs derivar en lectura, no decidido |
+| Menciones | ~~Entidad `mentions`~~ — **resuelta en v0.19**: tabla `mentions` con dos targets posibles (post o comentario) y `users.who_can_mention` como control de permiso (`ADR-019-mentions.md`, §5.11) | **IMPLEMENTADA — v0.19** | — |
 | Hashtags | Entidad `hashtags` + puente `post_hashtags` (N:N) | OBJETIVO | Modelado sin decidir |
 | Compartir | = ver Contenido › Compartir publicaciones | PENDIENTE DE DECISIÓN | Misma decisión abierta |
 
@@ -262,6 +300,15 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 | `email_verified` | `BOOLEAN`, `DEFAULT false` | No | **v0.13 (`ADR-009-password-reset-and-email-verification.md`).** `false` en toda cuenta hasta completar la verificación (reescrito a OTP en `ADR-011`, v0.15). **v0.16 (`ADR-012`):** una cuenta creada vía Google nace en `true` directamente (la garantía de Google reemplaza al OTP); también puede pasar de `false` a `true` al vincular Google con una cuenta tradicional nunca verificada (account linking, `ADR-012` §Decisión) |
 | `profile_completed` | `BOOLEAN`, `DEFAULT true` | No | **v0.16 (`ADR-012-google-sign-in.md`).** `true` para toda cuenta existente antes de esta migración y para todo registro tradicional (siempre exige `phone`/`country_code`/`birth_date`); una cuenta nueva vía Google nace en `false` hasta completar esos tres campos vía `PATCH /api/users/me`. Nunca vuelve a `false` una vez en `true` |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Convención de auditoría (§7); estándar para toda entidad |
+| `is_private` | `BOOLEAN`, `DEFAULT false` | No | **v0.19 (`ADR-018`).** `true` = solo ven tu contenido quienes tengan un follow en estado `'accepted'` (§5.5), más vos mismo. `false` preserva el comportamiento histórico — ninguna cuenta se vuelve privada por efecto de la migración. Es la única columna de `users` que participa en una regla de **autorización de lectura** |
+| `who_can_mention` | `VARCHAR(20)`, `DEFAULT 'everyone'` | No | **v0.19 (`ADR-019`).** `'everyone'`/`'followers'`/`'nobody'`. Quién puede mencionarte con `@username`. `'followers'` significa "solo quienes **me** siguen". Discriminador validado en la aplicación (`domain/privacy/audience.py`), no `ENUM` de PostgreSQL — mismo criterio que `notifications.type` |
+| `who_can_message` | `VARCHAR(20)`, `DEFAULT 'everyone'` | No | **v0.19 (`ADR-020`).** Mismo vocabulario que `who_can_mention`, deliberadamente compartido: significan lo mismo, así que duplicarlo invitaría a que se desincronizaran. `'everyone'` es el comportamiento que `POST /api/users/<id>/messages` ya tenía desde `ADR-013` |
+| `hide_offensive_comments` | `BOOLEAN`, `DEFAULT false` | No | **v0.19 (`ADR-020`).** Filtra los comentarios de **tus** publicaciones contra la lista de términos del sistema (`domain/moderation/offensive_words.py`, que vive en el repositorio y **no** en la base de datos: es configuración de producto revisable, no dato de usuario). `false` por defecto — nadie empieza a ver su hilo filtrado sin pedirlo |
+| `show_activity_status` | `BOOLEAN`, `DEFAULT true` | No | **v0.19 (`ADR-020`).** Única preferencia de esta revisión que nace **abierta**, y es seguro: hasta ahora no existía ningún dato de presencia, así que activarla no expone nada retroactivo |
+| `last_seen_at` | `TIMESTAMPTZ` | **Sí** | **v0.19 (`ADR-020`).** `NULL` = nunca se registró actividad. La escribe un hook `after_request` en cualquier petición autenticada que resuelve bien, con un **throttle de 5 minutos impuesto en el propio `WHERE` del `UPDATE`** — no en memoria del proceso, para que funcione igual con varios workers (a diferencia del indicador de "escribiendo", `ADR-014`, que es efímero y acepta esa limitación). Nunca cruza la frontera HTTP hacia terceros si `show_activity_status` es `false` |
+| `login_alerts_enabled` | `BOOLEAN`, `DEFAULT true` | No | **v0.20 (`ADR-021`).** Avisar por correo de un acceso desde un dispositivo no visto antes. Nace **activada**: una alerta de seguridad que hay que descubrir y encender no protege a nadie. Sin `RESEND_API_KEY` el envío es un no-op registrado por log, así que el default no rompe el desarrollo local |
+| `two_factor_enabled` | `BOOLEAN`, `DEFAULT false` | No | **v0.20 (`ADR-022`).** Separada de `totp_secret` a propósito: durante el alta existe un secreto todavía **sin confirmar**. Sin esa separación, escanear el QR y abandonar dejaría la cuenta exigiendo un código que nadie puede generar |
+| `totp_secret` | `TEXT` | **Sí** | **v0.20 (`ADR-022`).** Secreto compartido TOTP en base32. **Se guarda recuperable, NO hasheado**, y es inevitable: verificar un código TOTP exige recalcularlo a partir del secreto. Es la diferencia estructural con `PasswordResetToken.code_hash` (§5.7) y `EmailVerificationToken.code_hash` (§5.8), que sí se hashean porque el código viaja una vez y solo hay que compararlo. Sin cifrado en reposo — la clave acabaría en la misma base o el mismo `.env` mientras no haya gestión de secretos (`ADR-022` §Riesgos) |
 | `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7). Un trigger de PostgreSQL (`set_updated_at`/`trg_users_updated_at`, ver migración) la actualiza en cada `UPDATE` — funciona igual vía ORM o SQL directo, no depende de que el código de aplicación la toque |
 
 **Clave primaria (PK).** `id`.
@@ -297,7 +344,8 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 | `author_id` | **UUID**, FK → `users.id` | No | Autor del post. Siempre resuelto desde `get_jwt_identity()` en el backend, nunca aceptado del body (`ADR-004` §Contrato, mismo principio anti mass-assignment que `PATCH /api/users/me`) |
 | `content` | `TEXT` | No | Sin límite de longitud a nivel de esquema — la validación de negocio (máximo 2000 caracteres, placeholder revisable) vive en `domain/posts/validators.py`, no en el tipo de columna |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Define el orden del feed (`GET /api/posts`, `ORDER BY created_at DESC`) |
-| `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7), mismo trigger `set_updated_at()` reutilizado de `users` — sin uso funcional todavía porque no hay edición de posts (`ADR-004` §No objetivos) |
+| `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7), mismo trigger `set_updated_at()` reutilizado de `users`. **Sigue sin uso funcional y sin exponerse en la API** incluso desde que existe la edición (v0.18): la señal de "fue editado" es `edited_at`, no esta columna (`ADR-017` §Opciones consideradas) |
+| `edited_at` | `TIMESTAMPTZ` | **Sí** | **v0.18 (`ADR-017`).** `NULL` = nunca editado. La fija `PATCH /api/posts/<id>` con `now()` de PostgreSQL en cada edición (sin `coalesce`, a diferencia de `read_at`: refleja la **última** edición, no la primera). Se expone en la API como el booleano `edited`, nunca como el timestamp crudo (`API_CONTRACT.md` §5) — mismo criterio que `notifications.read_at` |
 
 **Clave primaria (PK).** `id`.
 
@@ -359,7 +407,8 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 | `author_id` | **UUID**, FK → `users.id` | No | Autor del comentario. Siempre resuelto desde `get_jwt_identity()`, nunca aceptado del body (mismo principio anti mass-assignment que `posts.author_id`) |
 | `content` | `TEXT` | No | Sin límite de longitud a nivel de esquema — la validación de negocio (máximo 1000 caracteres, placeholder revisable, más corto que el de `posts`) vive en `domain/comments/validators.py` |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Define el orden del hilo (cronológico ascendente, a diferencia del feed) |
-| `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7), mismo trigger `set_updated_at()` reutilizado de `users`/`posts` — sin uso funcional todavía porque no hay edición de comentarios (`ADR-006` §No objetivos) |
+| `updated_at` | `TIMESTAMPTZ`, `DEFAULT now()`, mantenida por trigger | No | Convención de auditoría (§7), mismo trigger `set_updated_at()` reutilizado de `users`/`posts`. **Sigue sin uso funcional y sin exponerse**, igual que `posts.updated_at` (§5.2) — la señal de edición es `edited_at` |
+| `edited_at` | `TIMESTAMPTZ` | **Sí** | **v0.18 (`ADR-017`).** `NULL` = nunca editado. La fija `PATCH /api/comments/<id>`; se expone como el booleano `edited` — mismo criterio y misma semántica que `posts.edited_at` (§5.2) |
 
 **Clave primaria (PK).** `id`.
 
@@ -390,7 +439,13 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 | `followed_id` | **UUID**, FK → `users.id` | No | A quién se sigue. Viene de la URL (`user_id`), nunca del body |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Auditoría — sin uso funcional todavía (no hay orden ni listado de follows en esta versión) |
 
-**Sin `updated_at`.** Igual que `likes` (`ADR-005` §Modelo de datos): una relación de "seguir" se crea o se borra, nunca se edita in place.
+**`status`** (`VARCHAR(20) NOT NULL DEFAULT 'accepted'`) — **v0.19 (`ADR-018-private-accounts.md`).** Dos valores: `'accepted'` (relación efectiva) y `'pending'` (solicitud sin responder, solo alcanzable hacia una cuenta con `is_private = true`). El `server_default 'accepted'` hace de **backfill**: todo follow previo a esta migración se hizo hacia una cuenta pública, así que ya estaba aceptado de hecho.
+
+La `UNIQUE (follower_id, followed_id)` **no se amplía** con `status`, y es deliberado: así una misma pareja nunca puede tener a la vez una solicitud pendiente y un follow aceptado — son dos estados de la misma fila, no dos filas. Es también el motivo por el que se descartó una tabla `follow_requests` aparte (`ADR-018` §Opciones consideradas): habría que mantener esa invariante a mano, sin que el esquema ayude.
+
+Todas las lecturas que significan "relación efectiva" (`is_following`, `followers_count`, `following_count`, el filtro de visibilidad del feed) cuentan **solo** `'accepted'`: un pendiente no es un seguidor, porque todavía no tiene acceso a nada.
+
+**Sin `updated_at`.** Igual que `likes` (`ADR-005` §Modelo de datos): una relación de "seguir" se crea o se borra, y desde v0.19 también cambia de `status` — ese cambio tiene su propia semántica ("fue aprobada"), que un timestamp genérico de última escritura no capturaría.
 
 **Clave primaria (PK).** `id`.
 
@@ -564,8 +619,9 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 | `content` | **TEXT** | No | Sin límite de longitud a nivel de esquema — validado en la aplicación (máximo 2000 caracteres, mismo criterio que `posts`) |
 | `read_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = no leído. Se expone en la API como booleano (`read`), nunca como el timestamp crudo — mismo criterio que `notifications.read_at` |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Define el orden cronológico del hilo |
+| `edited_at` | `TIMESTAMPTZ` | **Sí** | **v0.18 (`ADR-017`).** `NULL` = nunca editado. La fija `PATCH /api/messages/<id>`; se expone como el booleano `edited`, nunca como timestamp crudo — mismo criterio que `read_at`. Editar **no** toca `read_at`: un mensaje ya leído no vuelve a no leído porque se corrigió una palabra |
 
-**Sin `updated_at`.** Igual que `likes`/`follows`/`notifications`: un mensaje no se edita in place más allá de marcarse como leído.
+**Sigue sin `updated_at`** incluso desde que un mensaje se puede editar (v0.18), a diferencia de `posts`/`comments`: no hace falta un timestamp de "última escritura" genérico cuando las dos escrituras posibles sobre un mensaje (marcarse leído, editarse) ya tienen cada una su propia columna (`read_at`, `edited_at`).
 
 **Clave primaria (PK).** `id`.
 
@@ -580,7 +636,200 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 
 **Índices.** `ix_messages_sender_recipient_created` (`sender_id`, `recipient_id`, `created_at`) e `ix_messages_recipient_sender_created` (`recipient_id`, `sender_id`, `created_at`) — el hilo entre dos usuarios se busca con un `OR` sobre ambos sentidos de la relación, que ninguna columna única cubre; ambos índices permiten que PostgreSQL resuelva ese `OR` sin escanear la tabla completa (`ADR-013` §Índices).
 
-**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-013` §Decisiones pendientes): conversaciones grupales (`conversation_participants`), fotos/archivos adjuntos, actualización en tiempo real (WebSockets/Flask-SocketIO en vez de polling), borrado de mensajes/conversaciones, confirmación de lectura visible para el remitente ("visto").
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-013` §Decisiones pendientes): conversaciones grupales (`conversation_participants`), fotos/archivos adjuntos, actualización en tiempo real (WebSockets/Flask-SocketIO en vez de polling), confirmación de lectura visible para el remitente ("visto"). **Ya resueltos:** borrado de mensajes (`ADR-014`, *hard delete*) y edición de mensajes (`ADR-017`, v0.18, vía `edited_at`); el **historial de versiones** de una edición queda como pendiente nuevo (`ADR-017` §Decisiones pendientes) — exigiría una tabla propia, no una columna.
+
+---
+
+### 5.11 `mentions`
+
+> Undécima entidad con definición formal (capa 4.A), ratificada por `ADR-019-mentions.md` — resuelve la candidata "Menciones" (§4.B › Notificaciones).
+
+**Propósito.** Registrar que una persona fue mencionada (`@username`) en una publicación **o** en un comentario.
+
+**Por qué se persiste en vez de derivarse del texto.** El permiso (`users.who_can_mention`) se evalúa **una vez, al escribir**. Así una mención ya aceptada sigue siendo válida si después la persona cierra sus menciones, y un `@username` que nunca tuvo permiso no se convierte en mención retroactivamente al cambiar la preferencia. Derivarla en cada lectura haría que el significado de un texto ya publicado cambiara con el tiempo (`ADR-019` §Opciones consideradas).
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` — mismo patrón que el resto |
+| `mentioned_user_id` | **UUID**, FK → `users.id` | No | A quién se menciona |
+| `author_id` | **UUID**, FK → `users.id` | No | Quién la escribió. Redundante con `posts.author_id`/`comments.author_id`, pero guardarlo evita un JOIN en cada lectura y deja la fila auto-explicativa |
+| `post_id` | **UUID**, FK → `posts.id` | **Sí** | Exactamente una de estas dos, impuesto por la `CHECK` de abajo |
+| `comment_id` | **UUID**, FK → `comments.id` | **Sí** | — |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | — |
+
+**Sin `updated_at` ni `edited_at`.** Una mención no se edita. Si se edita el texto que la contenía (`ADR-017`), las menciones de esa fila se **recalculan**: se borran las que ya no están y se crean las nuevas.
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** Las cuatro con `ON DELETE CASCADE`: borrar el post, el comentario o cualquiera de los dos usuarios se lleva la mención con él.
+
+**Relaciones.** `users (1) ←→ (N) mentions` dos veces (como mencionado y como autor); `posts (1) ←→ (N) mentions` y `comments (1) ←→ (N) mentions`, de las cuales cada fila usa exactamente una.
+
+**Constraints relevantes**
+- `mentioned_user_id`/`author_id` **NOT NULL**.
+- **`ck_mentions_exactly_one_target`** — **tercera `CHECK` del esquema** (`(post_id IS NULL) <> (comment_id IS NULL)`), después de `ck_follows_no_self_follow` (§5.5) y `ck_messages_no_self_message` (§5.10). Es lo que permite usar **una** tabla con dos targets posibles en vez de dos tablas casi idénticas (`ADR-019` §Opciones consideradas).
+
+**Índices.** `uq_mentions_user_post` (`mentioned_user_id`, `post_id`) y `uq_mentions_user_comment` (`mentioned_user_id`, `comment_id`), las dos **UNIQUE parciales** (`WHERE ... IS NOT NULL`): una `UNIQUE` no parcial sobre las tres columnas no impediría nada, porque en PostgreSQL dos filas con `NULL` en una columna del índice no se consideran duplicadas. Más `ix_mentions_post_id` e `ix_mentions_comment_id`, para resolver "¿a quién menciona esto?" al renderizar un post o un hilo.
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-019` §Decisiones pendientes): autocompletado de `@` (necesita un endpoint de búsqueda de usuarios que no existe), quitarse una mención ajena, listar las publicaciones donde me mencionaron, menciones en mensajes directos, y añadir `comment_id` a `notifications` para que una mención en un comentario apunte al comentario en vez de a su post (heredada de `ADR-016` §Riesgos).
+
+---
+
+### 5.12 `muted_keywords`
+
+> Duodécima entidad con definición formal (capa 4.A), ratificada por `ADR-020-content-filters-and-privacy-preferences.md` — resuelve "Filtros de palabras clave personalizadas" de REF-SET-02.
+
+**Propósito.** Términos que una persona no quiere ver, aplicados en el servidor a cada lectura de publicaciones y comentarios.
+
+**Por qué es una tabla y no un array/JSON en `users`.** Hay que poder preguntar "¿algún término de este usuario aparece en este texto?" **desde el mismo `WHERE`** que lista posts/comentarios. Con un array habría que traer la lista a Python y filtrar después del `LIMIT`, que es exactamente lo que devuelve páginas cortas (mismo razonamiento que el filtro de visibilidad de `ADR-018`).
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` |
+| `user_id` | **UUID**, FK → `users.id` | No | De quién es el término. Nunca se acepta del body: sale de `get_jwt_identity()` |
+| `keyword` | `VARCHAR(100)` | No | Normalizado a minúsculas y sin espacios alrededor por la aplicación (`domain/moderation/keyword_matching.py`) **antes** de insertar, con la misma función que después lo busca — si fueran dos criterios distintos se podría guardar un término que nunca llega a encontrarse. Acotado en el esquema, a diferencia de `content` (`TEXT`): un keyword no es texto libre. El límite real de negocio (60) vive en la aplicación |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Define el orden de la lista (más reciente primero) |
+
+**Sin `updated_at`.** Mismo criterio que `likes`/`follows`: un término se agrega o se quita, nunca se edita in place.
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `user_id → users.id`, `ON DELETE CASCADE`.
+
+**Relaciones.** `users (1) ←→ (N) muted_keywords`.
+
+**Constraints relevantes**
+- `user_id`/`keyword` **NOT NULL**.
+- **`uq_muted_keywords_user_keyword`** (`user_id`, `keyword`) — impide duplicados y hace que agregar un término ya existente sea idempotente (mismo criterio que `likes`/`follows`). Como `keyword` se guarda ya normalizado, la UNIQUE distingue términos realmente distintos y no variaciones de mayúsculas.
+
+**Índices.** Ninguno adicional: la `UNIQUE (user_id, keyword)` ya lidera por `user_id`, que es el único patrón de acceso real ("los términos de este usuario") — mismo razonamiento que `likes` (§5.3), que tampoco necesitó uno aparte.
+
+**Límite de cardinalidad.** Máximo **100** términos por usuario, impuesto en la aplicación (no en el esquema). Existe porque cada término se traduce a un `ILIKE` en las consultas de lectura: una lista sin tope degradaría el feed de quien la tenga (`ADR-020` §Riesgos).
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-020` §Decisiones pendientes): normalización de acentos/Unicode al comparar (hoy "mañana" y "manana" son términos distintos a propósito), coincidencia por palabra completa en vez de subcadena, y filtrar `GET /api/notifications` por estos términos.
+
+---
+
+### 5.13 `sessions`
+
+> Decimotercera entidad con definición formal (capa 4.A), ratificada por `ADR-021-session-registry.md`. **Es la entidad con más alcance del modelo:** no agrega un hecho al margen, redefine qué significa que un JWT sea válido.
+
+**Propósito.** Representar cada token de sesión emitido, para poder listarlo y revocarlo.
+
+**Por qué existe.** Hasta ADR-021 el JWT era puramente *stateless*: firmado, autocontenido, válido mientras no expirara y **sin ninguna operación capaz de invalidarlo**. Eso no era un descuido — es la propiedad por la que se elige un JWT — pero hacía que "cerrar sesión en ese dispositivo" fuera literalmente imposible de implementar. Esta tabla es el precio asumido para que ese control funcione de verdad (`ADR-021` §Opciones consideradas, que descarta una lista negra en memoria por perderse al reiniciar y no compartirse entre workers).
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()`. Es lo que el cliente usa para revocar -- **no** el `jti` |
+| `user_id` | **UUID**, FK → `users.id` | No | De quién es la sesión |
+| `jti` | `VARCHAR(36)` | No | El identificador que flask_jwt_extended pone en cada JWT (un UUID v4 en texto). `VARCHAR` y no UUID nativo: es un valor que produce la librería, no el esquema, y tratarlo como texto evita depender de que su formato siga siendo exactamente un UUID. **Nunca cruza la frontera HTTP** (`API_CONTRACT.md` §4.12) |
+| `user_agent` | `TEXT` | **Sí** | Lo que el cliente dijo de sí mismo, **crudo y sin parsear**: el servidor no tiene una base de datos de user agents y adivinar produciría etiquetas equivocadas *persistidas*. El resumen vive en el Frontend. Nullable porque un cliente no está obligado a mandarlo |
+| `ip_address` | `VARCHAR(45)` | **Sí** | 45 = longitud máxima de una IPv6 en texto (incluido el formato mapeado a IPv4). Sale de `X-Forwarded-For` cuando existe, que el cliente puede falsificar -- **solo se muestra, nunca autoriza** |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Cuándo se inició; define el orden de la lista |
+| `last_used_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Con throttle de 5 min impuesto en el propio WHERE, igual que `users.last_seen_at` (§5.1, ADR-020) -- sin él, el polling del chat (4 s, ADR-014) escribiría en cada petición. Es por eso **aproximado** |
+| `revoked_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = sesión viva |
+
+**Sin `updated_at`.** Mismo criterio que `likes`/`follows`: las dos escrituras posibles (`last_used_at`, `revoked_at`) tienen cada una su columna con su propia semántica.
+
+**Revocar marca, no borra.** La fila se conserva para que la heurística de "dispositivo conocido" de las alertas siga sabiendo que ese `user_agent` ya se había visto: si se borrara, cerrar sesión y volver a entrar desde el mismo navegador generaría una alerta falsa. Las revocadas **no se listan** -- conservarlas es para el servidor.
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `user_id → users.id`, `ON DELETE CASCADE`.
+
+**Relaciones.** `users (1) ←→ (N) sessions`.
+
+**Constraints relevantes**
+- `user_id`/`jti` **NOT NULL**.
+- **`uq_sessions_jti`** — un `jti` identifica una sola sesión. Es además el índice que sostiene la consulta más caliente del backend.
+
+**Índices.** `uq_sessions_jti` (acceso por token, en cada petición protegida) e `ix_sessions_user_id_created_at` (listar las de una persona, que lidera por otra columna).
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-021` §Decisiones pendientes): purga periódica de las filas revocadas (crecen sin límite y no hay proceso programado, `CLAUDE.md` §15), *refresh tokens* y rotación, geolocalización aproximada de la IP, alertas por IP nueva además de por dispositivo nuevo, y límite de sesiones simultáneas.
+
+---
+
+### 5.14 `two_factor_recovery_codes`
+
+> Decimocuarta entidad con definición formal (capa 4.A), ratificada por `ADR-022-two-factor-authentication.md`.
+
+**Propósito.** Códigos de un solo uso para entrar cuando se pierde el dispositivo con la app autenticadora. Sin ellos, perder el teléfono significaría perder la cuenta.
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` |
+| `user_id` | **UUID**, FK → `users.id` | No | De quién es el código |
+| `code_hash` | `TEXT` | No | Hash **scrypt** del código, nunca el valor crudo -- mismo criterio que `PasswordResetToken.code_hash` (§5.7) y `EmailVerificationToken.code_hash` (§5.8). Acá **sí** se puede hashear, a diferencia de `users.totp_secret` (§5.1): el código viaja una vez y solo hay que compararlo, no reconstruirlo |
+| `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | — |
+| `used_at` | `TIMESTAMPTZ` | **Sí** | `NULL` = sin usar. Se marca en vez de borrar la fila, para poder informar cuántos quedan sin perder el rastro de cuántos se gastaron |
+
+**Sin `updated_at`.** Mismo criterio que `password_reset_tokens` (§5.7): la fila avanza de etapa (creada → usada) mediante una columna propia.
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** `user_id → users.id`, `ON DELETE CASCADE`. Se borran además explícitamente al desactivar el 2FA: dejarlos permitiría entrar con un código de recuperación de un 2FA que ya no existe.
+
+**Relaciones.** `users (1) ←→ (N) two_factor_recovery_codes`.
+
+**Constraints relevantes**
+- `user_id`/`code_hash` **NOT NULL**.
+- **Sin `UNIQUE` sobre `code_hash`.** scrypt usa sal, así que dos códigos iguales producirían hashes distintos: una UNIQUE no garantizaría nada y tampoco hay motivo para impedirlo.
+
+**Índices.** `ix_two_factor_recovery_codes_user_id` -- buscar los códigos sin usar de una persona al intentar entrar con uno. Hay que compararlos de a uno (scrypt usa sal, no se puede buscar por hash), pero son diez como máximo.
+
+**Propiedades de los códigos** (en la aplicación, no en el esquema): diez por cuenta, diez caracteres de un alfabeto base32 sin ambigüedades visuales (sin `I`/`L`/`O`/`0`/`1`), ~48 bits de entropía. Mucho más que un OTP de 6 dígitos porque **no expiran** -- viven hasta que se usan, así que no pueden depender de una ventana de tiempo corta para ser seguros. Se comparan normalizados (mayúsculas, sin guion) para que escribirlos sin el guion no deje a nadie fuera de su cuenta.
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-022` §Decisiones pendientes): ***rate limiting* de `POST /api/2fa/verify`** -- el más urgente, porque un TOTP son 10⁶ combinaciones y sin límite de intentos la fuerza bruta es concebible; cifrado de `users.totp_secret` en reposo; WebAuthn/llaves de seguridad; "recordar este dispositivo"; y 2FA obligatorio por rol (no existe el concepto de rol, §4.B).
+
+---
+
+### 5.15 `rate_limit_buckets`
+
+> Decimoquinta entidad con definición formal (capa 4.A), ratificada por `ADR-023-rate-limiting.md`. **Es la única que no modela un hecho del producto** sino una defensa operativa: no aparece en ninguna respuesta de la API y su contenido es descartable.
+
+**Propósito.** Contar intentos por (qué se limita, quién lo intenta) dentro de una ventana de tiempo, para poder rechazar los que se pasan del límite.
+
+**Por qué existe.** Ningún endpoint limitaba intentos. Con `ADR-022` en producción eso dejó de ser una buena práctica ausente y pasó a ser explotable: `POST /api/2fa/verify` acepta un código de 10⁶ combinaciones en una ventana de 30 s, así que sin límite el segundo factor no protege nada.
+
+**Por qué en PostgreSQL y no en memoria.** Un contador en memoria del proceso se pierde al reiniciar y no se comparte entre *workers*: con dos *workers* el límite real sería el doble del configurado. Es el mismo criterio por el que `ADR-021` descartó una lista negra en memoria para revocar tokens, y la razón por la que el indicador de "escribiendo" de `ADR-014` sí podía permitírselo (es efímero y cosmético; esto es un control de seguridad).
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` |
+| `scope` | `VARCHAR(40)` | No | Qué se limita (`'login'`, `'2fa_verify'`, `'register'`...). Los valores viven en `domain/rate_limiting/policy.py`, no en el esquema -- agregar un scope nuevo no debe exigir una migración (mismo criterio que `Notification.type`, ADR-008, y `Follow.status`, ADR-018) |
+| `identity_hash` | `CHAR(64)` | No | **SHA-256 de la identidad** (una IP, un email, un `user_id`), en hexadecimal: siempre 64 caracteres, de ahí el CHAR fijo. Se hashea porque esta tabla solo necesita **contar**, nunca saber de quién. SHA-256 y no scrypt (a diferencia de `code_hash`, §5.7/§5.8): acá no se protege un secreto de baja entropía contra fuerza bruta offline, solo se evita guardar el dato en claro -- y corre en el camino caliente de cada intento de login |
+| `window_started_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Inicio de la ventana en curso. La fila se **reutiliza** (se reinicia la ventana) en vez de crearse una nueva por período |
+| `attempts` | `INTEGER`, `DEFAULT 0` | No | Intentos dentro de la ventana en curso |
+
+**Sin `created_at`/`updated_at`.** `window_started_at` ya es el timestamp que importa, y la fila no tiene historia: se reinicia, no se versiona.
+
+**Clave primaria (PK).** `id`.
+
+**Claves foráneas (FK).** **Ninguna**, y es deliberado: la identidad puede ser una IP o el email de una cuenta que no existe (un intento de login contra un email inventado también tiene que contar, porque si no se podría enumerar cuentas sin límite). Atarla a `users` dejaría fuera justamente los casos que más interesa limitar.
+
+**Relaciones.** Ninguna. Es la única tabla aislada del esquema (§6).
+
+**Constraints relevantes**
+- `scope`/`identity_hash`/`window_started_at`/`attempts` **NOT NULL**.
+- **`uq_rate_limit_scope_identity`** (`scope`, `identity_hash`) — un contador por combinación. Es además el índice sobre el que se resuelve el `ON CONFLICT` del UPSERT, que es el único acceso real a la tabla.
+
+**Índices.** `uq_rate_limit_scope_identity` (el UPSERT) e `ix_rate_limit_buckets_window_started_at` (la purga de ventanas vencidas, que no usa el otro porque lidera por otra columna).
+
+**Atomicidad.** Crear la fila, reiniciar la ventana vencida y sumar el intento ocurren en **una sola sentencia** (`INSERT ... ON CONFLICT DO UPDATE ... RETURNING`). Si fueran tres pasos, dos peticiones simultáneas leerían el mismo valor y escribirían el mismo incremento, perdiendo uno -- y la concurrencia **es** el escenario de un ataque de fuerza bruta, no un caso raro.
+
+**Purga.** Las filas vencidas se borran de forma **oportunista** (una de cada 200 escrituras borra lo vencido hace más de 24 h), no por un proceso programado: el proyecto no tiene tareas periódicas (DevOps sin documentación oficial, `CLAUDE.md` §15). Funciona mientras haya tráfico; en un sistema parado las filas vencidas se quedan, sin afectar a ningún límite.
+
+**Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-023` §Decisiones pendientes): extender el límite a los endpoints de **producto** (feed, posts, comentarios, mensajes) con un mecanismo más barato que una escritura por petición; purga programada en vez de oportunista; y *sliding window* en vez de ventana fija si el borde entre ventanas llega a importar (hoy permite un ritmo instantáneo de hasta 2× el configurado, aceptado conscientemente).
 
 ---
 

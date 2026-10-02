@@ -21,10 +21,13 @@ class NotificationRepository(ABC):
         transición real, nunca en un no-op idempotente) antes de invocarlo."""
 
     @abstractmethod
-    def list_for_user(self, user_id, limit):
+    def list_for_user(self, user_id, limit, excluded_actor_ids=()):
         """Lista las notificaciones donde `user_id` es el destinatario, más
         reciente primero. Sin paginación real en esta versión -- límite
-        fijo (mismo criterio que `CommentRepository.list_for_post`)."""
+        fijo (mismo criterio que `CommentRepository.list_for_post`).
+
+        `excluded_actor_ids` descarta las disparadas por esas cuentas
+        (bloqueos, ADR-025-blocked-and-restricted-accounts.md)."""
 
     @abstractmethod
     def mark_as_read(self, notification_id, user_id):

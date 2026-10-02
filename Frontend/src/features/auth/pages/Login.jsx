@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FaApple } from "react-icons/fa";
-import { IoInformationCircleOutline } from "react-icons/io5";
-import { useAuth, useOAuthNotice } from "@features/auth";
+import { useAuth } from "@features/auth";
 import { getErrorMessage } from "@shared/lib/api";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
@@ -16,7 +14,6 @@ import { isValidEmail } from "../lib/validators";
 export default function Login() {
   const navigate = useNavigate();
   const { login, loginWithGoogle } = useAuth();
-  const { notice, notify } = useOAuthNotice();
   const toast = useToast();
   const { t } = useLanguage();
 
@@ -36,8 +33,14 @@ export default function Login() {
     if (isGoogleSubmitting) return;
     setIsGoogleSubmitting(true);
     try {
-      const googleUser = await loginWithGoogle(credential);
-      navigate(googleUser.profile_completed ? "/feed" : "/complete-profile");
+      const result = await loginWithGoogle(credential);
+      if (result.twoFactorRequired) {
+        // La cuenta tiene 2FA: Google autenticó la identidad pero falta el
+        // segundo factor (ADR-022 §Seguridad).
+        navigate("/two-factor", { state: { twoFactorToken: result.twoFactorToken } });
+        return;
+      }
+      navigate(result.user.profile_completed ? "/feed" : "/complete-profile");
     } catch (error) {
       console.error(error);
       toast.error(getErrorMessage(error, t), { title: t("auth.login.toastErrorTitle") });
@@ -63,7 +66,13 @@ export default function Login() {
     try {
       // .trim() solo en email (mismo motivo que en backend/auth_routes.py) --
       // la contraseña nunca se normaliza, se envía tal cual la escribió el usuario.
-      await login({ email: email.trim(), password });
+      const result = await login({ email: email.trim(), password });
+      if (result.twoFactorRequired) {
+        // 200 con `two_factor_required`: nada falló, falta el segundo paso
+        // (ADR-022 §Contrato API). Todavía no hay sesión guardada.
+        navigate("/two-factor", { state: { twoFactorToken: result.twoFactorToken } });
+        return;
+      }
       navigate("/feed");
     } catch (error) {
       // Credenciales correctas pero cuenta todavía sin verificar
@@ -97,28 +106,6 @@ export default function Login() {
     >
       {/* GOOGLE LOGIN -- ADR-012-google-sign-in.md, botón real */}
       <GoogleSignInButton onCredential={handleGoogleCredential} disabled={isGoogleSubmitting} />
-
-      {/* APPLE LOGIN */}
-      <button
-        type="button"
-        onClick={() => notify("apple")}
-        className="w-full flex items-center justify-center gap-3 bg-black text-white border border-line-dark py-3 rounded-full font-semibold hover:bg-gray-900 transition mt-3"
-      >
-        <FaApple size={18} />
-        {t("auth.oauthAppleLogin")}
-      </button>
-
-      {notice && (
-        <p
-          role="status"
-          className="flex items-start gap-1.5 text-xs text-muted-dark bg-black/30 rounded-lg px-3 py-2 mt-3"
-        >
-          <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
-          {/* Solo Apple puede disparar este aviso ahora -- Google ya usa
-              GoogleSignInButton real, ver useOAuthNotice.js */}
-          {t("auth.oauthNoticeLogin", { provider: t("auth.providerApple") })}
-        </p>
-      )}
 
       {/* DIVISOR */}
       <div className="flex items-center my-6">

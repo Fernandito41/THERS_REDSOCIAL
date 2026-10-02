@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import Icon from "@shared/components/Icon";
-import { mockSuggestions, mockTopics } from "../data/mockData";
+import { mockTopics } from "../data/mockData";
+import { loadSettings } from "../lib/settingsStorage";
+import SuggestedPeopleCard from "./SuggestedPeopleCard";
 
 /**
  * Rail derecho del Feed — sección 6 de REF-FEED-01 (≈340px).
@@ -12,17 +14,23 @@ import { mockSuggestions, mockTopics } from "../data/mockData";
  * PROCEDENCIA DE LOS DATOS — mezclada a propósito, y señalada en pantalla:
  *  · Perfil y métricas: REALES. `followers_count` viene de GET /api/users/me
  *    (ADR-007) y las publicaciones se cuentan sobre los posts ya cargados.
- *  · Personas y temas: FIXTURE (`data/mockData`). No hay endpoint de
- *    sugerencias ni de tendencias; se rotulan como ejemplo en vez de pasar
- *    por datos reales (archivo maestro §9.5: "datos reales y fixtures no
- *    deben mezclarse silenciosamente en una pantalla").
+ *  · Personas que resuenan: REALES desde ADR-026 (GET /api/users/suggestions),
+ *    con su propio componente. Se puede ocultar desde Configuración.
+ *  · Temas en tendencia: FIXTURE (`data/mockData`). No hay endpoint de
+ *    tendencias; se rotula como ejemplo en vez de pasar por dato real
+ *    (archivo maestro §9.5: "datos reales y fixtures no deben mezclarse
+ *    silenciosamente en una pantalla").
  *
  * La referencia dibuja un indicador «En línea» en la mini-tarjeta. NO se
  * reproduce como estado activo: no existe sistema de presencia y el archivo
  * maestro §10.2 prohíbe presentarlo como capacidad real.
  */
-export default function DiscoveryRail({ currentUser, capsules, followingIds, onToggleFollow }) {
+export default function DiscoveryRail({ currentUser, capsules }) {
   const postCount = capsules.filter((capsule) => capsule.author?.id === currentUser?.id).length;
+  // Preferencia local de interfaz (no protege ningún dato): por defecto se
+  // muestra. Se lee al montar -- cambiarla en Configuración desmonta esta
+  // página, así que la próxima vez que se entra al feed ya está aplicada.
+  const showSuggestions = loadSettings(currentUser?.username)["content.suggestions"] ?? true;
 
   return (
     <aside className="flex w-full flex-col gap-6 xl:w-th-rail xl:shrink-0">
@@ -50,46 +58,9 @@ export default function DiscoveryRail({ currentUser, capsules, followingIds, onT
         </div>
       </div>
 
-      {/* 2. Personas que resuenan — fixture rotulado */}
-      <RailCard
-        title="Personas que resuenan"
-        icon="sync_alt"
-        note="Ejemplo: sin endpoint de sugerencias todavía"
-      >
-        <ul className="flex flex-col gap-3">
-          {mockSuggestions.map((person) => {
-            const isFollowing = followingIds.has(person.id);
-            return (
-              <li key={person.id} className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-th-pill bg-th-surface-raised text-label-md font-bold text-th-fg-muted">
-                    {initialsOf(person)}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-body-sm font-semibold text-th-fg-strong">
-                      {person.name}
-                    </p>
-                    <p className="truncate text-label-md text-th-fg-muted">@{person.username}</p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => onToggleFollow(person.id)}
-                  aria-pressed={isFollowing}
-                  className={`shrink-0 rounded-th-pill border px-3 py-1.5 text-label-md font-bold transition-colors th-focus-ring ${
-                    isFollowing
-                      ? "border-th-border bg-th-surface text-th-fg-muted hover:bg-th-surface-raised"
-                      : "border-th-brand bg-th-brand text-th-on-brand hover:bg-th-brand-hover"
-                  }`}
-                >
-                  {isFollowing ? "Siguiendo" : "Seguir"}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </RailCard>
+      {/* 2. Personas que resuenan — cuentas REALES (GET /api/users/suggestions,
+          ADR-026). Se oculta con la preferencia «Mostrar cuentas sugeridas». */}
+      {showSuggestions && <SuggestedPeopleCard />}
 
       {/* 3. Temas en tendencia — fixture rotulado */}
       <RailCard

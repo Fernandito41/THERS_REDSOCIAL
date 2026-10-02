@@ -15,3 +15,15 @@ class MessageNotFoundError(Exception):
     """`message_id` no existe, o existe pero no pertenece a quien intenta
     borrarlo (ADR-014-messages-ux-improvements.md) -- mismo mensaje/código
     en ambos casos, no se distingue cuál ocurrió."""
+
+
+class MessagesNotAllowedError(Exception):
+    """El destinatario no acepta mensajes de quien escribe, segun su
+    preferencia `who_can_message`
+    (ADR-020-content-filters-and-privacy-preferences.md).
+
+    La route lo traduce a **403, no a 404**: a diferencia de una cuenta
+    privada (ADR-018), aca no hay nada que ocultar -- quien escribe ya sabia
+    que esa persona existe (le estaba escribiendo) y mentirle con un 404 solo
+    lo haria reintentar. Lo que la preferencia protege es la bandeja, no la
+    existencia de la cuenta."""

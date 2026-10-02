@@ -19,6 +19,13 @@ def create_app():
     from app.interfaces.error_handlers import register_error_handlers
     register_error_handlers(app)
 
+    # Marca `users.last_seen_at` en cada petición autenticada que resuelve
+    # bien, con throttle (ADR-020-content-filters-and-privacy-preferences.md).
+    # Se registra acá y no en cada route para que ningún endpoint nuevo se
+    # olvide de hacerlo.
+    from app.interfaces.activity_tracker import register_activity_tracker
+    register_activity_tracker(app)
+
     # Registra los modelos en el metadata de SQLAlchemy para que Flask-Migrate
     # los detecte al autogenerar migraciones (flask db migrate).
     from app.infrastructure.persistence import models  # noqa: F401
@@ -46,5 +53,20 @@ def create_app():
 
     from app.interfaces.routes.message_routes import messages_bp
     app.register_blueprint(messages_bp, url_prefix="/api")
+
+    from app.interfaces.routes.privacy_routes import privacy_bp
+    app.register_blueprint(privacy_bp, url_prefix="/api")
+
+    from app.interfaces.routes.security_routes import security_bp
+    app.register_blueprint(security_bp, url_prefix="/api")
+
+    from app.interfaces.routes.data_export_routes import data_exports_bp
+    app.register_blueprint(data_exports_bp, url_prefix="/api")
+
+    from app.interfaces.routes.restriction_routes import restrictions_bp
+    app.register_blueprint(restrictions_bp, url_prefix="/api")
+
+    from app.interfaces.routes.content_routes import content_bp
+    app.register_blueprint(content_bp, url_prefix="/api")
 
     return app

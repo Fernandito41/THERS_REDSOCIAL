@@ -6,9 +6,17 @@
 from app.domain.auth.exceptions import UserNotFoundError
 
 
-def send_typing_ping(sender_id, recipient_id, user_repository, typing_repository):
+def send_typing_ping(
+    sender_id, recipient_id, user_repository, typing_repository, restriction_repository
+):
     recipient = user_repository.find_by_id(recipient_id)
     if recipient is None:
         raise UserNotFoundError()
+
+    # Con un bloqueo en cualquier sentido el aviso se descarta en silencio
+    # (ADR-025): la otra persona no debe ver "escribiendo..." de alguien que
+    # bloqueó o que la bloqueó.
+    if restriction_repository.is_blocked_between(sender_id, recipient_id):
+        return
 
     typing_repository.ping(sender_id, recipient_id)

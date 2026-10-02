@@ -11,5 +11,9 @@ def unfollow_user(follower_id, followed_id, user_repository, follow_repository):
     if target is None:
         raise UserNotFoundError()
 
+    # Borra la fila sea cual sea su estado: el mismo DELETE sirve para dejar
+    # de seguir y para cancelar una solicitud que todavía no respondieron
+    # (ADR-018 §Decisión) -- son el mismo gesto desde el Frontend ("ya no
+    # quiero esta relación") y no hace falta un endpoint aparte.
     follow_repository.remove(follower_id, followed_id)
-    return {"following": False}
+    return {"following": False, "follow_status": None}

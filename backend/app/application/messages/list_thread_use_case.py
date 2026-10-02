@@ -10,9 +10,17 @@ from app.domain.auth.exceptions import UserNotFoundError
 DEFAULT_LIMIT = 50
 
 
-def list_thread(user_id, other_user_id, user_repository, message_repository, limit=DEFAULT_LIMIT):
+def list_thread(
+    user_id, other_user_id, user_repository, message_repository, restriction_repository,
+    limit=DEFAULT_LIMIT,
+):
     other_user = user_repository.find_by_id(other_user_id)
     if other_user is None:
+        raise UserNotFoundError()
+
+    # Con un bloqueo en cualquier sentido el hilo deja de ser accesible
+    # (ADR-025). Los mensajes no se borran: reaparecen si se desbloquea.
+    if restriction_repository.is_blocked_between(user_id, other_user_id):
         raise UserNotFoundError()
 
     messages = message_repository.list_thread(user_id, other_user_id, limit)

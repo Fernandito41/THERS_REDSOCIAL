@@ -372,3 +372,216 @@ class TestTypingIndicator:
         response = client.get(f"/api/users/{id_b}/typing")
 
         assert response.status_code == 401
+
+
+class TestUpdateMessage:
+    # PATCH /api/messages/<message_id> (ADR-017-content-editing.md).
+
+    def _send(self, client, token, recipient_id, content="original"):
+        res = client.post(
+            f"/api/users/{recipient_id}/messages",
+            json={"content": content},
+            headers=_auth_headers(token),
+        )
+        return res.get_json()["message"]["id"]
+
+    def test_sender_can_edit_own_message(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        response = client.patch(
+            f"/api/messages/{message_id}",
+            json={"content": "corregido"},
+            headers=_auth_headers(token_a),
+        )
+
+        assert response.status_code == 200
+        message = response.get_json()["message"]
+        assert message["content"] == "corregido"
+        assert message["edited"] is True
+
+    def test_a_message_that_was_never_edited_reports_edited_false(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        self._send(client, token_a, id_b)
+
+        thread = client.get(
+            f"/api/users/{id_b}/messages", headers=_auth_headers(token_a)
+        ).get_json()["messages"]
+
+        assert thread[0]["edited"] is False
+
+    def test_edited_content_appears_in_the_thread_for_both_sides(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        client.patch(
+            f"/api/messages/{message_id}",
+            json={"content": "lo que quise decir"},
+            headers=_auth_headers(token_a),
+        )
+
+        for token, other_id in ((token_a, id_b), (token_b, id_a)):
+            thread = client.get(
+                f"/api/users/{other_id}/messages", headers=_auth_headers(token)
+            ).get_json()["messages"]
+            assert thread[0]["content"] == "lo que quise decir"
+            assert thread[0]["edited"] is True
+
+    def test_recipient_cannot_edit_a_message_sent_to_them(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b, content="lo que A dijo")
+
+        response = client.patch(
+            f"/api/messages/{message_id}",
+            json={"content": "lo que B quiere que A haya dicho"},
+            headers=_auth_headers(token_b),
+        )
+
+        # Mismo 404 que un mensaje inexistente -- editar es solo de quien lo
+        # mandó, igual que borrar (ADR-014/ADR-017 §Seguridad).
+        assert response.status_code == 404
+        thread = client.get(
+            f"/api/users/{id_a}/messages", headers=_auth_headers(token_b)
+        ).get_json()["messages"]
+        assert thread[0]["content"] == "lo que A dijo"
+
+    def test_nonexistent_message_returns_404(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        fake_id = "11111111-1111-1111-1111-111111111111"
+
+        response = client.patch(
+            f"/api/messages/{fake_id}", json={"content": "nada"}, headers=_auth_headers(token_a)
+        )
+
+        assert response.status_code == 404
+
+    def test_edit_message_without_token_returns_401(self, client):
+        fake_id = "11111111-1111-1111-1111-111111111111"
+
+        response = client.patch(f"/api/messages/{fake_id}", json={"content": "sin token"})
+
+        assert response.status_code == 401
+
+    def test_edit_message_empty_body_returns_400(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        response = client.patch(
+            f"/api/messages/{message_id}", json={}, headers=_auth_headers(token_a)
+        )
+
+        assert response.status_code == 400
+
+    def test_edit_message_empty_content_returns_400(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        response = client.patch(
+            f"/api/messages/{message_id}", json={"content": " "}, headers=_auth_headers(token_a)
+        )
+
+        assert response.status_code == 400
+
+    def test_edit_message_over_max_length_returns_400(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        response = client.patch(
+            f"/api/messages/{message_id}",
+            json={"content": "x" * 2001},
+            headers=_auth_headers(token_a),
+        )
+
+        assert response.status_code == 400
+
+    def test_edit_message_trims_surrounding_whitespace(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        response = client.patch(
+            f"/api/messages/{message_id}",
+            json={"content": "   con espacios   "},
+            headers=_auth_headers(token_a),
+        )
+
+        assert response.get_json()["message"]["content"] == "con espacios"
+
+    def test_editing_a_read_message_does_not_make_it_unread_again(self, client):
+        token_a, id_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+        # B abre el hilo: el mensaje queda marcado como leído (ADR-013).
+        client.get(f"/api/users/{id_a}/messages", headers=_auth_headers(token_b))
+
+        client.patch(
+            f"/api/messages/{message_id}",
+            json={"content": "editado después de leído"},
+            headers=_auth_headers(token_a),
+        )
+
+        # `read` sigue en true: editar no devuelve el mensaje a no leído
+        # (ADR-017 §Decisión) -- el separador de no-leídos no se reordena.
+        thread = client.get(
+            f"/api/users/{id_b}/messages", headers=_auth_headers(token_a)
+        ).get_json()["messages"]
+        assert thread[0]["read"] is True
+
+    def test_edit_message_cannot_change_recipient_or_read_state(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        _, id_c = _register_and_login(client, username="user_c", email="c@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        response = client.patch(
+            f"/api/messages/{message_id}",
+            json={"content": "editado", "recipient_id": id_c, "read": True},
+            headers=_auth_headers(token_a),
+        )
+
+        message = response.get_json()["message"]
+        # Ni el destinatario ni el estado de lectura se dejan pisar desde el
+        # body (ADR-017 §Seguridad).
+        assert message["recipient_id"] == id_b
+        assert message["read"] is False
+        assert client.get(
+            f"/api/users/{id_c}/messages", headers=_auth_headers(token_a)
+        ).get_json()["messages"] == []
+
+    def test_conversation_preview_shows_the_edited_content(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        client.patch(
+            f"/api/messages/{message_id}",
+            json={"content": "texto final"},
+            headers=_auth_headers(token_a),
+        )
+        conversations = client.get(
+            "/api/conversations", headers=_auth_headers(token_a)
+        ).get_json()["conversations"]
+
+        # El resumen de la conversación muestra el texto vigente, no el que se
+        # mandó primero. No lleva `edited` -- es una vista derivada, no el
+        # mensaje (ADR-017 §Contrato API).
+        assert conversations[0]["last_message"]["content"] == "texto final"
+
+    def test_deleted_message_cannot_be_edited(self, client):
+        token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")
+        _, id_b = _register_and_login(client, username="user_b", email="b@example.com")
+        message_id = self._send(client, token_a, id_b)
+
+        client.delete(f"/api/messages/{message_id}", headers=_auth_headers(token_a))
+        response = client.patch(
+            f"/api/messages/{message_id}", json={"content": "zombi"}, headers=_auth_headers(token_a)
+        )
+
+        assert response.status_code == 404

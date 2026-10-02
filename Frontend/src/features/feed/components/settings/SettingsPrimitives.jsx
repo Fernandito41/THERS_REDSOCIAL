@@ -72,20 +72,28 @@ function Row({ label, description, badge, control, hint }) {
  * El archivo maestro §8.9 pide dejar explícito si un cambio se guarda solo o
  * con botón: aquí es automático, y la fila lo dice.
  */
-export function SwitchRow({ label, description, checked, onChange }) {
+export function SwitchRow({
+  label,
+  description,
+  checked,
+  onChange,
+  hint = "Se guarda en este navegador",
+  disabled = false,
+}) {
   return (
     <Row
       label={label}
       description={description}
-      hint="Se guarda en este navegador"
+      hint={hint}
       control={
         <button
           type="button"
           role="switch"
           aria-checked={checked}
           aria-label={label}
+          disabled={disabled}
           onClick={() => onChange(!checked)}
-          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-th-pill transition-colors th-focus-ring ${
+          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-th-pill transition-colors th-focus-ring disabled:opacity-50 ${
             checked ? "bg-th-brand" : "bg-th-surface-raised"
           }`}
         >
@@ -100,13 +108,34 @@ export function SwitchRow({ label, description, checked, onChange }) {
   );
 }
 
-/** Selector de opción única que guarda en este navegador. */
-export function ChoiceRow({ label, description, value, options, onChange, id }) {
+/**
+ * Selector de opción única.
+ *
+ * `options` acepta dos formas: un array de strings (el valor es la etiqueta,
+ * como ya lo usaban las secciones existentes) o un array de `{value, label}`
+ * cuando el valor que entiende el servidor no es texto presentable -- las
+ * audiencias de privacidad viajan como 'everyone'/'followers'/'nobody' pero se
+ * muestran como "Cualquiera"/"Solo mis seguidores"/"Nadie".
+ */
+export function ChoiceRow({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+  id,
+  hint = "Se guarda en este navegador",
+  disabled = false,
+}) {
+  const normalized = options.map((option) =>
+    typeof option === "string" ? { value: option, label: option } : option
+  );
+
   return (
     <Row
       label={label}
       description={description}
-      hint="Se guarda en este navegador"
+      hint={hint}
       control={
         <>
           <label htmlFor={id} className="sr-only">
@@ -115,12 +144,13 @@ export function ChoiceRow({ label, description, value, options, onChange, id }) 
           <select
             id={id}
             value={value}
+            disabled={disabled}
             onChange={(event) => onChange(event.target.value)}
-            className="min-h-[44px] rounded-th-input border border-th-border bg-th-surface px-3 py-2 text-body-sm font-semibold text-th-fg th-focus-ring"
+            className="min-h-[44px] rounded-th-input border border-th-border bg-th-surface px-3 py-2 text-body-sm font-semibold text-th-fg th-focus-ring disabled:opacity-50"
           >
-            {options.map((option) => (
-              <option key={option} value={option}>
-                {option}
+            {normalized.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>

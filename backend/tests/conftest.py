@@ -31,6 +31,26 @@ from app import create_app
 from app.extensions import db
 
 
+def reset_rate_limits():
+    """Borra todos los contadores de rate limiting (ADR-023-rate-limiting.md).
+
+    `_clean_tables` ya trunca `rate_limit_buckets` ENTRE tests, así que la
+    inmensa mayoría no necesita esto. Hace falta solo dentro de un test que
+    legítimamente hace más peticiones de las que un límite permite -- por
+    ejemplo uno que registra doce usuarios para probar el tope de menciones,
+    cuando `policy.REGISTER` permite cinco por hora.
+
+    Se expone como helper explícito en vez de subir los límites: un límite que
+    se relaja para que los tests pasen deja de ser el límite que protege
+    producción, y esa diferencia es justo la que nadie recuerda después.
+    """
+    from app.extensions import db
+    from app.infrastructure.persistence.models import RateLimitBucket
+
+    db.session.query(RateLimitBucket).delete()
+    db.session.commit()
+
+
 def mark_email_verified(user_id):
     """Verifica el email de `user_id` directamente en la base, sin pasar
     por el flujo OTP real (ADR-011-mandatory-email-verification.md) --
@@ -88,9 +108,19 @@ def _clean_tables(app):
     # `notifications` referencia a `users` dos veces (recipient_id/actor_id)
     # y a `posts` una vez (ADR-008-notifications-minimal-model.md), y
     # `password_reset_tokens`/`email_verification_tokens` referencian a
-    # `users` una vez cada una (ADR-009-password-reset-and-email-verification.md)
-    # y `user_identities` referencia a `users` una vez
-    # (ADR-012-google-sign-in.md) -- un TRUNCATE de una sola tabla falla si
+    # `users` una vez cada una (ADR-009-password-reset-and-email-verification.md),
+    # `user_identities` referencia a `users` una vez
+    # (ADR-012-google-sign-in.md), `mentions` referencia a `users` dos veces y
+    # a `posts`/`comments` una cada una (ADR-019-mentions.md) y
+    # `muted_keywords` referencia a `users` una vez
+    # (ADR-020-content-filters-and-privacy-preferences.md), y `sessions`
+    # (ADR-021-session-registry.md) y `two_factor_recovery_codes`
+    # (ADR-022-two-factor-authentication.md) referencian a `users` una vez cada
+    # una, y `rate_limit_buckets` (ADR-023-rate-limiting.md) no referencia a
+    # ninguna (su identidad es un hash, puede ser una IP o un email inexistente)
+    # pero se trunca igual: si no, los contadores de un test se arrastrarian al
+    # siguiente y un test con varios intentos de login empezaria ya limitado --
+    # un TRUNCATE de una sola tabla falla si
     # otra tiene filas dependientes, salvo que todas se trunquen juntas en
     # la misma sentencia (Postgres lo permite sin necesitar CASCADE en el
     # propio TRUNCATE cuando la tabla referenciante también está en la
@@ -100,8 +130,9 @@ def _clean_tables(app):
         db.session.execute(
             db.text(
                 "TRUNCATE TABLE password_reset_tokens, email_verification_tokens, "
-                "user_identities, notifications, messages, comments, likes, follows, "
-                "posts, users"
+                "user_identities, notifications, messages, mentions, muted_keywords, "
+                "sessions, two_factor_recovery_codes, rate_limit_buckets, data_exports, user_restrictions, muted_topics, "
+                "comments, likes, follows, posts, users"
             )
         )
         db.session.commit()

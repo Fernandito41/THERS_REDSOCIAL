@@ -2,13 +2,22 @@
 # ADR-005-likes-minimal-model.md). Idempotente: si el usuario ya le había
 # dado like, no falla -- solo devuelve el estado actual.
 
+from app.application.privacy.post_visibility import assert_post_visible
 from app.domain.posts.exceptions import PostNotFoundError
 
 
-def like_post(post_id, user_id, post_repository, like_repository, notification_repository):
+def like_post(
+    post_id, user_id, post_repository, like_repository, notification_repository,
+    follow_repository, restriction_repository,
+):
     post = post_repository.get_by_id(post_id)
     if post is None:
         raise PostNotFoundError(post_id)
+
+    # No se le puede dar like a lo que no se puede ver: una cuenta privada no
+    # recibe likes de quien no la sigue (ADR-018). Mismo 404 que un post
+    # inexistente, sin revelar que existe.
+    assert_post_visible(post, user_id, follow_repository, restriction_repository)
 
     was_created = like_repository.add(post_id, user_id)
 

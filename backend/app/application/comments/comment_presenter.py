@@ -5,7 +5,10 @@
 # password_hash ni otros campos privados.
 
 
-def to_public_comment(comment):
+from app.application.mentions.mention_presenter import to_public_mentions
+
+
+def to_public_comment(comment, mentions=None):
     return {
         "id": str(comment.id),
         "post_id": str(comment.post_id),
@@ -16,4 +19,9 @@ def to_public_comment(comment):
         },
         "content": comment.content,
         "created_at": comment.created_at.isoformat(),
+        # Mismo criterio y misma forma que `post.mentions` (ADR-019).
+        "mentions": to_public_mentions(mentions),
+        # Booleano, nunca el timestamp `edited_at` crudo -- mismo criterio
+        # que `read` en messages/notifications (ADR-017-content-editing.md).
+        "edited": comment.edited_at is not None,
     }

@@ -5,15 +5,22 @@
 # orquesta, mismo patrón que application/posts/create_post_use_case.py.
 
 from app.application.comments.comment_presenter import to_public_comment
+from app.application.mentions.resolve_mentions import resolve_comment_mentions
+from app.application.privacy.post_visibility import assert_post_visible
 from app.domain.posts.exceptions import PostNotFoundError
 
 
 def create_comment(
-    post_id, author_id, content, post_repository, comment_repository, notification_repository
+    post_id, author_id, content, post_repository, comment_repository,
+    notification_repository, follow_repository, user_repository, mention_repository,
+    restriction_repository,
 ):
     post = post_repository.get_by_id(post_id)
     if post is None:
         raise PostNotFoundError(post_id)
+
+    # No se comenta lo que no se puede ver (ADR-018).
+    assert_post_visible(post, author_id, follow_repository, restriction_repository)
 
     comment = comment_repository.create(post_id, author_id, content)
 
@@ -26,4 +33,14 @@ def create_comment(
             recipient_id=post.author_id, actor_id=author_id, notification_type="comment", post_id=post_id
         )
 
-    return to_public_comment(comment)
+    # Menciones del comentario (ADR-019). Se resuelven después de crear la fila
+    # porque la mención apunta al `comment_id`. La notificación de mención es
+    # independiente de la de "comentó tu publicación": a quien mencionan le
+    # llega una propia, y al dueño del post la suya -- si son la misma persona,
+    # recibe las dos, que describen dos hechos distintos.
+    mentions = resolve_comment_mentions(
+        comment.id, post_id, author_id, content, user_repository, follow_repository,
+        mention_repository, notification_repository, restriction_repository,
+    )
+
+    return to_public_comment(comment, mentions=mentions)

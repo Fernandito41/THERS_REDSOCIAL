@@ -116,6 +116,21 @@ export default function AppShell() {
     }
   };
 
+  // Resincroniza GET /api/notifications. Hace falta tras borrar una
+  // publicación (ADR-015): PostgreSQL borra en cascada las notificaciones
+  // que apuntaban a ese post (ADR-008), así que la lista en memoria queda
+  // con notificaciones que el backend ya no tiene. Mismo criterio silencioso
+  // que reloadConversations -- es una resincronización de fondo, no una
+  // acción del usuario.
+  const reloadNotifications = async () => {
+    try {
+      const res = await api.get("/notifications", { headers: authHeaders() });
+      setNotifications(res.data.notifications.map(mapNotification));
+    } catch {
+      // Silencioso, mismo motivo que reloadConversations.
+    }
+  };
+
   const handleToggleFollow = (id) => {
     setFollowingIds((prev) => {
       const next = new Set(prev);
@@ -162,10 +177,58 @@ export default function AppShell() {
   // se propaga a CreateCapsuleFlow, que ya maneja error/loading con el mismo
   // patrón que AuthContext.updateProfile()/Profile.jsx (getErrorMessage +
   // Toast, formulario abierto para reintentar).
-  const handleCreateCapsule = async (content) => {
-    const res = await api.post("/posts", { content }, { headers: authHeaders() });
+  // `isSensitive` (ADR-026): lo que el autor declara al publicar.
+  const handleCreateCapsule = async (content, isSensitive = false) => {
+    const res = await api.post(
+      "/posts",
+      { content, is_sensitive: isSensitive },
+      { headers: authHeaders() }
+    );
     setCapsules((prev) => [res.data.post, ...prev]);
     setComposerOpen(false);
+  };
+
+  // DELETE /api/posts/<id> (ADR-015-post-deletion.md). Solo el autor puede
+  // borrar su propia publicación -- el backend lo verifica contra el JWT y
+  // responde 404 si el post no existe o no es suyo, así que el Frontend no
+  // decide permisos, solo evita ofrecer la acción donde no aplica
+  // (CapsuleCard oculta el botón si el post no es propio).
+  // Optimistic update + rollback, mismo patrón que handleToggleLike
+  // (ADR-005): la tarjeta desaparece al instante y vuelve si la petición
+  // falla. `previous` guarda la lista completa, no solo el post borrado --
+  // así el rollback lo restituye en su posición original del feed.
+  const handleDeleteCapsule = async (postId) => {
+    const previous = capsules;
+    setCapsules((prev) => prev.filter((c) => c.id !== postId));
+
+    try {
+      await api.delete(`/posts/${postId}`, { headers: authHeaders() });
+      // Las notificaciones de ese post (like/comentario) se borran en
+      // cascada en PostgreSQL (ADR-008) -- se recargan para que el panel y
+      // el badge no queden mostrando notificaciones de un post que ya no
+      // existe.
+      reloadNotifications();
+    } catch (error) {
+      setCapsules(previous);
+      toast.error(getErrorMessage(error, t));
+    }
+  };
+
+  // PATCH /api/posts/<id> (ADR-017-content-editing.md). Solo el autor puede
+  // editar su propia publicación -- el backend lo verifica contra el JWT y
+  // responde 404 si no existe o no es suya; CapsuleCard solo ofrece la acción
+  // sobre publicaciones propias.
+  //
+  // Sin actualización optimista, a diferencia de handleDeleteCapsule: el
+  // servidor devuelve la publicación completa ya editada (con `edited` y los
+  // contadores reales de likes/comentarios, que la edición no toca), así que
+  // se reemplaza con su respuesta en vez de adivinarla. Sin try/catch acá --
+  // CapsuleCard lo maneja (Toast + el editor queda abierto para reintentar),
+  // mismo criterio que handlePostComment.
+  const handleEditCapsule = async (postId, content) => {
+    const res = await api.patch(`/posts/${postId}`, { content }, { headers: authHeaders() });
+    setCapsules((prev) => prev.map((c) => (c.id === postId ? res.data.post : c)));
+    return res.data.post;
   };
 
   // POST/DELETE /api/posts/<id>/like (ADR-005-likes-minimal-model.md).
@@ -229,41 +292,98 @@ export default function AppShell() {
     return res.data.comment;
   };
 
-  // POST/DELETE /api/users/<id>/follow (ADR-007-follows-minimal-model.md).
+  // DELETE /api/comments/<id> (ADR-016-comment-deletion.md). Solo el autor del
+  // comentario puede borrarlo -- el backend lo verifica contra el JWT y
+  // responde 404 si no existe o no es suyo; CapsuleCard solo ofrece la acción
+  // sobre comentarios propios. Sin try/catch acá -- CapsuleCard lo maneja
+  // (Toast + estado local del panel), mismo criterio que handlePostComment.
+  // `comments_count` vive en `capsules` (AppShell), así que se baja acá para
+  // que el número de la tarjeta quede sincronizado, espejo de
+  // handlePostComment. No hay notificación que retirar: la de "comentó tu
+  // publicación" no guarda a qué comentario corresponde (ADR-016 §Riesgos).
+  const handleDeleteComment = async (postId, commentId) => {
+    await api.delete(`/comments/${commentId}`, { headers: authHeaders() });
+    setCapsules((prev) =>
+      prev.map((c) =>
+        c.id === postId ? { ...c, comments_count: Math.max(0, c.comments_count - 1) } : c
+      )
+    );
+  };
+
+  // PATCH /api/comments/<id> (ADR-017-content-editing.md). Mismo reparto que
+  // handleDeleteComment: la petición vive acá, el hilo de comentarios abierto
+  // es estado local de CapsuleCard, que recibe el comentario ya editado y lo
+  // reemplaza en su lista. No toca `capsules`: editar no mueve
+  // `comments_count` (a diferencia de crear/borrar). Sin try/catch acá --
+  // CapsuleCard lo maneja, mismo criterio que handlePostComment.
+  const handleEditComment = async (commentId, content) => {
+    const res = await api.patch(
+      `/comments/${commentId}`,
+      { content },
+      { headers: authHeaders() }
+    );
+    return res.data.comment;
+  };
+
+  // POST/DELETE /api/users/<id>/follow (ADR-007-follows-minimal-model.md,
+  // extendido por ADR-018-private-accounts.md).
+  //
   // No reutiliza followingIds/handleToggleFollow (ese Set en memoria sigue
   // siendo exclusivo del panel de sugerencias mock de Home.jsx -- esas
   // personas no existen en el backend, llamar a este endpoint con sus ids
-  // daría 404 real). Actúa sobre `author.is_followed_by_me`, que ya viaja
-  // con cada post -- y actualiza TODOS los posts de ese autor en `capsules`,
-  // no solo el que disparó la acción, para que el estado quede consistente
-  // en toda la tarjeta del feed. Mismo patrón de optimistic update +
-  // rollback que handleToggleLike (ADR-005).
+  // daría 404 real). Actúa sobre `author.follow_status`, que ya viaja con cada
+  // post -- y actualiza TODOS los posts de ese autor en `capsules`, no solo el
+  // que disparó la acción, para que el estado quede consistente en toda la
+  // tarjeta del feed.
+  //
+  // Tres estados desde ADR-018, no dos: seguir una cuenta privada crea una
+  // solicitud ('pending'), no una relación. El mismo DELETE sirve para dejar
+  // de seguir y para cancelar una solicitud, así que el botón es un toggle
+  // igual que antes -- lo que cambia es a qué estado va.
+  //
+  // Optimistic update + rollback, mismo patrón que handleToggleLike (ADR-005).
+  // El estado optimista se predice con `author.is_private` (que el contrato ya
+  // expone justamente para esto) y después se reconcilia con la respuesta real
+  // del servidor, que es la única autoridad sobre el estado final.
   const handleToggleFollowAuthor = async (authorId) => {
     const capsule = capsules.find((c) => c.author.id === authorId);
     if (!capsule) return;
 
-    const wasFollowing = capsule.author.is_followed_by_me;
+    const previousStatus = capsule.author.follow_status ?? null;
+    const hasRelation = previousStatus !== null;
+    const optimisticStatus = hasRelation
+      ? null
+      : capsule.author.is_private
+        ? "pending"
+        : "accepted";
 
-    setCapsules((prev) =>
-      prev.map((c) =>
-        c.author.id === authorId
-          ? { ...c, author: { ...c.author, is_followed_by_me: !wasFollowing } }
-          : c
-      )
-    );
-
-    try {
-      wasFollowing
-        ? await api.delete(`/users/${authorId}/follow`, { headers: authHeaders() })
-        : await api.post(`/users/${authorId}/follow`, null, { headers: authHeaders() });
-    } catch (error) {
+    const applyStatus = (status) =>
       setCapsules((prev) =>
         prev.map((c) =>
           c.author.id === authorId
-            ? { ...c, author: { ...c.author, is_followed_by_me: wasFollowing } }
+            ? {
+                ...c,
+                author: {
+                  ...c.author,
+                  follow_status: status,
+                  // Se mantiene sincronizado con el contrato:
+                  // `is_followed_by_me` es true solo con un follow aceptado.
+                  is_followed_by_me: status === "accepted",
+                },
+              }
             : c
         )
       );
+
+    applyStatus(optimisticStatus);
+
+    try {
+      const res = hasRelation
+        ? await api.delete(`/users/${authorId}/follow`, { headers: authHeaders() })
+        : await api.post(`/users/${authorId}/follow`, null, { headers: authHeaders() });
+      applyStatus(res.data.follow_status ?? null);
+    } catch (error) {
+      applyStatus(previousStatus);
       toast.error(getErrorMessage(error, t));
     }
   };
@@ -313,7 +433,11 @@ export default function AppShell() {
           onToggleLike: handleToggleLike,
           onLoadComments: handleLoadComments,
           onPostComment: handlePostComment,
+          onDeleteComment: handleDeleteComment,
+          onEditComment: handleEditComment,
           onToggleFollowAuthor: handleToggleFollowAuthor,
+          onDeleteCapsule: handleDeleteCapsule,
+          onEditCapsule: handleEditCapsule,
         }}
       />
 

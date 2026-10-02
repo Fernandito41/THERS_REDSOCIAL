@@ -284,3 +284,330 @@ class TestListPostsWithComments:
 
         post = next(p for p in response.get_json()["posts"] if p["id"] == post_id)
         assert post["comments_count"] == 2
+
+
+class TestDeleteComment:
+    # DELETE /api/comments/<comment_id> (ADR-016-comment-deletion.md).
+
+    def _post_and_comment(self, client, post_author_token, commenter_token, content="un comentario"):
+        post_id = client.post(
+            "/api/posts", json={"content": "post"}, headers=_auth_headers(post_author_token)
+        ).get_json()["post"]["id"]
+        comment_id = client.post(
+            f"/api/posts/{post_id}/comments",
+            json={"content": content},
+            headers=_auth_headers(commenter_token),
+        ).get_json()["comment"]["id"]
+        return post_id, comment_id
+
+    def test_author_can_delete_their_own_comment(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        _, comment_id = self._post_and_comment(client, token_a, token_b)
+
+        response = client.delete(f"/api/comments/{comment_id}", headers=_auth_headers(token_b))
+
+        assert response.status_code == 200
+        assert response.get_json() == {"deleted": True}
+
+    def test_deleted_comment_disappears_from_thread_and_count(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        post_id, comment_id = self._post_and_comment(client, token_a, token_b)
+
+        client.delete(f"/api/comments/{comment_id}", headers=_auth_headers(token_b))
+
+        comments = client.get(
+            f"/api/posts/{post_id}/comments", headers=_auth_headers(token_a)
+        ).get_json()["comments"]
+        assert comments == []
+        posts = client.get("/api/posts", headers=_auth_headers(token_a)).get_json()["posts"]
+        assert posts[0]["comments_count"] == 0
+
+    def test_only_the_deleted_comment_is_removed(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        post_id, first_id = self._post_and_comment(client, token_a, token_b, "primero")
+        client.post(
+            f"/api/posts/{post_id}/comments",
+            json={"content": "segundo"},
+            headers=_auth_headers(token_b),
+        )
+
+        client.delete(f"/api/comments/{first_id}", headers=_auth_headers(token_b))
+
+        comments = client.get(
+            f"/api/posts/{post_id}/comments", headers=_auth_headers(token_a)
+        ).get_json()["comments"]
+        assert [c["content"] for c in comments] == ["segundo"]
+
+    def test_another_user_cannot_delete_someone_elses_comment(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        post_id, comment_id = self._post_and_comment(client, token_a, token_b)
+
+        response = client.delete(f"/api/comments/{comment_id}", headers=_auth_headers(token_a))
+
+        # Mismo 404 que un comentario inexistente (ADR-016 §Seguridad) --
+        # incluso siendo A el dueño del post, no puede borrar el de B.
+        assert response.status_code == 404
+        comments = client.get(
+            f"/api/posts/{post_id}/comments", headers=_auth_headers(token_a)
+        ).get_json()["comments"]
+        assert len(comments) == 1
+
+    def test_nonexistent_comment_returns_404(self, client):
+        token = _register_and_login(client)
+
+        response = client.delete(
+            "/api/comments/00000000-0000-0000-0000-000000000000",
+            headers=_auth_headers(token),
+        )
+
+        assert response.status_code == 404
+
+    def test_malformed_comment_id_returns_404(self, client):
+        token = _register_and_login(client)
+
+        response = client.delete("/api/comments/no-es-un-uuid", headers=_auth_headers(token))
+
+        assert response.status_code == 404
+
+    def test_delete_comment_without_token_returns_401(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        _, comment_id = self._post_and_comment(client, token_a, token_b)
+
+        response = client.delete(f"/api/comments/{comment_id}")
+
+        assert response.status_code == 401
+
+    def test_deleting_twice_returns_404_the_second_time(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        _, comment_id = self._post_and_comment(client, token_a, token_b)
+
+        client.delete(f"/api/comments/{comment_id}", headers=_auth_headers(token_b))
+        response = client.delete(f"/api/comments/{comment_id}", headers=_auth_headers(token_b))
+
+        assert response.status_code == 404
+
+    def test_deleting_a_comment_does_not_delete_the_post(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        post_id, comment_id = self._post_and_comment(client, token_a, token_b)
+
+        client.delete(f"/api/comments/{comment_id}", headers=_auth_headers(token_b))
+
+        posts = client.get("/api/posts", headers=_auth_headers(token_a)).get_json()["posts"]
+        assert [p["id"] for p in posts] == [post_id]
+
+
+class TestUpdateComment:
+    # PATCH /api/comments/<comment_id> (ADR-017-content-editing.md).
+
+    def _post_and_comment(self, client, post_author_token, commenter_token, content="original"):
+        post_id = client.post(
+            "/api/posts", json={"content": "post"}, headers=_auth_headers(post_author_token)
+        ).get_json()["post"]["id"]
+        comment_id = client.post(
+            f"/api/posts/{post_id}/comments",
+            json={"content": content},
+            headers=_auth_headers(commenter_token),
+        ).get_json()["comment"]["id"]
+        return post_id, comment_id
+
+    def test_author_can_edit_their_own_comment(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        _, comment_id = self._post_and_comment(client, token_a, token_b)
+
+        response = client.patch(
+            f"/api/comments/{comment_id}",
+            json={"content": "ya lo corregí"},
+            headers=_auth_headers(token_b),
+        )
+
+        assert response.status_code == 200
+        comment = response.get_json()["comment"]
+        assert comment["content"] == "ya lo corregí"
+        assert comment["edited"] is True
+
+    def test_a_comment_that_was_never_edited_reports_edited_false(self, client):
+        token = _register_and_login(client)
+        post_id, comment_id = self._post_and_comment(client, token, token)
+
+        thread = client.get(
+            f"/api/posts/{post_id}/comments", headers=_auth_headers(token)
+        ).get_json()["comments"]
+
+        assert thread[0]["edited"] is False
+
+    def test_edited_content_appears_in_the_thread(self, client):
+        token = _register_and_login(client)
+        post_id, comment_id = self._post_and_comment(client, token, token)
+
+        client.patch(
+            f"/api/comments/{comment_id}",
+            json={"content": "texto final"},
+            headers=_auth_headers(token),
+        )
+        thread = client.get(
+            f"/api/posts/{post_id}/comments", headers=_auth_headers(token)
+        ).get_json()["comments"]
+
+        assert thread[0]["content"] == "texto final"
+        assert thread[0]["edited"] is True
+
+    def test_another_user_cannot_edit_someone_elses_comment(self, client):
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        post_id, comment_id = self._post_and_comment(
+            client, token_a, token_b, content="comentario de B"
+        )
+
+        response = client.patch(
+            f"/api/comments/{comment_id}",
+            json={"content": "editado por A"},
+            headers=_auth_headers(token_a),
+        )
+
+        # El dueño de la publicación tampoco puede editar comentarios ajenos
+        # en ella -- mismo criterio que el borrado (ADR-016/ADR-017 §Seguridad).
+        assert response.status_code == 404
+        thread = client.get(
+            f"/api/posts/{post_id}/comments", headers=_auth_headers(token_a)
+        ).get_json()["comments"]
+        assert thread[0]["content"] == "comentario de B"
+
+    def test_nonexistent_comment_returns_404(self, client):
+        token = _register_and_login(client)
+
+        response = client.patch(
+            "/api/comments/00000000-0000-0000-0000-000000000000",
+            json={"content": "nada"},
+            headers=_auth_headers(token),
+        )
+
+        assert response.status_code == 404
+
+    def test_edit_comment_without_token_returns_401(self, client):
+        token = _register_and_login(client)
+        _, comment_id = self._post_and_comment(client, token, token)
+
+        response = client.patch(f"/api/comments/{comment_id}", json={"content": "sin token"})
+
+        assert response.status_code == 401
+
+    def test_edit_comment_empty_body_returns_400(self, client):
+        token = _register_and_login(client)
+        _, comment_id = self._post_and_comment(client, token, token)
+
+        response = client.patch(
+            f"/api/comments/{comment_id}", json={}, headers=_auth_headers(token)
+        )
+
+        assert response.status_code == 400
+
+    def test_edit_comment_empty_content_returns_400(self, client):
+        token = _register_and_login(client)
+        _, comment_id = self._post_and_comment(client, token, token)
+
+        response = client.patch(
+            f"/api/comments/{comment_id}", json={"content": "  "}, headers=_auth_headers(token)
+        )
+
+        assert response.status_code == 400
+
+    def test_edit_comment_over_max_length_returns_400(self, client):
+        token = _register_and_login(client)
+        _, comment_id = self._post_and_comment(client, token, token)
+
+        response = client.patch(
+            f"/api/comments/{comment_id}",
+            json={"content": "x" * 1001},
+            headers=_auth_headers(token),
+        )
+
+        # Mismo validador (y mismo límite de 1000, menor que el de posts) que
+        # crear un comentario -- domain/comments/validators.py.
+        assert response.status_code == 400
+
+    def test_edit_comment_trims_surrounding_whitespace(self, client):
+        token = _register_and_login(client)
+        _, comment_id = self._post_and_comment(client, token, token)
+
+        response = client.patch(
+            f"/api/comments/{comment_id}",
+            json={"content": "   con espacios   "},
+            headers=_auth_headers(token),
+        )
+
+        assert response.get_json()["comment"]["content"] == "con espacios"
+
+    def test_edit_comment_cannot_move_it_to_another_post(self, client):
+        token = _register_and_login(client)
+        post_id, comment_id = self._post_and_comment(client, token, token)
+        other_post_id = client.post(
+            "/api/posts", json={"content": "otro post"}, headers=_auth_headers(token)
+        ).get_json()["post"]["id"]
+
+        response = client.patch(
+            f"/api/comments/{comment_id}",
+            json={"content": "editado", "post_id": other_post_id},
+            headers=_auth_headers(token),
+        )
+
+        # `post_id` no está en la whitelist del body (ADR-017 §Seguridad).
+        assert response.get_json()["comment"]["post_id"] == post_id
+        assert client.get(
+            f"/api/posts/{other_post_id}/comments", headers=_auth_headers(token)
+        ).get_json()["comments"] == []
+
+    def test_editing_a_comment_does_not_change_the_count(self, client):
+        token = _register_and_login(client)
+        post_id, comment_id = self._post_and_comment(client, token, token)
+
+        client.patch(
+            f"/api/comments/{comment_id}",
+            json={"content": "editado"},
+            headers=_auth_headers(token),
+        )
+        feed = client.get("/api/posts", headers=_auth_headers(token)).get_json()["posts"]
+
+        # Editar no suma ni resta: `comments_count` sigue en 1 (ADR-017).
+        assert feed[0]["comments_count"] == 1
+
+    def test_editing_a_comment_does_not_create_a_new_notification(self, client):
+        # La notificación "comentó tu publicación" (ADR-008) se emite al crear
+        # el comentario; editarlo no es un evento social nuevo (ADR-017).
+        token_a = _register_and_login(client, username="user_a", email="a@example.com")
+        token_b = _register_and_login(client, username="user_b", email="b@example.com")
+        _, comment_id = self._post_and_comment(client, token_a, token_b)
+        before = len(
+            client.get("/api/notifications", headers=_auth_headers(token_a))
+            .get_json()["notifications"]
+        )
+
+        client.patch(
+            f"/api/comments/{comment_id}",
+            json={"content": "editado"},
+            headers=_auth_headers(token_b),
+        )
+
+        after = len(
+            client.get("/api/notifications", headers=_auth_headers(token_a))
+            .get_json()["notifications"]
+        )
+        assert after == before
+
+    def test_deleted_comment_cannot_be_edited(self, client):
+        token = _register_and_login(client)
+        _, comment_id = self._post_and_comment(client, token, token)
+
+        client.delete(f"/api/comments/{comment_id}", headers=_auth_headers(token))
+        response = client.patch(
+            f"/api/comments/{comment_id}", json={"content": "zombi"}, headers=_auth_headers(token)
+        )
+
+        assert response.status_code == 404

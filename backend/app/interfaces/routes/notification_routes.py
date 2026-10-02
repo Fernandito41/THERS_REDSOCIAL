@@ -26,10 +26,16 @@ from app.domain.notifications.exceptions import NotificationNotFoundError
 from app.infrastructure.persistence.repositories.notification_repository import (
     SQLAlchemyNotificationRepository,
 )
+from app.infrastructure.persistence.repositories.restriction_repository import (
+    SQLAlchemyRestrictionRepository,
+)
 
 notifications_bp = Blueprint("notifications", __name__)
 
 _notification_repository = SQLAlchemyNotificationRepository()
+# ADR-025-blocked-and-restricted-accounts.md: se ocultan las notificaciones de
+# cuentas bloqueadas.
+_restriction_repository = SQLAlchemyRestrictionRepository()
 
 
 @notifications_bp.route("/notifications", methods=["GET"])
@@ -40,7 +46,9 @@ def list_all():
     # puede listar sus propias notificaciones, nunca las de otro.
     user_id = get_jwt_identity()
 
-    notifications = list_notifications(user_id, _notification_repository, DEFAULT_LIMIT)
+    notifications = list_notifications(
+        user_id, _notification_repository, _restriction_repository, DEFAULT_LIMIT
+    )
     return jsonify({"notifications": notifications}), 200
 
 

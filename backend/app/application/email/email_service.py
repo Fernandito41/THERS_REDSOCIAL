@@ -21,6 +21,7 @@
 # usuario no existe -- no es este servicio el que decide ocultar nada.
 
 from app.application.email.templates import (
+    login_alert_email,
     password_changed_email,
     password_reset_code_email,
     registration_code_email,
@@ -41,4 +42,12 @@ class EmailService:
 
     def send_registration_code_email(self, to_email, name, code, ttl_minutes):
         subject, html = registration_code_email(name, code, ttl_minutes)
+        self._email_sender.send(to_email, subject, html)
+
+    def send_login_alert_email(self, to_email, name, user_agent, ip_address, when):
+        # ADR-021-session-registry.md. Quien decide SI corresponde mandarla es
+        # application/sessions/issue_session_use_case.py (dispositivo nuevo +
+        # preferencia activada); este servicio solo arma y envía, igual que con
+        # el resto de correos.
+        subject, html = login_alert_email(name, user_agent, ip_address, when)
         self._email_sender.send(to_email, subject, html)

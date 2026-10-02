@@ -1,23 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
-import { IoSearchOutline, IoArrowBack, IoSend, IoChatbubblesOutline, IoTrashOutline } from "react-icons/io5";
+import { IoSearchOutline, IoArrowBack, IoSend, IoChatbubblesOutline, IoTrashOutline, IoPencilOutline } from "react-icons/io5";
 import Avatar from "@shared/components/Avatar";
+import ConfirmDialog from "@shared/components/ConfirmDialog";
 import { api, getErrorMessage } from "@shared/lib/api";
 import { getStoredToken } from "@features/auth";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
 
-// Mensajes directos reales (POST/GET/DELETE .../messages, GET /api/conversations
-// -- ADR-013-messages-minimal-model.md, ADR-014-messages-ux-improvements.md).
+// Mensajes directos reales (POST/GET/PATCH/DELETE .../messages,
+// GET /api/conversations -- ADR-013-messages-minimal-model.md,
+// ADR-014-messages-ux-improvements.md, ADR-017-content-editing.md).
 // `conversations` llega por contexto desde AppShell.jsx (mismo patrón que
 // `capsules`/`notifications`: se carga una sola vez ahí, no en cada página).
 // El hilo abierto, su envío/borrado y el indicador de "escribiendo" son
 // estado propio de esta página.
 //
-// Sin presencia en línea: `mockConversations` tenía un campo `online`
-// inventado -- no existe ningún dato real de eso todavía, así que se quita
-// en vez de dejar un valor falso fijo.
+// Presencia: `mockConversations` tenía un campo `online` inventado, que se
+// quitó por no tener dato real detrás. Desde
+// ADR-020-content-filters-and-privacy-preferences.md sí existe uno:
+// `user.last_seen_at` en GET /api/conversations. Llega en `null` cuando la otra
+// persona oculta su actividad O cuando nunca registró ninguna -- los dos casos
+// son indistinguibles a propósito, para que apagar el interruptor no se note
+// (ADR-020 §Seguridad). Se sigue sin mostrar un indicador "en línea" en verde:
+// el dato es "última vez activo", no presencia en tiempo real.
 
 function authHeaders() {
   return { Authorization: `Bearer ${getStoredToken()}` };
@@ -45,6 +52,15 @@ export default function Messages() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
+  // Mensaje pendiente de confirmar para borrar (ADR-014). `null` = diálogo
+  // cerrado. Se guarda el id, no un booleano, para saber cuál borrar al confirmar.
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  // Mensaje en edición en línea (PATCH /api/messages/<id>, ADR-017). `null` =
+  // ninguno. Sin ConfirmDialog, a diferencia de borrar: una edición se puede
+  // volver a editar, así que no hace falta confirmar nada.
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   // Id del primer mensaje sin leer al abrir el hilo -- calculado una sola
   // vez con la primera respuesta (ADR-014 §Decisión: `read` refleja el
   // estado ANTES de marcar como leído solo en esa primera llamada), no en
@@ -187,8 +203,49 @@ export default function Messages() {
     }
   };
 
+  // PATCH /api/messages/<id> (ADR-017). Solo quien mandó el mensaje puede
+  // editarlo -- el backend lo verifica contra el JWT y responde 404 si no
+  // existe o es de otra persona; acá solo se evita ofrecer el lápiz donde no
+  // aplica. El polling del hilo (THREAD_POLL_MS) reemplaza `thread` cada pocos
+  // segundos, pero nunca el borrador: `editDraft`/`editingId` son estado
+  // aparte, así que escribir una corrección no se pierde entre refrescos.
+  const handleStartEdit = (message) => {
+    setEditDraft(message.content);
+    setEditingId(message.id);
+  };
+
+  const handleSubmitEdit = async (e) => {
+    e.preventDefault();
+    const content = editDraft.trim();
+    const original = thread.find((m) => m.id === editingId);
+    // Un guardado sin cambios no se manda: marcaría el mensaje como «editado»
+    // sin que nada hubiera cambiado.
+    if (!content || !original || content === original.content || savingEdit) return;
+
+    setSavingEdit(true);
+    try {
+      const res = await api.patch(
+        `/messages/${editingId}`,
+        { content },
+        { headers: authHeaders() }
+      );
+      setThread((prev) => prev.map((m) => (m.id === editingId ? res.data.message : m)));
+      setEditingId(null);
+      // El resumen de la conversación muestra el texto del último mensaje, que
+      // pudo ser justo el editado -- se resincroniza igual que al mandar uno.
+      onReloadConversations();
+    } catch (error) {
+      // El editor queda abierto con lo escrito para reintentar.
+      toast.error(getErrorMessage(error, t));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // El botón de la papelera solo abre el diálogo de confirmación propio de
+  // THERS (ConfirmDialog); el borrado real corre recién al confirmar.
   const handleDelete = async (messageId) => {
-    if (!window.confirm("¿Eliminar este mensaje? No se puede deshacer.")) return;
+    setPendingDeleteId(null);
 
     const previous = thread;
     setThread((prev) => prev.filter((m) => m.id !== messageId));
@@ -277,8 +334,16 @@ export default function Messages() {
                   <p className="text-ink dark:text-ink-dark text-sm font-semibold truncate">
                     {active.user.name}
                   </p>
-                  {otherIsTyping && (
+                  {otherIsTyping ? (
                     <p className="text-pulse-600 text-xs animate-pulse">Escribiendo...</p>
+                  ) : (
+                    // "Escribiendo" tiene prioridad: si está escribiendo ahora,
+                    // decir "activo hace 5 min" sería contradictorio.
+                    active.user.last_seen_at && (
+                      <p className="text-muted text-xs">
+                        Activo {formatRelativeTime(active.user.last_seen_at)}
+                      </p>
+                    )
                   )}
                 </div>
               </div>
@@ -303,25 +368,87 @@ export default function Messages() {
                           message.sender_id === currentUser.id ? "justify-end" : "justify-start"
                         }`}
                       >
-                        {message.sender_id === currentUser.id && (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(message.id)}
-                            aria-label="Eliminar mensaje"
-                            className="shrink-0 rounded-full p-1 text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-500"
-                          >
-                            <IoTrashOutline size={14} />
-                          </button>
+                        {message.sender_id === currentUser.id && editingId !== message.id && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setPendingDeleteId(message.id)}
+                              aria-label="Eliminar mensaje"
+                              className="shrink-0 rounded-full p-1 text-muted opacity-0 transition group-hover:opacity-100 hover:text-red-500"
+                            >
+                              <IoTrashOutline size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(message)}
+                              aria-label="Editar mensaje"
+                              className="shrink-0 rounded-full p-1 text-muted opacity-0 transition group-hover:opacity-100 hover:text-pulse-600"
+                            >
+                              <IoPencilOutline size={14} />
+                            </button>
+                          </>
                         )}
-                        <div
-                          className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
-                            message.sender_id === currentUser.id
-                              ? "bg-pulse-600 text-white rounded-br-md"
-                              : "bg-canvas dark:bg-canvas-dark text-ink dark:text-ink-dark rounded-bl-md"
-                          }`}
-                        >
-                          {message.content}
-                        </div>
+                        {editingId === message.id ? (
+                          <form
+                            onSubmit={handleSubmitEdit}
+                            className="flex max-w-[85%] flex-1 items-center gap-2"
+                          >
+                            <label htmlFor={`edit-message-${message.id}`} className="sr-only">
+                              Editar el mensaje
+                            </label>
+                            <input
+                              id={`edit-message-${message.id}`}
+                              type="text"
+                              value={editDraft}
+                              onChange={(e) => setEditDraft(e.target.value)}
+                              maxLength={2000}
+                              disabled={savingEdit}
+                              className="flex-1 rounded-full border border-pulse-500 bg-canvas dark:bg-canvas-dark px-4 py-2 text-sm text-ink dark:text-ink-dark focus:outline-none focus:ring-2 focus:ring-pulse-500 disabled:opacity-60"
+                            />
+                            <button
+                              type="submit"
+                              disabled={
+                                !editDraft.trim() ||
+                                editDraft.trim() === message.content ||
+                                savingEdit
+                              }
+                              className="shrink-0 rounded-full px-3 py-1.5 text-xs font-bold text-pulse-600 transition hover:bg-pulse-50 dark:hover:bg-pulse-900/20 disabled:opacity-40"
+                            >
+                              Guardar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(null)}
+                              disabled={savingEdit}
+                              className="shrink-0 rounded-full px-3 py-1.5 text-xs text-muted transition hover:text-ink dark:hover:text-ink-dark disabled:opacity-40"
+                            >
+                              Cancelar
+                            </button>
+                          </form>
+                        ) : (
+                          <div
+                            className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
+                              message.sender_id === currentUser.id
+                                ? "bg-pulse-600 text-white rounded-br-md"
+                                : "bg-canvas dark:bg-canvas-dark text-ink dark:text-ink-dark rounded-bl-md"
+                            }`}
+                          >
+                            {message.content}
+                            {/* `edited` es un booleano en el contrato
+                                (ADR-017): se dice QUE se editó, no cuándo. */}
+                            {message.edited && (
+                              <span
+                                className={`ml-2 text-[10px] ${
+                                  message.sender_id === currentUser.id
+                                    ? "text-white/70"
+                                    : "text-muted"
+                                }`}
+                              >
+                                editado
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -361,6 +488,17 @@ export default function Messages() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        icon="delete"
+        destructive
+        title="¿Eliminar este mensaje?"
+        description="Se borrará para ti y para la otra persona. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        onConfirm={() => handleDelete(pendingDeleteId)}
+        onCancel={() => setPendingDeleteId(null)}
+      />
     </div>
   );
 }

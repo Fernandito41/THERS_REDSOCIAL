@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaApple } from "react-icons/fa";
-import { IoInformationCircleOutline } from "react-icons/io5";
 import { Link } from "react-router-dom";
 import collage from "@/assets/collage.png";
 import logo from "@/assets/logo_oficial.jpeg";
-import { useAuth, useOAuthNotice } from "@features/auth";
+import { useAuth } from "@features/auth";
 import { getErrorMessage } from "@shared/lib/api";
 import { Footer } from "@shared/components/Footer";
 import { useToast } from "@shared/components/Toast";
@@ -16,7 +14,6 @@ import GoogleSignInButton from "../components/GoogleSignInButton";
 export default function AuthPage() {
   const navigate = useNavigate();
   const { loginWithGoogle } = useAuth();
-  const { notice, notify } = useOAuthNotice();
   const toast = useToast();
   const { t } = useLanguage();
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
@@ -28,7 +25,13 @@ export default function AuthPage() {
     if (isGoogleSubmitting) return;
     setIsGoogleSubmitting(true);
     try {
-      const googleUser = await loginWithGoogle(credential);
+      const googleResult = await loginWithGoogle(credential);
+      if (googleResult.twoFactorRequired) {
+        // ADR-022: la cuenta tiene 2FA, falta el segundo factor.
+        navigate("/two-factor", { state: { twoFactorToken: googleResult.twoFactorToken } });
+        return;
+      }
+      const googleUser = googleResult.user;
       navigate(googleUser.profile_completed ? "/feed" : "/complete-profile");
     } catch (error) {
       console.error(error);
@@ -88,23 +91,6 @@ export default function AuthPage() {
             onCredential={handleGoogleCredential}
             disabled={isGoogleSubmitting}
           />
-
-          <button
-            type="button"
-            onClick={() => notify("apple")}
-            className="w-full flex items-center justify-center gap-3 bg-black text-white py-3 rounded-full font-semibold mt-3"
-          >
-            <FaApple size={18} />
-            {t("auth.oauthAppleRegister")}
-          </button>
-
-          {notice && (
-            <p className="flex items-start gap-1.5 text-xs text-muted bg-line rounded-lg px-3 py-2 mt-3">
-              <IoInformationCircleOutline size={15} className="shrink-0 mt-0.5" />
-              {/* Solo Apple puede disparar este aviso ahora -- ver useOAuthNotice.js */}
-              {t("auth.oauthNoticeShort", { provider: t("auth.providerApple") })}
-            </p>
-          )}
 
           <div className="flex items-center my-4">
             <div className="flex-1 h-px bg-line"></div>

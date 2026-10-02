@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.21 |
+| Versión | 0.22 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -49,6 +49,10 @@
 > Decimoséptima a vigésima relación real entre entidades (§6): `mentions` referencia dos veces a `users` y una a `posts`/`comments`; `muted_keywords` referencia una vez a `users`. Verificado con un ciclo completo `flask db upgrade`/`downgrade`/`upgrade` contra PostgreSQL 16 real sobre `thers_dev` y `thers_test`, más la suite completa de pruebas (`backend/tests/`, 414 pruebas).
 >
 > **v0.18 — edición de contenido propio: `edited_at` en `posts`, `comments` y `messages` (`ADR-021-content-editing.md`):** "Editar / Eliminar publicaciones" (§4.B › Contenido) queda **resuelta por completo** — el borrado ya lo había cubierto `ADR-019`/`ADR-020`, y la edición la cubre este ADR. **Primera migración que modifica tres tablas ya implementadas a la vez** (`a2c6e9b3f571`): una columna `edited_at` (`TIMESTAMPTZ`, nullable, `NULL` = nunca editado) en `posts` (§5.2), `comments` (§5.4) y `messages` (§5.10). Se expone en la API como el booleano `edited`, nunca como el timestamp crudo — mismo criterio que `notifications.read_at`/`messages.read_at` (`API_CONTRACT.md` §5, v0.22). **No se reutilizó `updated_at`** para esto, aunque `posts`/`comments` ya la tenían: nace igual a `created_at` por su `server_default`, así que "editado" habría que inferirlo de `updated_at > created_at` — una condición implícita que cualquier escritura futura sobre la fila volvería falsa (`ADR-021` §Opciones consideradas, opción B descartada). `updated_at` sigue siendo solo auditoría y sigue sin exponerse; `messages` sigue **sin** `updated_at`. Ninguna entidad, FK, `UNIQUE`, `CHECK` ni índice cambia — la columna es puramente aditiva y nullable, así que las filas existentes quedan en `NULL` sin *backfill*. Verificado con `flask db upgrade` contra PostgreSQL 16 real sobre `thers_dev` y `thers_test`, más la suite completa de pruebas (`backend/tests/`, 338 pruebas).
+>
+> **(rama `develop`, antes numerada v0.18) — refresh tokens rotativos, `refresh_tokens` (`ADR-017-jwt-session-policy.md`):** nueva entidad implementada (definición formal en §5.16). Una fila por refresh token emitido; cada login abre una familia (`family_id`) y cada renovación consume la fila vigente y crea la siguiente. Se guarda el **SHA-256 del `jti`**, nunca el token. Índice único parcial `uq_refresh_tokens_active_family` (a lo sumo un token activo por familia, mismo patrón que `ADR-010`). Migración `b7d41e9a3c52`, que encadena con `a5c8e2d71f34` (`ADR-015`, aún sin commitear a esta fecha). `ON DELETE CASCADE` desde `users`.
+>
+> **v0.22 — integración de `refresh_tokens` (`ADR-017`) con el registro de sesiones (`ADR-025`):** una migración (`f8c2d6a4b190`) que une las dos ramas de migraciones y agrega `sessions.refresh_family_id` (`UUID`, nullable, índice `ix_sessions_refresh_family_id`). Enlaza cada fila de `sessions` con la familia de refresh tokens de su login: hay **una fila de `sessions` por login**, y al renovar el access token esa fila se re-vincula a su `jti` nuevo en vez de crear otra. Es lo que hace que cerrar una sesión desde Ajustes también corte su refresh token (la renovación exige una sesión viva en la familia). `refresh_tokens` pasa a ser la sección §5.16 para no chocar con `mentions` (§5.11).
 >
 > **v0.17 — mensajes directos, `messages` (`ADR-013-messages-minimal-model.md`):** "Conversaciones (privadas y grupales), Participantes" + "Mensajes" (§4.B › Mensajería) se resuelve **solo a medias** — pasa a **implementada** (§4.A, §5.10) únicamente la mitad 1:1: mensaje directo entre dos usuarios reales, sin la tabla puente `conversation_participants` que soportaría grupos (sigue sin ratificar). Nueva tabla `messages`: `sender_id`/`recipient_id` (FKs a `users`, ambas `ON DELETE CASCADE`), `content` (texto, sin límite de esquema — validado en la aplicación, máximo 2000 caracteres), `read_at` (`TIMESTAMPTZ`, nullable, `NULL` = no leído, mismo criterio que `notifications.read_at`), sin `updated_at` (mismo criterio que `likes`/`follows`/`notifications`). **Segunda `CHECK` constraint del esquema** (`ck_messages_no_self_message`: `sender_id <> recipient_id`, mismo criterio que `ck_follows_no_self_follow`). Sin `UNIQUE` — dos mensajes entre las mismas personas son eventos legítimos, no un duplicado a impedir (mismo criterio que `notifications`). Dos índices compuestos nuevos, `ix_messages_sender_recipient_created`/`ix_messages_recipient_sender_created` (§8) — el hilo entre A y B se busca con un `OR` sobre ambos sentidos de la relación, que ninguna `UNIQUE` cubre. Decimocuarta y decimoquinta relación real entre entidades (§6): `messages.sender_id → users.id`, `messages.recipient_id → users.id`. Migración `f7a2c9e4d1b8`. Verificado con `flask db upgrade`/`downgrade` contra PostgreSQL 16 real y la suite completa de pruebas (`backend/tests/`, 263 pruebas).
 >
@@ -167,6 +171,7 @@ Se distingue entre:
 | `notifications` | **IMPLEMENTADA — v0.12** (ratificada por `ADR-008-notifications-minimal-model.md`; definición formal en §5; en uso real por `GET /api/notifications`/`PATCH /api/notifications/<id>/read`, generada como efecto secundario de `POST /api/posts/<id>/like`, `POST /api/posts/<id>/comments` y `POST /api/users/<id>/follow`) | Quinta entidad de la capa objetivo (§4.B, "Notificaciones") en pasar a implementada, solo para los tipos `like`/`comment`/`follow`. Modelo: `recipient_id`+`actor_id` (FKs a `users`), `type` (discriminador), `post_id` (FK a `posts`, nullable), `read_at` (nullable) — sin respuestas/menciones/mensajes, sin push/email, sin preferencias configurables |
 | `password_reset_tokens` | **IMPLEMENTADA — v0.14** (reescrita por `ADR-010-password-reset-otp-flow.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/forgot-password`/`POST /api/verify-reset-code`/`POST /api/reset-password`) | Sexta entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `verified_at` (nullable), `reset_authorization_hash`/`_expires_at` (nullable), `used_at` (nullable) — código de un solo uso (10 min), autorización temporal de propósito específico tras verificarlo (10 min), máximo 5 intentos, a lo sumo una solicitud activa por usuario (índice único parcial) |
 | `email_verification_tokens` | **IMPLEMENTADA — v0.15** (reescrita por `ADR-011-mandatory-email-verification.md`, reemplaza la v0.13 de `ADR-009-password-reset-and-email-verification.md`; definición formal en §5; en uso real por `POST /api/register`/`POST /api/verify-registration-code`/`POST /api/resend-registration-code`) | Séptima entidad de la capa objetivo (§4.B, "Autenticación y cuenta"). Modelo: `user_id` (FK a `users`), `code_hash` (scrypt del código OTP de 6 dígitos), `attempts`, `expires_at`, `used_at` (nullable) — código de un solo uso (10 min), máximo 5 intentos, a lo sumo un código activo por usuario (índice único parcial); sin columnas de autorización temporal, a diferencia de `password_reset_tokens` — verificar el código ya es la acción final |
+| `refresh_tokens` | **IMPLEMENTADA — v0.18** (ratificada por `ADR-017-jwt-session-policy.md`; definición formal en §5.16; en uso real por `POST /api/login`, `/api/auth/google`, `/api/refresh` y `/api/logout`) | Sesiones de larga vida con refresh token rotativo: familia por login, hash SHA-256 del `jti`, índice único parcial «un token activo por familia». |
 | `user_identities` | **IMPLEMENTADA — v0.16** (ratificada por `ADR-012-google-sign-in.md`; definición formal en §5.9; en uso real por `POST /api/auth/google`) | Octava entidad de la capa objetivo (§4.B, "Autenticación y cuenta", candidata `oauth_accounts`). Modelo: `user_id` (FK a `users`), `provider` (string libre, `"google"` hoy), `provider_subject` (el claim `sub`, único junto con `provider`) — un usuario puede tener varias identidades vinculadas a la vez (account linking); preparada para Apple/Microsoft sin otra migración de `users` |
 | `messages` | **IMPLEMENTADA — v0.17** (ratificada por `ADR-013-messages-minimal-model.md`; definición formal en §5.10; en uso real por `POST`/`GET /api/users/<id>/messages`, `PATCH`/`DELETE /api/messages/<id>`, `GET /api/conversations`) | Novena entidad de la capa objetivo (§4.B, "Mensajería") en pasar a implementada, solo su mitad 1:1 — sin `conversation_participants`, sin grupos. Modelo: `sender_id`+`recipient_id` (FKs a `users`), `content` (texto), `read_at` (nullable) — sin fotos/archivos adjuntos, sin tiempo real (polling desde el Frontend). **v0.18:** gana `edited_at` (nullable), igual que `posts`/`comments` (`ADR-021`) |
 
@@ -298,6 +303,11 @@ Ninguna entidad de la capa objetivo se implementa hasta que su modelado se ratif
 | `password_hash` | `TEXT` | **Sí** desde v0.16 | Deriva del campo `password` del registro. **Nunca se guarda en claro** — se almacena el hash (necesidad técnica evidente; §11). **v0.16 (`ADR-012`):** pasa a nullable — una cuenta creada exclusivamente vía "Continuar con Google" no tiene contraseña local; `NULL` significa exactamente eso, nunca un valor inventado |
 | `username_changed_at` | `TIMESTAMPTZ` | **Sí** | **v0.6 (`ADR-003`).** Marca de tiempo del último cambio de `username` vía `PATCH /api/users/me`; `NULL` significa "nunca cambió su username". Sostiene la regla de cooldown de 30 días (`domain/auth/username_policy.py`) — no se reutiliza `updated_at` porque esa cambia con cualquier campo, no solo con `username`. Nunca se expone en la API pública (`API_CONTRACT.md` §5). **v0.16:** el username provisorio de una cuenta Google nunca toca esta columna (se queda en `NULL`) hasta que la persona elige uno propio en "Complete your profile" — esa primera elección real nunca choca con el cooldown |
 | `email_verified` | `BOOLEAN`, `DEFAULT false` | No | **v0.13 (`ADR-009-password-reset-and-email-verification.md`).** `false` en toda cuenta hasta completar la verificación (reescrito a OTP en `ADR-011`, v0.15). **v0.16 (`ADR-012`):** una cuenta creada vía Google nace en `true` directamente (la garantía de Google reemplaza al OTP); también puede pasar de `false` a `true` al vincular Google con una cuenta tradicional nunca verificada (account linking, `ADR-012` §Decisión) |
+| `bio` | `VARCHAR(160)` | **Sí** | **ADR-015 (migración `a5c8e2d71f34`).** Texto del perfil. `NULL` = no definido, nunca una cadena vacía. |
+| `location` | `VARCHAR(60)` | **Sí** | **ADR-015.** Ubicación textual libre del perfil. |
+| `website` | `VARCHAR(100)` | **Sí** | **ADR-015.** URL del perfil, validada al escribir. |
+| `avatar_path` | `VARCHAR(255)` | **Sí** | **ADR-015.** **Clave del objeto** en el almacenamiento (p. ej. `avatars/<uuid>.webp`), no una URL: la URL pública depende del entorno (disco local, Supabase o R2) y se resuelve al presentar (`application/media/media_url.py`). |
+| `cover_path` | `VARCHAR(255)` | **Sí** | **ADR-015.** Igual que `avatar_path`, para la portada. |
 | `profile_completed` | `BOOLEAN`, `DEFAULT true` | No | **v0.16 (`ADR-012-google-sign-in.md`).** `true` para toda cuenta existente antes de esta migración y para todo registro tradicional (siempre exige `phone`/`country_code`/`birth_date`); una cuenta nueva vía Google nace en `false` hasta completar esos tres campos vía `PATCH /api/users/me`. Nunca vuelve a `false` una vez en `true` |
 | `created_at` | `TIMESTAMPTZ`, `DEFAULT now()` | No | Convención de auditoría (§7); estándar para toda entidad |
 | `is_private` | `BOOLEAN`, `DEFAULT false` | No | **v0.19 (`ADR-022`).** `true` = solo ven tu contenido quienes tengan un follow en estado `'accepted'` (§5.5), más vos mismo. `false` preserva el comportamiento histórico — ninguna cuenta se vuelve privada por efecto de la migración. Es la única columna de `users` que participa en una regla de **autorización de lectura** |
@@ -830,6 +840,37 @@ Todas las lecturas que significan "relación efectiva" (`is_following`, `followe
 **Purga.** Las filas vencidas se borran de forma **oportunista** (una de cada 200 escrituras borra lo vencido hace más de 24 h), no por un proceso programado: el proyecto no tiene tareas periódicas (DevOps sin documentación oficial, `CLAUDE.md` §15). Funciona mientras haya tráfico; en un sistema parado las filas vencidas se quedan, sin afectar a ningún límite.
 
 **Decisiones sobre esta entidad marcadas como PENDIENTES** (§14, `ADR-027` §Decisiones pendientes): extender el límite a los endpoints de **producto** (feed, posts, comentarios, mensajes) con un mecanismo más barato que una escritura por petición; purga programada en vez de oportunista; y *sliding window* en vez de ventana fija si el borde entre ventanas llega a importar (hoy permite un ritmo instantáneo de hasta 2× el configurado, aceptado conscientemente).
+
+---
+
+### 5.16 `refresh_tokens`
+
+> Undécima entidad con definición formal, ratificada por `ADR-017-jwt-session-policy.md` (implementada el 2026-10-02).
+
+**Propósito.** Sostener las sesiones de larga vida: un refresh token rotativo por login/dispositivo, revocable por reuso, logout o cambio de contraseña.
+
+**Atributos principales**
+
+| Columna | Tipo (conceptual) | Nulo | Justificación / origen |
+|---|---|---|---|
+| `id` | **UUID** | No | Clave primaria, `DEFAULT gen_random_uuid()` |
+| `user_id` | **UUID**, FK → `users.id` | No | Dueño del token. `ON DELETE CASCADE` |
+| `family_id` | **UUID** | No | Cadena de renovaciones de un mismo login. Se revoca entera ante reuso o logout |
+| `token_hash` | **VARCHAR(64)** | No | SHA-256 hexadecimal del `jti` del JWT. Nunca el token ni su `jti` en claro (`ADR-017` §4.1) |
+| `created_at` | **TIMESTAMPTZ** | No | `DEFAULT now()` |
+| `expires_at` | **TIMESTAMPTZ** | No | 30 días desde la emisión (configurable) |
+| `used_at` | **TIMESTAMPTZ** | Sí | Se fija al consumirlo en una renovación |
+| `revoked_at` | **TIMESTAMPTZ** | Sí | Se fija en toda la familia ante reuso, logout o cambio de contraseña |
+| `replaced_by_id` | **UUID** | Sí | Sucesor emitido al consumirlo (trazabilidad) |
+
+**Relaciones.** `users (1) ←→ (N) refresh_tokens`.
+
+**Constraints e índices**
+- **`uq_refresh_tokens_token_hash`** — `UNIQUE (token_hash)`: lookup de `POST /api/refresh` y `/api/logout`.
+- **`uq_refresh_tokens_active_family`** — índice único parcial sobre `family_id` `WHERE used_at IS NULL AND revoked_at IS NULL`: a lo sumo un token activo por familia (`ADR-017` §4.3), defensa de última línea contra dos rotaciones simultáneas.
+- `ix_refresh_tokens_user_id` (revocar todas las sesiones de un usuario) y `ix_refresh_tokens_family_id`.
+
+**Pendiente (no decidido):** limpieza periódica de filas expiradas o revocadas — hoy se acumulan.
 
 ---
 

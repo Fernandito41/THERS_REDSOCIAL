@@ -296,7 +296,7 @@ export default function Messages() {
                   activeId === conversation.user.id ? "bg-pulse-50 dark:bg-pulse-900/20" : ""
                 }`}
               >
-                <Avatar name={conversation.user.name} size="w-11 h-11" />
+                <Avatar name={conversation.user.name} photo={conversation.user.avatar_url} size="w-11 h-11" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-ink dark:text-ink-dark text-sm font-semibold truncate">
@@ -329,7 +329,7 @@ export default function Messages() {
                 >
                   <IoArrowBack size={20} />
                 </button>
-                <Avatar name={active.user.name} size="w-9 h-9" />
+                <Avatar name={active.user.name} photo={active.user.avatar_url} size="w-9 h-9" />
                 <div className="min-w-0">
                   <p className="text-ink dark:text-ink-dark text-sm font-semibold truncate">
                     {active.user.name}
@@ -457,7 +457,7 @@ export default function Messages() {
               </div>
 
               <form onSubmit={handleSend} className="flex items-center gap-2 px-4 py-3 border-t border-line dark:border-line-dark">
-                <Avatar name={currentUser.name} size="w-8 h-8" />
+                <Avatar name={currentUser.name} photo={currentUser.avatar_url} size="w-8 h-8" />
                 <input
                   type="text"
                   value={draft}

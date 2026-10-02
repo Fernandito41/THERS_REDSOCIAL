@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, decode_token
+from flask_jwt_extended import create_access_token, decode_token, get_jwt, get_jwt_identity, jwt_required
 
 from app.application.auth.forgot_password_use_case import forgot_password
 from app.application.auth.google_auth_use_case import authenticate_with_google
@@ -9,6 +9,11 @@ from app.application.auth.login_use_case import login_user
 from app.application.auth.register_use_case import register_user
 from app.application.auth.resend_registration_code_use_case import resend_registration_code
 from app.application.auth.reset_password_use_case import reset_password
+from app.application.auth.session_use_cases import (
+    issue_session as issue_refresh_session,
+    logout_session,
+    rotate_session,
+)
 from app.application.auth.verify_registration_code_use_case import verify_registration_code
 from app.application.auth.verify_reset_code_use_case import verify_reset_code
 from app.application.auth.user_presenter import to_public_user
@@ -25,6 +30,7 @@ from app.domain.auth.exceptions import (
     InvalidCredentialsError,
     InvalidGoogleCredentialError,
     InvalidOrExpiredResetTokenError,
+    InvalidRefreshTokenError,
     InvalidRegistrationCodeError,
     InvalidResetCodeError,
     UsernameAlreadyExistsError,
@@ -44,6 +50,7 @@ from app.domain.auth.validators import (
 )
 from app.infrastructure.auth.google_id_token_verifier import GoogleIdTokenVerifier
 from app.infrastructure.auth.pyotp_totp_provider import PyotpTotpProvider
+from app.infrastructure.auth.session_tokens import FAMILY_CLAIM, JwtSessionTokens
 from app.infrastructure.email.factory import create_email_sender
 from app.infrastructure.persistence.repositories.email_verification_repository import (
     SQLAlchemyEmailVerificationTokenRepository,
@@ -53,6 +60,9 @@ from app.infrastructure.persistence.repositories.password_reset_repository impor
 )
 from app.infrastructure.persistence.repositories.rate_limit_repository import (
     SQLAlchemyRateLimitRepository,
+)
+from app.infrastructure.persistence.repositories.refresh_token_repository import (
+    SQLAlchemyRefreshTokenRepository,
 )
 from app.infrastructure.persistence.repositories.session_repository import (
     SQLAlchemySessionRepository,
@@ -86,6 +96,8 @@ _totp_provider = PyotpTotpProvider()
 # ADR-027-rate-limiting.md: los endpoints de credenciales de este blueprint
 # limitan intentos. Cierra el ítem 8 de `API_CONTRACT.md` §9.
 _rate_limit_repository = SQLAlchemyRateLimitRepository()
+_refresh_token_repository = SQLAlchemyRefreshTokenRepository()
+_session_tokens = JwtSessionTokens()
 
 # EmailSender se decide una sola vez, al importar este módulo (mismo momento
 # en que Config ya resolvió RESEND_API_KEY desde el entorno) -- Resend real
@@ -159,21 +171,28 @@ def _client_fingerprint():
 
 
 def _issue_session_token(user_entity):
-    """Emite el JWT de sesión y registra su sesión. Único camino por el que se
-    emite un token de sesión en todo el backend (login, Google y verificación de
-    2FA pasan por acá) -- centralizarlo es lo que garantiza que no exista un
-    token sin sesión asociada, que funcionaría pero sería irrevocable."""
-    token = create_access_token(identity=str(user_entity.id))
+    """Abre una sesión y devuelve `{"token", "refresh_token"}`. Único camino por
+    el que se emite un token de sesión en todo el backend (login, Google y
+    verificación de 2FA pasan por acá) -- centralizarlo es lo que garantiza que
+    no exista un token sin sesión asociada, que funcionaría pero sería
+    irrevocable.
+
+    Dos piezas, enlazadas por la familia del refresh token: la familia de
+    refresh tokens (ADR-017, renovación rotativa) y la fila del registro de
+    sesiones (ADR-025, ver y cerrar dispositivos)."""
+    tokens = issue_refresh_session(user_entity.id, _refresh_token_repository, _session_tokens)
+    family_id = decode_token(tokens["refresh_token"])[FAMILY_CLAIM]
     user_agent, ip_address = _client_fingerprint()
     issue_session(
         user_entity,
-        decode_token(token)["jti"],
+        decode_token(tokens["token"])["jti"],
         user_agent,
         ip_address,
         _session_repository,
         _email_service,
+        refresh_family_id=family_id,
     )
-    return token
+    return tokens
 
 
 def _two_factor_challenge_token(user_id):
@@ -343,10 +362,14 @@ def login():
 
     # Identity del JWT: user.id (UUID de PostgreSQL), no email — ver
     # BACKEND_ARCHITECTURE.md §9 nota de impacto sobre esta migración.
-    token = _issue_session_token(user_entity)
+    # ADR-017 + ADR-025: se abre una familia de refresh tokens y una fila del
+    # registro de sesiones enlazada a ella. Cambio aditivo -- `token` y `user`
+    # siguen igual.
+    session = _issue_session_token(user_entity)
 
     return jsonify({
-        "token": token,
+        "token": session["token"],
+        "refresh_token": session["refresh_token"],
         "user": user
     }), 200
 
@@ -453,6 +476,7 @@ def reset_password_route():
             _password_reset_token_repository,
             _email_service,
             _session_repository,
+            _refresh_token_repository,
         )
     except InvalidOrExpiredResetTokenError:
         # Mismo mensaje/código sin importar si la autorización no existe,
@@ -589,9 +613,11 @@ def google_auth_route():
             "two_factor_token": _two_factor_challenge_token(user_entity.id),
         }), 200
 
-    token = _issue_session_token(user_entity)
+    session = _issue_session_token(user_entity)
 
-    return jsonify({"token": token, "user": user}), 200
+    return jsonify(
+        {"token": session["token"], "refresh_token": session["refresh_token"], "user": user}
+    ), 200
 
 
 @auth_bp.route("/2fa/verify", methods=["POST"])
@@ -675,13 +701,64 @@ def verify_two_factor():
         policy.TWO_FACTOR_VERIFY, f"ip:{_client_ip()}", _rate_limit_repository
     )
 
-    token = _issue_session_token(user_entity)
+    session = _issue_session_token(user_entity)
 
     return jsonify({
-        "token": token,
+        "token": session["token"],
+        "refresh_token": session["refresh_token"],
         "user": to_public_user(user_entity),
         # Para que el Frontend pueda avisar "usaste un código de recuperación,
         # te quedan N" en vez de dejarlo pasar inadvertido.
         "used_recovery_code": result["used_recovery_code"],
         "recovery_codes_remaining": _recovery_code_repository.count_unused(user_entity.id),
     }), 200
+
+
+@auth_bp.route("/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def refresh_route():
+    # ADR-017-jwt-session-policy.md. Se autentica con el REFRESH token en
+    # `Authorization: Bearer <refresh>` (un access token aquí da 401, y un
+    # refresh en cualquier endpoint protegido también). Cada llamada consume
+    # el refresh presentado y devuelve un par nuevo; reusar uno ya consumido
+    # revoca toda la sesión.
+    claims = get_jwt()
+    family_id = claims.get(FAMILY_CLAIM)
+    try:
+        session = rotate_session(
+            get_jwt_identity(),
+            claims.get("jti"),
+            family_id,
+            _refresh_token_repository,
+            _user_repository,
+            _session_tokens,
+        )
+    except InvalidRefreshTokenError:
+        return jsonify({"msg": "La sesión no es válida o expiró"}), 401
+
+    # ADR-025 + ADR-017: el access token nuevo hereda la fila del registro de
+    # sesiones de esa familia (una fila por login, no una por renovación). Si
+    # la sesión se cerró desde Ajustes (o por cambio de contraseña / 2FA), no
+    # hay fila viva a la que re-vincular: el refresh deja de valer aunque su
+    # propia firma y su fila de `refresh_tokens` sigan vigentes.
+    new_jti = decode_token(session["token"])["jti"]
+    if not _session_repository.rebind_access_token(family_id, new_jti):
+        _refresh_token_repository.revoke_all_for_user(get_jwt_identity())
+        return jsonify({"msg": "La sesión no es válida o expiró"}), 401
+
+    return jsonify(session), 200
+
+
+@auth_bp.route("/logout", methods=["POST"])
+@jwt_required(refresh=True)
+def logout_route():
+    # Revoca la sesión (familia) del refresh token presentado. Idempotente.
+    # Si el refresh ya expiró, la librería responde 401 antes de llegar aquí:
+    # el cliente igual debe limpiar su almacenamiento local.
+    claims = get_jwt()
+    logout_session(claims.get("jti"), _refresh_token_repository)
+    # ADR-025: cerrar sesión también cierra la fila del registro, para que
+    # deje de aparecer como activa en Ajustes › Seguridad.
+    _session_repository.revoke_by_refresh_family(claims.get(FAMILY_CLAIM))
+
+    return jsonify({"msg": "Sesión cerrada"}), 200

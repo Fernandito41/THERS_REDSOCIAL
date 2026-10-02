@@ -21,7 +21,8 @@ export default function AppShell() {
   // ProtectedRoute (app/router/ProtectedRoute.jsx), que envuelve esta rama de
   // rutas y solo renderiza AppShell cuando isAuthenticated es true. Acá solo
   // se consume el usuario ya resuelto por AuthProvider.
-  const { user: currentUser, updateProfile, logout } = useAuth();
+  const { user: currentUser, updateProfile, uploadProfileImage, removeProfileImage, logout } =
+    useAuth();
   const { theme, toggleTheme } = useTheme();
   const { t } = useLanguage();
   const toast = useToast();
@@ -429,6 +430,8 @@ export default function AppShell() {
           onMarkRead: handleMarkRead,
           onMarkAllRead: handleMarkAllRead,
           onUpdateUser: updateProfile,
+          onUploadProfileImage: uploadProfileImage,
+          onRemoveProfileImage: removeProfileImage,
           onOpenComposer: () => setComposerOpen(true),
           onToggleLike: handleToggleLike,
           onLoadComments: handleLoadComments,

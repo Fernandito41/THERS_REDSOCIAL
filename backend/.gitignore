@@ -1,4 +1,10 @@
 venv/
+# `.venv/` también: `python -m venv .venv` crea su propio `.gitignore` con `*`
+# dentro, así que hoy se auto-ignora -- pero eso depende de cómo se creó el
+# entorno, no de este archivo. Se declara explícitamente para que un venv
+# recreado de otra forma no termine en un commit por accidente
+# (HB-001 §20, regla innegociable sobre qué entra al repositorio).
+.venv/
 __pycache__/
 *.pyc
 .env

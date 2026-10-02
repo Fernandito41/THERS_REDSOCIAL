@@ -68,3 +68,13 @@ def meets_minimum_age(birth_date, today=None, min_age_years=MIN_AGE_YEARS):
     if not had_birthday_this_year:
         age -= 1
     return age >= min_age_years
+
+
+# Sitio web del perfil (ADR-015). Se acepta con o sin esquema; si trae uno,
+# solo http/https (nunca `javascript:` u otros -- el Frontend lo usa como
+# href). Sin espacios y con al menos un punto en el host.
+_WEBSITE_RE = re.compile(r"^(https?://)?[^\s/:@]+\.[^\s/:@]+(/\S*)?$", re.IGNORECASE)
+
+
+def is_valid_website(value):
+    return bool(_WEBSITE_RE.match(value))

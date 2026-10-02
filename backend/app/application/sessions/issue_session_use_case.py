@@ -14,7 +14,8 @@ from app.application.email.email_service import EmailService
 
 
 def issue_session(
-    user, token_jti, user_agent, ip_address, session_repository, email_service=None
+    user, token_jti, user_agent, ip_address, session_repository, email_service=None,
+    refresh_family_id=None,
 ):
     """Registra la sesión del token y, si corresponde, avisa por correo.
 
@@ -28,7 +29,9 @@ def issue_session(
     # haría que cualquier dispositivo pareciera conocido.
     is_new_device = not session_repository.has_seen_user_agent(user.id, user_agent)
 
-    session = session_repository.create(user.id, token_jti, user_agent, ip_address)
+    session = session_repository.create(
+        user.id, token_jti, user_agent, ip_address, refresh_family_id
+    )
 
     if is_new_device and user.login_alerts_enabled and email_service is not None:
         # Un fallo de correo NO puede impedir el login: la alerta es un aviso,

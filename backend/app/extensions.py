@@ -68,6 +68,12 @@ def _is_token_revoked(jwt_header, jwt_payload):
     if jwt_payload.get("purpose") == "2fa_challenge":
         return True
 
+    # Los refresh tokens (ADR-017) no son access tokens: no tienen fila propia
+    # en `sessions` y se validan contra `refresh_tokens` en POST /api/refresh y
+    # /api/logout. La librería ya impide usarlos en cualquier otro endpoint.
+    if jwt_payload.get("type") == "refresh":
+        return False
+
     jti = jwt_payload.get("jti")
     if not jti:
         # Un token sin `jti` no puede tener sesión asociada. No debería pasar

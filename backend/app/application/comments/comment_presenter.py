@@ -5,6 +5,7 @@
 # password_hash ni otros campos privados.
 
 
+from app.application.auth.user_presenter import to_author_summary
 from app.application.mentions.mention_presenter import to_public_mentions
 
 
@@ -12,11 +13,7 @@ def to_public_comment(comment, mentions=None):
     return {
         "id": str(comment.id),
         "post_id": str(comment.post_id),
-        "author": {
-            "id": str(comment.author.id),
-            "username": comment.author.username,
-            "name": comment.author.name,
-        },
+        "author": to_author_summary(comment.author),
         "content": comment.content,
         "created_at": comment.created_at.isoformat(),
         # Mismo criterio y misma forma que `post.mentions` (ADR-023).

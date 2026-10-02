@@ -26,6 +26,9 @@
 # adivinarlo -- nunca se expone `password_hash` en sí.
 
 
+from app.application.media.media_url import media_url
+
+
 def to_public_user(user, followers_count=0, following_count=0):
     return {
         "id": str(user.id),
@@ -47,4 +50,21 @@ def to_public_user(user, followers_count=0, following_count=0):
         "is_private": user.is_private,
         "profile_completed": user.profile_completed,
         "has_password": user.password_hash is not None,
+        # ADR-015-profile-media.md: perfil público extendido. `None` = no definido.
+        "bio": user.bio,
+        "location": user.location,
+        "website": user.website,
+        "avatar_url": media_url(user.avatar_path),
+        "cover_url": media_url(user.cover_path),
+    }
+
+
+def to_author_summary(user):
+    """Forma reducida del autor que comparten posts/comentarios/mensajes
+    (nunca campos privados). Centraliza `avatar_url` (ADR-015)."""
+    return {
+        "id": str(user.id),
+        "username": user.username,
+        "name": user.name,
+        "avatar_url": media_url(user.avatar_path),
     }

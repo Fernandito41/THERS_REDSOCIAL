@@ -8,10 +8,24 @@ from abc import ABC, abstractmethod
 
 class SessionRepository(ABC):
     @abstractmethod
-    def create(self, user_id, jti, user_agent, ip_address):
+    def create(self, user_id, jti, user_agent, ip_address, refresh_family_id=None):
         """Registra la sesión que representa un token recién emitido. Se llama
         justo después de `create_access_token`, con el `jti` de ese token
-        (ADR-025-session-registry.md)."""
+        (ADR-025-session-registry.md). `refresh_family_id` enlaza la fila con la
+        familia de refresh tokens del mismo login (ADR-017)."""
+
+    @abstractmethod
+    def rebind_access_token(self, refresh_family_id, new_jti):
+        """Al renovar (ADR-017), apunta la sesión **viva** de esa familia al
+        `jti` del access token nuevo. Devuelve True si había una sesión viva,
+        False si no existe o fue revocada -- en ese caso la renovación debe
+        fallar: es lo que hace que cerrar una sesión desde Ajustes corte
+        también su refresh token."""
+
+    @abstractmethod
+    def revoke_by_refresh_family(self, refresh_family_id):
+        """Revoca la sesión de esa familia (logout con refresh token).
+        Idempotente."""
 
     @abstractmethod
     def is_active(self, jti):

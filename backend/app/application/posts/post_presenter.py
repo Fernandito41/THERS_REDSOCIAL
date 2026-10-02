@@ -10,6 +10,9 @@ from app.domain.follows.follow_status import ACCEPTED
 # campos privados de `users`.
 
 
+from app.application.auth.user_presenter import to_author_summary
+
+
 def to_public_post(
     post, likes_count=0, liked_by_me=False, comments_count=0, follow_status=None,
     mentions=None,
@@ -22,9 +25,7 @@ def to_public_post(
     return {
         "id": str(post.id),
         "author": {
-            "id": str(post.author.id),
-            "username": post.author.username,
-            "name": post.author.name,
+            **to_author_summary(post.author),
             # `is_followed_by_me` se mantiene (ADR-007, v0.12 del contrato) y
             # sigue significando exactamente lo mismo: relación efectiva. Una
             # solicitud pendiente es `false` acá -- pedir no es seguir.

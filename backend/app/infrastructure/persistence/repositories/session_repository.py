@@ -12,14 +12,45 @@ from app.infrastructure.persistence.models import Session
 
 
 class SQLAlchemySessionRepository(SessionRepository):
-    def create(self, user_id, jti, user_agent, ip_address):
+    def create(self, user_id, jti, user_agent, ip_address, refresh_family_id=None):
         session = Session(
-            user_id=user_id, jti=jti, user_agent=user_agent, ip_address=ip_address
+            user_id=user_id,
+            jti=jti,
+            user_agent=user_agent,
+            ip_address=ip_address,
+            refresh_family_id=refresh_family_id,
         )
         db.session.add(session)
         db.session.commit()
         db.session.refresh(session)
         return session
+
+    def rebind_access_token(self, refresh_family_id, new_jti):
+        if not refresh_family_id:
+            return False
+        result = db.session.execute(
+            update(Session)
+            .where(
+                Session.refresh_family_id == refresh_family_id,
+                Session.revoked_at.is_(None),
+            )
+            .values(jti=new_jti, last_used_at=func.now())
+        )
+        db.session.commit()
+        return result.rowcount > 0
+
+    def revoke_by_refresh_family(self, refresh_family_id):
+        if not refresh_family_id:
+            return
+        db.session.execute(
+            update(Session)
+            .where(
+                Session.refresh_family_id == refresh_family_id,
+                Session.revoked_at.is_(None),
+            )
+            .values(revoked_at=func.now())
+        )
+        db.session.commit()
 
     def is_active(self, jti):
         # Consulta más caliente del backend: corre en cada petición protegida.

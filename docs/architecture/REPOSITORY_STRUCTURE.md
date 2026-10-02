@@ -124,6 +124,28 @@ Lo mostrado dentro de `Frontend/` corresponde a la captura de referencia origina
 - **Qué NO debe contener:** código del producto (Frontend), lógica de negocio del backend.
 - `[Pendiente de confirmación]`: contenido interno real — no expandida en la captura de referencia. Ver sección 5 para la relación entre `handbook/` y `docs/`, marcada explícitamente como no verificada.
 
+### `mobile/`
+
+**Agregada el 2026-10-01.** Verificada directamente contra el filesystem real, no inferida de una captura.
+
+- **Propósito:** la aplicación Android de THERS — React Native + Expo SDK 57 + TypeScript, decidido en `ADR-016-mobile-stack.md` (ratificado por el Comité Técnico, `HB-001` §11–12).
+- **Cuarta aplicación independiente** del monorepo, junto a `backend/`, `Frontend/` y `handbook/`: sin código compartido, sin `node_modules` compartidos, con su propio `package.json` y su propio lockfile. La raíz **no** usa workspaces, y esta carpeta no los introduce (sección 2).
+- **Contenido real:**
+
+| Ruta | Contenido |
+|---|---|
+| `app/` | rutas de Expo Router — `_layout.tsx`, `index.tsx`, `login.tsx`, `profile.tsx` |
+| `src/features/auth/` | `context/AuthContext.tsx`, `lib/validators.ts`, `types.ts` |
+| `src/shared/` | `lib/api.ts` (cliente HTTP), `lib/session.ts` (SecureStore), `design/tokens.ts` |
+| `assets/` | iconos de la aplicación |
+| `app.json` | configuración de Expo — `scheme`, `package` (`com.thers.app`), plugins |
+| `.env.example` | documenta `EXPO_PUBLIC_API_URL`; `.env` real ignorado por git |
+
+- **Organización por dominio funcional**, igual que `Frontend/src` (sección 2): `features/<dominio>/` con sus propias subcarpetas, `shared/` para lo transversal. Alias `@`, `@features`, `@shared`, `@assets`.
+- **Qué NO debe contener:** código del Frontend web, del Handbook ni del backend; documentos oficiales fuente (viven en `docs/`); ningún secreto (`EXPO_PUBLIC_*` queda embebida en el bundle y es legible desde el APK).
+- **`android/` e `ios/` no se versionan:** el proyecto usa CNG (Continuous Native Generation) — se generan desde `app.json` y los config plugins. Ya están en el `.gitignore` de la carpeta.
+- Documentación operativa en `docs/mobile/` (`READINESS.md`, `ANDROID_SETUP.md`, `VALIDATION.md`, `ROADMAP.md`).
+
 ---
 
 ## 5. Frontend

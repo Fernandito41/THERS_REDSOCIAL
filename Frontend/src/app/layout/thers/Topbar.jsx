@@ -130,9 +130,13 @@ export default function Topbar({
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label={t("nav.profileMenuAria")}
-            className="flex h-9 w-9 items-center justify-center rounded-th-pill bg-th-brand text-label-md font-bold text-th-on-brand th-focus-ring"
+            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-th-pill bg-th-brand text-label-md font-bold text-th-on-brand th-focus-ring"
           >
-            {initialsOf(currentUser)}
+            {currentUser?.avatar_url ? (
+              <img src={currentUser.avatar_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initialsOf(currentUser)
+            )}
           </button>
 
           {menuOpen && (

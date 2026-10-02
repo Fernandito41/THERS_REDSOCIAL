@@ -11,7 +11,7 @@ import ProfileIdentity from "../components/ProfileIdentity";
 import ProfileCollections from "../components/ProfileCollections";
 import ProfileRail from "../components/ProfileRail";
 import ProfileTabs, { DEFAULT_TAB, isProfileTab } from "../components/ProfileTabs";
-import { loadProfile, moveProfile } from "../lib/profileStorage";
+import { loadProfile, moveProfile, saveProfile } from "../lib/profileStorage";
 
 // Perfil propio — REF-PROFILE-01.
 //
@@ -30,10 +30,13 @@ import { loadProfile, moveProfile } from "../lib/profileStorage";
 //   · Nombre / usuario       GET/PATCH /api/users/me (ADR-002/003)
 //   · Seguidores / Siguiendo GET /api/users/me (ADR-007)
 //   · Likes y comentarios    reales en cada tarjeta (ADR-005/006)
-//   · Bio, ubicación, enlace, portada, acento -> LOCALES (localStorage),
-//     porque PATCH /api/users/me solo acepta name/username/phone/
-//     country_code/birth_date y no hay columnas ratificadas para el resto
-//     (DATABASE_ARCHITECTURE.md §4.B). Ya era así; no se inventa contrato.
+//   · Bio, ubicación, enlace  GET/PATCH /api/users/me (ADR-015)
+//   · Foto de perfil y portada  POST/DELETE /api/users/me/{avatar,cover} (ADR-015)
+//   · Mood, intereses, canción, degradé de portada y acento -> LOCALES
+//     (localStorage): siguen sin columnas ratificadas (ver lib/profileStorage.js).
+//   · Migración: si el perfil del servidor está vacío y en este navegador
+//     quedaba bio/ubicación/enlace guardados por la versión anterior, se
+//     envían una sola vez al servidor y se limpian de localStorage.
 //
 // La referencia aparece con la tab «Me gusta» seleccionada. La pestaña
 // inicial de la aplicación sigue siendo «Publicaciones» —comportamiento de
@@ -47,6 +50,8 @@ export default function Profile() {
     capsules,
     capsulesLoading,
     onUpdateUser,
+    onUploadProfileImage,
+    onRemoveProfileImage,
     onToggleLike,
     onLoadComments,
     onPostComment,
@@ -60,7 +65,8 @@ export default function Profile() {
   const { t } = useLanguage();
   const editButtonRef = useRef(null);
 
-  const [profile, setProfile] = useState(() => loadProfile(currentUser.username));
+  const [localProfile, setLocalProfile] = useState(() => loadProfile(currentUser.username));
+  const migratedForRef = useRef(null);
   const [isEditing, setEditing] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -78,8 +84,42 @@ export default function Profile() {
   );
 
   useEffect(() => {
-    setProfile(loadProfile(currentUser.username));
+    const local = loadProfile(currentUser.username);
+    setLocalProfile(local);
+
+    if (migratedForRef.current === currentUser.id) return;
+    migratedForRef.current = currentUser.id;
+
+    const legacy = {};
+    for (const field of ["bio", "location", "website"]) {
+      if (local[field]) legacy[field] = local[field];
+    }
+    const serverIsEmpty = !currentUser.bio && !currentUser.location && !currentUser.website;
+    if (!serverIsEmpty || Object.keys(legacy).length === 0) return;
+
+    onUpdateUser(legacy)
+      .then(() => {
+        const cleaned = { ...local, bio: "", location: "", website: "" };
+        saveProfile(currentUser.username, cleaned);
+        setLocalProfile(cleaned);
+      })
+      .catch(() => {
+        // Un valor heredado inválido (p. ej. enlace mal escrito) no debe romper
+        // la página: se queda en local y la persona lo corrige desde «Editar».
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.username]);
+
+  // Bio/ubicación/enlace vienen del servidor; el resto sigue siendo local.
+  const profile = useMemo(
+    () => ({
+      ...localProfile,
+      bio: currentUser.bio ?? "",
+      location: currentUser.location ?? "",
+      website: currentUser.website ?? "",
+    }),
+    [localProfile, currentUser.bio, currentUser.location, currentUser.website]
+  );
 
   const ownCapsules = useMemo(
     () => capsules.filter((capsule) => capsule.author.id === currentUser.id),
@@ -97,18 +137,39 @@ export default function Profile() {
     requestAnimationFrame(() => editButtonRef.current?.focus());
   };
 
-  const handleSave = async ({ name, username, profile: nextProfile }) => {
+  const handleSave = async ({ name, username, profile: nextProfile, media }) => {
     const previousUsername = currentUser.username;
 
     try {
-      await onUpdateUser({ name, username });
+      await onUpdateUser({
+        name,
+        username,
+        bio: nextProfile.bio,
+        location: nextProfile.location,
+        website: nextProfile.website,
+      });
     } catch (error) {
       toast.error(getErrorMessage(error, t));
       return;
     }
 
-    moveProfile(previousUsername, username, nextProfile);
-    setProfile(nextProfile);
+    // Lo local se guarda apenas el texto quedó persistido: si una imagen
+    // falla después, el resto del perfil ya no se pierde.
+    const localOnly = { ...nextProfile, bio: "", location: "", website: "" };
+    moveProfile(previousUsername, username, localOnly);
+    setLocalProfile(localOnly);
+
+    try {
+      for (const kind of ["avatar", "cover"]) {
+        const change = media[kind];
+        if (change === "remove") await onRemoveProfileImage(kind);
+        else if (change) await onUploadProfileImage(kind, change);
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, t));
+      return;
+    }
+
     closeEditor();
     toast.success("Perfil actualizado");
   };
@@ -195,7 +256,11 @@ export default function Profile() {
   return (
     <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 py-4 xl:flex-row">
       <div className="flex w-full min-w-0 flex-1 flex-col gap-6">
-        <ProfileCover cover={profile.cover} onChangeCover={() => setEditing(true)} />
+        <ProfileCover
+          cover={profile.cover}
+          coverUrl={currentUser.cover_url}
+          onChangeCover={() => setEditing(true)}
+        />
 
         <ProfileIdentity
           user={currentUser}

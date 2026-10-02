@@ -4,6 +4,9 @@
 # application/notifications/notification_presenter.py.
 
 
+from app.application.auth.user_presenter import to_author_summary
+
+
 def to_public_message(message):
     return {
         "id": str(message.id),
@@ -25,9 +28,7 @@ def to_public_conversation(conversation):
     last_message = conversation["last_message"]
     return {
         "user": {
-            "id": str(other_user.id),
-            "username": other_user.username,
-            "name": other_user.name,
+            **to_author_summary(other_user),
             # Estado de actividad (ADR-024-content-filters-and-privacy-preferences.md).
             # `null` si la otra persona lo tiene oculto O si nunca registró
             # actividad -- los dos casos son indistinguibles a propósito: si

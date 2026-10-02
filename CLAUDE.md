@@ -44,9 +44,9 @@ Cuatro documentos, todos en `docs/architecture/`, todos con el mismo formato y e
 | Documento | Versión | Estado | Cubre |
 |---|---|---|---|
 | `BACKEND_ARCHITECTURE.md` | 0.13 | Pendiente de ratificación formal (`HB-001` §11–12) | Capas del backend, flujo de una petición, autenticación, configuración, seguridad |
-| `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md` + `DATABASE_ERD_OBJETIVO.md` | 0.18 / 0.1 / 0.2 | Pendiente de ratificación formal | Modelo de datos en tres capas: implementado (`users`, incluidas columnas de perfil), objetivo del producto (candidatas sin modelado ratificado), pendiente de decisión |
+| `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md` + `DATABASE_ERD_OBJETIVO.md` | 0.22 / 0.14 / 0.7 | Pendiente de ratificación formal | Modelo de datos en tres capas: implementado (`users`, incluidas columnas de perfil), objetivo del producto (candidatas sin modelado ratificado), pendiente de decisión |
 | `FRONTEND_ARCHITECTURE.md` | 0.4 | Pendiente de ratificación formal | Stack, estructura, estado, routing, frontera con el backend, seguridad y Design System (§13) del Frontend del producto |
-| `API_CONTRACT.md` | 0.21 | Pendiente de ratificación formal | Catálogo de endpoints, formato de request/response/error, autenticación — única fuente del contrato HTTP entre `Frontend/` y `backend/` |
+| `API_CONTRACT.md` | 0.29 | Pendiente de ratificación formal | Catálogo de endpoints, formato de request/response/error, autenticación — única fuente del contrato HTTP entre `Frontend/` y `backend/` |
 
 Ninguno de los cuatro es todavía un documento oficial ratificado en el sentido de `HB-001` §11–12: son la mejor fuente disponible para su dominio, con las decisiones sin respaldo marcadas explícitamente como `PENDIENTE DE APROBACIÓN` dentro de cada uno. No copian contenido entre sí — cada decisión vive en un único documento y los demás la referencian.
 
@@ -134,17 +134,17 @@ Ningún cambio de arquitectura o diseño se decide de forma aislada dentro de un
 - Alias de imports (`@`, `@features`, `@shared`, `@assets`) definidos en `vite.config.js` y ya en uso — documentados en `FRONTEND_ARCHITECTURE.md` §20.
 
 ### Base de Datos
-- Fuente: `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md`/`DATABASE_ERD_OBJETIVO.md` (§3.1) — propuesta v0.18/v0.1/v0.2, pendiente de ratificación.
-- **Ya no es solo `users`** (corrección: este archivo afirmaba "única entidad con modelo implementado" cuando el esquema había avanzado por ADR). Implementadas y ratificadas: `users` (incluidos `username`/`phone`/`country_code`/`birth_date` por `ADR-002`, `bio`/media de perfil por `ADR-015`), `posts` (`ADR-004`), likes (`ADR-005`), comentarios (`ADR-006`), `follows` (`ADR-007`), `notifications` (`ADR-008`), tokens de recuperación y verificación (`ADR-009`/`ADR-010`/`ADR-011`), identidades externas de Google (`ADR-012`) y `messages` (`ADR-013`/`ADR-014`). Migración `head` actual: `b7d41e9a3c52` (`refresh_tokens`, `ADR-017`; encadena con `a5c8e2d71f34`, de `ADR-015`).
+- Fuente: `DATABASE_ARCHITECTURE.md` + `DATABASE_ERD.md`/`DATABASE_ERD_OBJETIVO.md` (§3.1) — propuesta v0.22/v0.14/v0.7, pendiente de ratificación.
+- **Ya no es solo `users`** (corrección: este archivo afirmaba "única entidad con modelo implementado" cuando el esquema había avanzado por ADR). Implementadas y ratificadas: `users` (incluidos `username`/`phone`/`country_code`/`birth_date` por `ADR-002`, `bio`/media de perfil por `ADR-015`), `posts` (`ADR-004`), likes (`ADR-005`), comentarios (`ADR-006`), `follows` (`ADR-007`), `notifications` (`ADR-008`), tokens de recuperación y verificación (`ADR-009`/`ADR-010`/`ADR-011`), identidades externas de Google (`ADR-012`), `messages` (`ADR-013`/`ADR-014`) y `refresh_tokens` (`ADR-017`). El PR #62 (`ADR-019` a `ADR-030`) integró en `develop`: borrado y edición de posts, comentarios y mensajes, cuentas privadas y solicitudes de seguimiento, menciones, filtros y preferencias de privacidad y de contenido, **registro de sesiones** (`ADR-025`), **2FA por TOTP** (`ADR-026`), *rate limiting* (`ADR-027`), exportación de datos (`ADR-028`) y cuentas bloqueadas o restringidas (`ADR-029`). Migración `head` actual: `f8c2d6a4b190`, que fusiona las dos ramas de migraciones (`refresh_tokens` y preferencias de contenido) y enlaza `sessions.refresh_family_id` con la familia de refresh tokens.
 - Lo que siga registrado como candidato objetivo en `DATABASE_ARCHITECTURE.md` §4.B no se implementa sin ratificación por ADR.
 - No inventar esquema, convención ni entidad nueva sin confirmarlo con el equipo.
 
 ### API (Frontend ↔ Backend)
-- Fuente: `API_CONTRACT.md` (§3.1) — propuesta v0.21, pendiente de ratificación.
-- **34 rutas registradas** (verificado contra `app.url_map`, incluida la ruta estática de Flask, 2026-10-02; 32 antes de `ADR-017`). Catálogo completo y autoritativo en `API_CONTRACT.md` §4 (v0.21) — **no replicar aquí la lista**, se desactualiza. Resumen por familia: auth (`register`, `login`, `auth/google`, recuperación y verificación por OTP), perfil (`GET`/`PATCH /api/users/me`, avatar y portada), social (posts, likes, comentarios, follows), notificaciones, mensajes directos (incluido borrado y "escribiendo") y media local.
+- Fuente: `API_CONTRACT.md` (§3.1) — propuesta v0.29, pendiente de ratificación.
+- **71 reglas registradas** en `app.url_map` (incluida la ruta estática de Flask; 70 combinaciones método+ruta, **todas documentadas**), verificado 2026-10-02; eran 34 antes del PR #62. Catálogo completo y autoritativo en `API_CONTRACT.md` §4 (v0.29) — **no replicar aquí la lista**, se desactualiza. Resumen por familia: auth (`register`, `login`, `auth/google`, recuperación y verificación por OTP), perfil (`GET`/`PATCH /api/users/me`, avatar y portada), social (posts, likes, comentarios, follows), notificaciones, mensajes directos (incluido borrado y "escribiendo"), media local, sesiones activas, 2FA, cuentas privadas, bloqueo y restricción, palabras y temas silenciados, y exportación de datos.
 - El Frontend ya consume todas esas familias end-to-end.
 - **Sin tiempo real:** no hay Flask-SocketIO ni WebSocket en el backend (verificado por búsqueda). Mensajes y notificaciones se refrescan por *polling* HTTP desde el Frontend. No asumir Socket.IO.
-- **Sesión:** `JWT_ACCESS_TOKEN_EXPIRES` es de **15 minutos** (default de la librería, verificado en ejecución) y con `ADR-017-jwt-session-policy.md` hay **refresh token rotativo de 30 días** (`POST /api/refresh`, `POST /api/logout`, tabla `refresh_tokens`): **backend (rama `feature/refresh-tokens`) y cliente móvil (rama `feature/mobile-android-app`) implementados y verificados en dispositivo el 2026-10-02, pendientes de merge**. La web todavía no lo usa (adopción opcional): su sesión sigue muriendo a los 15 minutos.
+- **Sesión:** `JWT_ACCESS_TOKEN_EXPIRES` es de **15 minutos** (default de la librería, verificado en ejecución) y con `ADR-017-jwt-session-policy.md` hay **refresh token rotativo de 30 días** (`POST /api/refresh`, `POST /api/logout`, tabla `refresh_tokens`): **backend y cliente móvil ya están en `develop`, verificados en un teléfono real el 2026-10-02**. El registro de sesiones (`ADR-025`) se enlaza con la familia de refresh tokens. La web todavía no usa el refresh (adopción opcional): su sesión sigue muriendo a los 15 minutos.
 - Todo endpoint nuevo se documenta en `API_CONTRACT.md` el mismo día del PR (`HB-001` §15.1).
 
 ### DevOps
@@ -267,8 +267,8 @@ python -m flask db upgrade        # aplica migraciones (backend/migrations/) —
 python run.py                     # punto de entrada — sirve en http://127.0.0.1:5000
 
 # Tests (requieren una base `thers_test` separada, ya migrada igual que arriba)
-python -m pytest                  # 316 pruebas de integración contra PostgreSQL real, no mocks
-                                   # (backend/tests/conftest.py). Verificado 2026-10-02: 316 passed.
+python -m pytest                  # 592 pruebas de integración contra PostgreSQL real, no mocks
+                                   # (backend/tests/conftest.py). Verificado 2026-10-02 sobre `develop`: 592 passed (~12 min).
                                    # conftest.py deriva el puerto de POSTGRES_PORT (el mismo que usa
                                    # docker-compose.yml) — antes estaba fijo en 5432 y en una máquina
                                    # con PostgreSQL nativo apuntaba al motor equivocado.

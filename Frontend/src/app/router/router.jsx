@@ -39,10 +39,13 @@ import {
 import AppShell from "@/app/layout/AppShell";
 import PublicLayout from "@/app/layout/PublicLayout";
 import ProtectedRoute from "./ProtectedRoute";
+import RouteSeo from "@/shared/seo/RouteSeo";
+import NotFound from "@/shared/seo/NotFound";
 
 export default function AppRouter() {
   return (
     <BrowserRouter>
+      <RouteSeo />
       <Routes>
         {/* AUTH */}
         <Route path="/" element={<AuthPage />} />
@@ -114,6 +117,9 @@ export default function AppRouter() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/cookies" element={<Cookies />} />
+          {/* Comodín dentro del layout público: una URL rota sigue mostrando
+              Footer y navegación (RouteSeo la marca noindex). */}
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </BrowserRouter>

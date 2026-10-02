@@ -4,7 +4,6 @@ import Icon from "@shared/components/Icon";
 import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 import { api, getErrorMessage } from "@shared/lib/api";
-import { getStoredToken } from "@features/auth";
 import { SETTINGS_CONTENT } from "../data/settingsSections";
 import { loadSettings, saveSetting } from "../lib/settingsStorage";
 import { usePrivacySettings } from "../hooks/usePrivacySettings";
@@ -41,8 +40,9 @@ import {
  *
  * Filas con comportamiento REAL:
  *  · `passwordReset`     -> POST /api/forgot-password (ADR-009)
- *  · `emailVerification` -> POST /api/send-verification-email (ADR-009) +
- *                           `email_verified` de la sesión
+ *  · `emailVerification` -> estado real `email_verified` de la sesión (solo
+ *                           informa: la verificación es obligatoria al registrarse,
+ *                           ADR-011, y `send-verification-email` se retiró)
  *  · `profileLink`       -> enlace a la edición de perfil ya existente
  *  · `switch` / `choice` -> preferencia guardada en este navegador
  *
@@ -333,26 +333,16 @@ function PasswordResetRow({ currentUser }) {
   );
 }
 
-/** POST /api/send-verification-email + `email_verified` real de la sesión (ADR-009). */
+/**
+ * Estado de verificación del correo (`email_verified` real de la sesión).
+ *
+ * Solo informa. `POST /api/send-verification-email` se retiró en ADR-011: desde
+ * entonces la verificación es obligatoria al registrarse (código OTP) y una
+ * cuenta sin verificar no puede iniciar sesión, así que quien ve esta pantalla
+ * ya tiene el correo verificado. El botón "Enviar verificación" que había acá
+ * llamaba a una ruta que ya no existe (404).
+ */
 function EmailVerificationRow({ currentUser }) {
-  const toast = useToast();
-  const { t } = useLanguage();
-  const [loading, setLoading] = useState(false);
-
-  async function handleSend() {
-    setLoading(true);
-    try {
-      await api.post("/send-verification-email", null, {
-        headers: { Authorization: `Bearer ${getStoredToken()}` },
-      });
-      toast.success("Si hace falta verificar, recibirás un correo con el enlace.");
-    } catch (error) {
-      toast.error(getErrorMessage(error, t));
-    } finally {
-      setLoading(false);
-    }
-  }
-
   if (currentUser.email_verified) {
     return (
       <InfoRow
@@ -364,12 +354,10 @@ function EmailVerificationRow({ currentUser }) {
   }
 
   return (
-    <ActionRow
-      label="Verificar correo"
+    <InfoRow
+      label="Correo sin verificar"
       description="Tu dirección todavía no está confirmada."
-      action="Enviar verificación"
-      onAction={handleSend}
-      loading={loading}
+      value="Pendiente"
     />
   );
 }

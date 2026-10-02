@@ -26,9 +26,9 @@ def _contains_any(column, terms):
 
 def _visible_comment_predicate(viewer_id, muted_keywords):
     """Condición SQL de "este comentario se le muestra a `viewer_id`"
-    (ADR-020-content-filters-and-privacy-preferences.md).
+    (ADR-024-content-filters-and-privacy-preferences.md).
 
-    (Desde ADR-025 la condición nunca es None: los bloqueos y restricciones
+    (Desde ADR-029 la condición nunca es None: los bloqueos y restricciones
     siempre aplican, tenga o no términos filtrados.)
 
     ESTA ES LA ÚNICA DEFINICIÓN del filtro, y la comparten `list_for_post` y
@@ -46,10 +46,10 @@ def _visible_comment_predicate(viewer_id, muted_keywords):
 
     Y una exención que vale para los dos: **a nadie se le oculta su propio
     comentario**. Si no, alguien escribiría un comentario, lo vería
-    desaparecer y lo volvería a escribir pensando que falló (ADR-020
+    desaparecer y lo volvería a escribir pensando que falló (ADR-024
     §Decisión).
     """
-    # Bloqueos y restricciones (ADR-025-blocked-and-restricted-accounts.md),
+    # Bloqueos y restricciones (ADR-029-blocked-and-restricted-accounts.md),
     # siempre presentes -- a diferencia de los filtros de contenido de abajo,
     # no dependen de preferencias opcionales.
     #
@@ -164,7 +164,7 @@ class SQLAlchemyCommentRepository(CommentRepository):
         # Mismo predicado que list_for_post: `comments_count` cuenta exactamente
         # lo que el panel va a mostrar a esta persona. Un contador que no
         # coincide con la lista es un bug visible, no una optimización
-        # (ADR-020 §Decisión).
+        # (ADR-024 §Decisión).
         conditions = [Comment.post_id.in_(post_ids)]
         visible = _visible_comment_predicate(viewer_id, muted_keywords)
         if visible is not None:
@@ -181,7 +181,7 @@ class SQLAlchemyCommentRepository(CommentRepository):
         # `author_id` en el propio WHERE, no un chequeo aparte después de
         # leer la fila -- confirma existencia y pertenencia en la misma
         # sentencia (mismo principio que SQLAlchemyPostRepository.delete,
-        # ADR-015). `comments` no tiene tablas dependientes: no hay cascada
+        # ADR-019). `comments` no tiene tablas dependientes: no hay cascada
         # que considerar (ADR-006 §No objetivos: sin hilos de respuestas).
         result = db.session.execute(
             sa_delete(Comment).where(Comment.id == comment_id, Comment.author_id == author_id)
@@ -191,7 +191,7 @@ class SQLAlchemyCommentRepository(CommentRepository):
 
     def update_content(self, comment_id, author_id, content):
         # Mismo criterio que SQLAlchemyPostRepository.update_content
-        # (ADR-017-content-editing.md): WHERE con author_id, `edited_at`
+        # (ADR-021-content-editing.md): WHERE con author_id, `edited_at`
         # generado por PostgreSQL, y relectura de la fila para devolverla ya
         # actualizada con su autor resuelto.
         result = db.session.execute(

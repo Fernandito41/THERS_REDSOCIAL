@@ -77,13 +77,13 @@ _user_repository = SQLAlchemyUserRepository()
 _password_reset_token_repository = SQLAlchemyPasswordResetTokenRepository()
 _email_verification_token_repository = SQLAlchemyEmailVerificationTokenRepository()
 _user_identity_repository = SQLAlchemyUserIdentityRepository()
-# ADR-021-session-registry.md: cada token emitido se registra como sesión
-# revocable. ADR-022-two-factor-authentication.md: el login puede exigir un
+# ADR-025-session-registry.md: cada token emitido se registra como sesión
+# revocable. ADR-026-two-factor-authentication.md: el login puede exigir un
 # segundo factor antes de emitir ese token.
 _session_repository = SQLAlchemySessionRepository()
 _recovery_code_repository = SQLAlchemyTwoFactorRecoveryCodeRepository()
 _totp_provider = PyotpTotpProvider()
-# ADR-023-rate-limiting.md: los endpoints de credenciales de este blueprint
+# ADR-027-rate-limiting.md: los endpoints de credenciales de este blueprint
 # limitan intentos. Cierra el ítem 8 de `API_CONTRACT.md` §9.
 _rate_limit_repository = SQLAlchemyRateLimitRepository()
 
@@ -111,14 +111,14 @@ TWO_FACTOR_CHALLENGE_PURPOSE = "2fa_challenge"
 
 
 def _client_ip():
-    """IP del cliente, para limitar por origen (ADR-023).
+    """IP del cliente, para limitar por origen (ADR-027).
 
     Mismo criterio que `_client_fingerprint`: `X-Forwarded-For` cuando existe,
     porque detrás de un proxy `remote_addr` es la del proxy. **Es un header que
     el cliente puede falsificar**, así que un atacante decidido puede rotarlo y
     saltarse el límite por IP -- por eso los endpoints que protegen una cuenta
     concreta (login, 2FA) limitan *además* por cuenta, que no se puede falsear
-    (ADR-023 §Riesgos).
+    (ADR-027 §Riesgos).
     """
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
@@ -127,7 +127,7 @@ def _client_ip():
 
 
 def _rate_limited_response(error):
-    """429 uniforme con `Retry-After` (ADR-023 §Contrato API).
+    """429 uniforme con `Retry-After` (ADR-027 §Contrato API).
 
     El header es tan importante como el código: sin él, el cliente reintenta a
     ciegas -- peor para la persona legítima (no sabe cuándo volver) y peor para
@@ -147,7 +147,7 @@ def _client_fingerprint():
 
     `User-Agent` se guarda crudo, sin parsear: el servidor no tiene una base de
     datos de user agents y adivinar produciría etiquetas equivocadas
-    (ADR-021 §Decisión).
+    (ADR-025 §Decisión).
 
     La IP sale de `X-Forwarded-For` cuando existe, porque detrás de un proxy
     `remote_addr` es la del proxy. Es un header que el cliente puede falsificar,
@@ -188,7 +188,7 @@ def _two_factor_challenge_token(user_id):
 def register():
     # Límite por IP, contando TODAS las llamadas (no solo los fallos): acá el
     # éxito es el abuso -- lo que se frena es crear cuentas en masa
-    # (ADR-023, policy.REGISTER con clear_on_success=False).
+    # (ADR-027, policy.REGISTER con clear_on_success=False).
     try:
         rate_limit_guard.enforce(policy.REGISTER, _client_ip(), _rate_limit_repository)
     except RateLimitExceededError as error:
@@ -286,7 +286,7 @@ def login():
     if not email or not password:
         return jsonify({"msg": "Email y contraseña son obligatorios"}), 400
 
-    # Dos límites, no uno (ADR-023 §Decisión):
+    # Dos límites, no uno (ADR-027 §Decisión):
     #  · por email -> protege UNA cuenta concreta de un ataque por diccionario,
     #    y es la identidad que un atacante NO puede falsear.
     #  · por IP -> frena el relleno de credenciales contra muchas cuentas desde
@@ -321,7 +321,7 @@ def login():
     # Credenciales correctas: se borran los contadores. Lo que hay que frenar es
     # *adivinar*, no *usar* -- sin esto, alguien que entra y sale legítimamente
     # varias veces acabaría bloqueado como un atacante
-    # (ADR-023, policy.LOGIN con clear_on_success=True).
+    # (ADR-027, policy.LOGIN con clear_on_success=True).
     rate_limit_guard.clear(policy.LOGIN, f"email:{email.lower()}", _rate_limit_repository)
     rate_limit_guard.clear(policy.LOGIN, f"ip:{client_ip}", _rate_limit_repository)
 
@@ -333,7 +333,7 @@ def login():
 
     if user_entity.two_factor_enabled:
         # 200, no 4xx: nada salió mal -- las credenciales eran correctas y falta
-        # el segundo paso del login (ADR-022 §Contrato API). **No se emite token
+        # el segundo paso del login (ADR-026 §Contrato API). **No se emite token
         # de sesión ni se registra ninguna sesión acá**: hasta que el segundo
         # factor valide, no hay sesión.
         return jsonify({
@@ -360,7 +360,7 @@ def forgot_password_route():
     # el flujo de enlace de ADR-009-password-reset-and-email-verification.md).
 
     # Límite por IP contando TODAS las llamadas: cada una exitosa manda un
-    # correo, así que acá el éxito ES el abuso (ADR-023, policy.EMAIL_DISPATCH
+    # correo, así que acá el éxito ES el abuso (ADR-027, policy.EMAIL_DISPATCH
     # con clear_on_success=False).
     #
     # Complementa, no reemplaza, el cooldown de 60 s por cuenta que ADR-010/
@@ -393,7 +393,7 @@ def verify_reset_code_route():
     # Público -- quien lo llama todavía no tiene sesión (ADR-010 §Contrato
     # API). No usa @jwt_required(): la identidad la aporta email + código.
 
-    # Límite por IP (ADR-023, policy.OTP_VERIFY). Estos endpoints YA tienen un
+    # Límite por IP (ADR-027, policy.OTP_VERIFY). Estos endpoints YA tienen un
     # contador de 5 intentos POR CÓDIGO (ADR-010/ADR-011); esto cierra el hueco
     # de que ese contador es por código, así que pedir uno nuevo daba 5 intentos
     # más cada 60 s indefinidamente.
@@ -470,7 +470,7 @@ def verify_registration_code_route():
     # sigue sin verificar, ADR-011-mandatory-email-verification.md §Contrato
     # API, reemplaza `POST /api/verify-email` de ADR-009).
 
-    # Límite por IP (ADR-023, policy.OTP_VERIFY). Estos endpoints YA tienen un
+    # Límite por IP (ADR-027, policy.OTP_VERIFY). Estos endpoints YA tienen un
     # contador de 5 intentos POR CÓDIGO (ADR-010/ADR-011); esto cierra el hueco
     # de que ese contador es por código, así que pedir uno nuevo daba 5 intentos
     # más cada 60 s indefinidamente.
@@ -510,7 +510,7 @@ def resend_registration_code_route():
     # llama todavía no puede iniciar sesión (ADR-011 §Contrato API).
 
     # Límite por IP contando TODAS las llamadas: cada una exitosa manda un
-    # correo, así que acá el éxito ES el abuso (ADR-023, policy.EMAIL_DISPATCH
+    # correo, así que acá el éxito ES el abuso (ADR-027, policy.EMAIL_DISPATCH
     # con clear_on_success=False).
     #
     # Complementa, no reemplaza, el cooldown de 60 s por cuenta que ADR-010/
@@ -580,7 +580,7 @@ def google_auth_route():
     # acepta un token de Google (FASE 15 de la tarea origen).
     # Mismo criterio que en /login: Google ya autenticó la identidad, pero si
     # la cuenta tiene 2FA activo ese segundo factor también aplica acá -- si no,
-    # "Continuar con Google" sería una puerta que lo saltea (ADR-022 §Seguridad).
+    # "Continuar con Google" sería una puerta que lo saltea (ADR-026 §Seguridad).
     user_entity = _user_repository.find_by_id(user["id"])
 
     if user_entity.two_factor_enabled:
@@ -596,7 +596,7 @@ def google_auth_route():
 
 @auth_bp.route("/2fa/verify", methods=["POST"])
 def verify_two_factor():
-    """Segundo paso del login con 2FA (ADR-022-two-factor-authentication.md).
+    """Segundo paso del login con 2FA (ADR-026-two-factor-authentication.md).
 
     **No lleva `@jwt_required()` a propósito.** El token de desafío no es un
     token de sesión: no tiene fila en `sessions`, así que el
@@ -633,7 +633,7 @@ def verify_two_factor():
         return jsonify({"msg": "El token de verificación no es válido o expiró"}), 401
 
     # ───────────────────────────────────────────────────────────────────────
-    # EL MOTIVO POR EL QUE EXISTE ADR-023-rate-limiting.md.
+    # EL MOTIVO POR EL QUE EXISTE ADR-027-rate-limiting.md.
     #
     # Un código TOTP son 10^6 combinaciones en una ventana de 30 s. Sin límite,
     # quien ya tiene la contraseña (y por tanto el token de desafío) puede
@@ -669,7 +669,7 @@ def verify_two_factor():
         # usado -- distinguirlos revelaría el estado de la cuenta.
         return jsonify({"msg": "El código no es válido"}), 401
 
-    # Segundo factor correcto: se liberan los contadores (ADR-023).
+    # Segundo factor correcto: se liberan los contadores (ADR-027).
     rate_limit_guard.clear(policy.TWO_FACTOR_VERIFY, account_identity, _rate_limit_repository)
     rate_limit_guard.clear(
         policy.TWO_FACTOR_VERIFY, f"ip:{_client_ip()}", _rate_limit_repository

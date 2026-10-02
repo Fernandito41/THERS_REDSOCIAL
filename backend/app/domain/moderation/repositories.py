@@ -1,5 +1,5 @@
 # Puerto (interfaz) del repositorio de muted_keywords
-# (ADR-020-content-filters-and-privacy-preferences.md). Vive en domain/ porque
+# (ADR-024-content-filters-and-privacy-preferences.md). Vive en domain/ porque
 # es un contrato de negocio puro -- sin SQLAlchemy, sin Flask, sin PostgreSQL
 # -- mismo patrón Repository que domain/follows/repositories.py.
 

@@ -49,7 +49,7 @@ export default function AppRouter() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-registration-code" element={<VerifyRegistrationCode />} />
-        {/* Segundo paso del login con 2FA (ADR-022). Ruta pública: en este
+        {/* Segundo paso del login con 2FA (ADR-026). Ruta pública: en este
             punto todavía no hay sesión -- el token de desafío viaja por
             router state, no por localStorage. */}
         <Route path="/two-factor" element={<TwoFactorChallenge />} />

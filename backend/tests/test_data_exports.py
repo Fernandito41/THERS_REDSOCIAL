@@ -1,5 +1,5 @@
 # Pruebas de integración de la exportación de datos (REF-SET-09,
-# ADR-024-data-export.md) contra PostgreSQL real (thers_test) -- no mocks.
+# ADR-028-data-export.md) contra PostgreSQL real (thers_test) -- no mocks.
 
 import io
 import json

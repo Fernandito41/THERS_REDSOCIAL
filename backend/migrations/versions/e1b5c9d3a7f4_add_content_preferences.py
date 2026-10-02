@@ -4,7 +4,7 @@ Revision ID: e1b5c9d3a7f4
 Revises: d9a3b7f1c5e2
 Create Date: 2026-10-01 00:00:00.000000
 
-Preferencias de contenido y feed (ADR-026-content-preferences.md):
+Preferencias de contenido y feed (ADR-030-content-preferences.md):
 
   · `posts.is_sensitive` — lo que el AUTOR declara al publicar.
   · `users.hide_sensitive_content` — si el feed de esa persona omite lo marcado.

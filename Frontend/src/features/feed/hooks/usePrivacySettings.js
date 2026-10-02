@@ -5,8 +5,8 @@ import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 
 // Preferencias de privacidad REALES, contra el servidor
-// (GET/PATCH /api/users/me/privacy -- ADR-018-private-accounts.md,
-// ADR-019-mentions.md, ADR-020-content-filters-and-privacy-preferences.md).
+// (GET/PATCH /api/users/me/privacy -- ADR-022-private-accounts.md,
+// ADR-023-mentions.md, ADR-024-content-filters-and-privacy-preferences.md).
 //
 // A diferencia de `settingsStorage.js`, que guarda preferencias en este
 // navegador porque no hay endpoint que las aplique, estas siete sí se aplican

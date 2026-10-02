@@ -1,5 +1,5 @@
 # Caso de uso: listar las solicitudes de seguimiento sin responder
-# (GET /api/follow-requests, ADR-018-private-accounts.md). Siempre desde la
+# (GET /api/follow-requests, ADR-022-private-accounts.md). Siempre desde la
 # perspectiva del usuario autenticado -- `user_id` sale de get_jwt_identity()
 # en la route, nunca de la URL ni del body, así que nadie puede listar las
 # solicitudes de otra persona (mismo criterio que GET /api/notifications y

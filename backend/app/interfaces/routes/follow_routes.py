@@ -1,6 +1,6 @@
 # POST y DELETE /api/users/<user_id>/follow (ADR-007-follows-minimal-model.md),
 # más GET /api/follow-requests, POST /api/follow-requests/<user_id>/accept y
-# DELETE /api/follow-requests/<user_id> (ADR-018-private-accounts.md).
+# DELETE /api/follow-requests/<user_id> (ADR-022-private-accounts.md).
 #
 # `/follow-requests` no anida bajo `/users/<id>`: siempre se listan y se
 # responden las solicitudes dirigidas al usuario autenticado, nunca las de
@@ -52,7 +52,7 @@ follows_bp = Blueprint("follows", __name__)
 _user_repository = SQLAlchemyUserRepository()
 _follow_repository = SQLAlchemyFollowRepository()
 _notification_repository = SQLAlchemyNotificationRepository()
-# ADR-025-blocked-and-restricted-accounts.md: no se sigue a quien bloqueó ni a
+# ADR-029-blocked-and-restricted-accounts.md: no se sigue a quien bloqueó ni a
 # quien se bloqueó.
 _restriction_repository = SQLAlchemyRestrictionRepository()
 
@@ -98,7 +98,7 @@ def unfollow(user_id):
 @jwt_required()
 def pending_requests():
     # Identidad exclusivamente del JWT -- nunca de query string. Un usuario
-    # solo puede listar sus propias solicitudes (ADR-018 §Seguridad, mismo
+    # solo puede listar sus propias solicitudes (ADR-022 §Seguridad, mismo
     # principio que GET /api/notifications).
     user_id = get_jwt_identity()
 
@@ -110,7 +110,7 @@ def pending_requests():
 @jwt_required()
 def accept_request(user_id):
     # `user_id` de la URL es QUIEN PIDIÓ seguir; quien acepta es el del JWT.
-    # La pertenencia se confirma dentro del UPDATE (ADR-018 §Seguridad), no
+    # La pertenencia se confirma dentro del UPDATE (ADR-022 §Seguridad), no
     # acá -- esta route no lee la fila para compararla después.
     responder_id = get_jwt_identity()
 
@@ -131,7 +131,7 @@ def accept_request(user_id):
 @jwt_required()
 def reject_request(user_id):
     # Rechazar es un DELETE sobre la solicitud, no un POST a /reject: lo que
-    # pasa es que la solicitud deja de existir (ADR-018 §Opciones
+    # pasa es que la solicitud deja de existir (ADR-022 §Opciones
     # consideradas). Aceptar sí es un POST porque crea una relación nueva.
     responder_id = get_jwt_identity()
 

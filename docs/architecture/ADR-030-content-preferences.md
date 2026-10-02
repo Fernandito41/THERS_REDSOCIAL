@@ -1,8 +1,8 @@
-# ADR-026 — Preferencias de contenido y feed
+# ADR-030 — Preferencias de contenido y feed
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-026-content-preferences.md` |
+| Documento | `docs/architecture/ADR-030-content-preferences.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea, a pedido del propietario del proyecto. Pendiente de la revisión humana que exige `HB-001` §19 |
@@ -18,13 +18,13 @@ La sección REF-SET-12 tenía cuatro controles. Al revisarlos, **uno de los moti
 | Control | Lo que decía la pantalla | Estado real antes de este ADR |
 |---|---|---|
 | Filtrar contenido sensible | «No existe clasificación de contenido en el servidor» | Cierto |
-| Lista de palabras ocultas | «El feed no admite filtros: `GET /api/posts` devuelve la lista completa» | **Falso desde `ADR-020`**: `muted_keywords` existe, filtra en SQL y la pantalla de Privacidad lo usa. Solo faltaba mostrarlo acá |
+| Lista de palabras ocultas | «El feed no admite filtros: `GET /api/posts` devuelve la lista completa» | **Falso desde `ADR-024`**: `muted_keywords` existe, filtra en SQL y la pantalla de Privacidad lo usa. Solo faltaba mostrarlo acá |
 | Temas silenciados | «No existe el modelo de temas ni etiquetas» | Cierto |
 | Mostrar cuentas sugeridas | «Controla el panel… que hoy usa datos de ejemplo» | Era un interruptor local que **no controlaba nada**: ningún componente leía `content.suggestions`, y el panel eran cinco personas inventadas |
 
 ## Qué no se toca
 
-**Las palabras ocultas ya funcionaban** (`ADR-020`: tabla, endpoints, filtro en el `WHERE`, componente `MutedKeywordsRow`). Este ADR **no modifica nada de eso**: solo coloca la misma fila en esta pantalla, que seguía marcándola como no disponible por un texto desactualizado.
+**Las palabras ocultas ya funcionaban** (`ADR-024`: tabla, endpoints, filtro en el `WHERE`, componente `MutedKeywordsRow`). Este ADR **no modifica nada de eso**: solo coloca la misma fila en esta pantalla, que seguía marcándola como no disponible por un texto desactualizado.
 
 ## Objetivos
 
@@ -37,7 +37,7 @@ La sección REF-SET-12 tenía cuatro controles. Al revisarlos, **uno de los moti
 - **No hay clasificación automática de contenido sensible.** Ni modelo de IA ni moderación: `is_sensitive` es lo que el **autor declara**. Es la única fuente honesta con lo que el producto tiene hoy, y la pantalla lo dice.
 - **No hay entidad de temas ni de hashtags.** Un tema se reconoce dentro del texto de la publicación; no hay tendencias, página de un tema ni búsqueda por etiqueta.
 - **«Temas en tendencia» sigue siendo de ejemplo** (otro módulo del rail, fuera de esta pantalla), y sigue rotulado así.
-- **No se puede editar la marca de sensible** de una publicación ya creada (`PATCH /api/posts/<id>` solo edita `content`, `ADR-017`). Quedaría para un ADR propio.
+- **No se puede editar la marca de sensible** de una publicación ya creada (`PATCH /api/posts/<id>` solo edita `content`, `ADR-021`). Quedaría para un ADR propio.
 - **No hay algoritmo de recomendación** en las sugerencias: es un orden simple y explicable (ver abajo).
 
 ## Decisión
@@ -47,9 +47,9 @@ La sección REF-SET-12 tenía cuatro controles. Al revisarlos, **uno de los moti
 | Cambio | Detalle |
 |---|---|
 | `posts.is_sensitive` | `BOOLEAN NOT NULL DEFAULT false`. Lo fija el autor en `POST /api/posts` (campo opcional `is_sensitive`, **solo booleano real**: `"false"` como texto se rechaza con `400`, porque en Python es verdadero) |
-| `users.hide_sensitive_content` | `BOOLEAN NOT NULL DEFAULT false`. Se edita con `PATCH /api/users/me/privacy`, el mismo endpoint y la misma whitelist que el resto de preferencias de privacidad (`ADR-018`/`ADR-019`/`ADR-020`) |
-| Filtro | `GET /api/posts` omite los posts con `is_sensitive` **si** el espectador activó el filtro. En el `WHERE`, no en Python, por el mismo motivo que `ADR-018` (filtrar después del `LIMIT` devolvería páginas cortas). La preferencia se lee con una subconsulta escalar sobre `users`, sin cambiar la firma de `list_recent` |
-| Excepciones | **Su propio post nunca se le oculta a su autor**, mismo criterio que los términos filtrados (`ADR-020`) |
+| `users.hide_sensitive_content` | `BOOLEAN NOT NULL DEFAULT false`. Se edita con `PATCH /api/users/me/privacy`, el mismo endpoint y la misma whitelist que el resto de preferencias de privacidad (`ADR-022`/`ADR-023`/`ADR-024`) |
+| Filtro | `GET /api/posts` omite los posts con `is_sensitive` **si** el espectador activó el filtro. En el `WHERE`, no en Python, por el mismo motivo que `ADR-022` (filtrar después del `LIMIT` devolvería páginas cortas). La preferencia se lee con una subconsulta escalar sobre `users`, sin cambiar la firma de `list_recent` |
+| Excepciones | **Su propio post nunca se le oculta a su autor**, mismo criterio que los términos filtrados (`ADR-024`) |
 | `is_sensitive` en la respuesta | Se expone en cada post (`to_public_post`) |
 
 Ambas columnas nacen en `false`: ninguna publicación existente pasa a ser sensible y a nadie se le oculta nada por efecto de la migración.
@@ -70,16 +70,16 @@ Tabla `muted_topics (id, user_id → users CASCADE, topic VARCHAR(50), created_a
 | **Tope de 50 temas por persona**, `409` al pasarse | Cada tema es una condición más en la consulta del feed. Repetir uno existente no choca con el tope |
 | **El propio post nunca se oculta** | Mismo criterio que las palabras ocultas |
 
-Los endpoints replican la forma de `muted-keywords` (`ADR-020`): cada respuesta devuelve la lista completa, y el tema viaja en el body también en el `DELETE`.
+Los endpoints replican la forma de `muted-keywords` (`ADR-024`): cada respuesta devuelve la lista completa, y el tema viaja en el body también en el `DELETE`.
 
 ### 3. Cuentas sugeridas
 
 `GET /api/users/suggestions` devuelve hasta **5** cuentas reales:
 
-- **Excluye:** la propia, a quien ya sigue **o ya le pidió seguir** (cualquier estado), y a cualquiera con un **bloqueo en cualquier sentido** (`ADR-025`) — sugerir la cuenta que bloqueaste, o a quien te bloqueó, deshace el bloqueo en la práctica.
+- **Excluye:** la propia, a quien ya sigue **o ya le pidió seguir** (cualquier estado), y a cualquiera con un **bloqueo en cualquier sentido** (`ADR-029`) — sugerir la cuenta que bloqueaste, o a quien te bloqueó, deshace el bloqueo en la práctica.
 - **Orden:** más seguidores aceptados primero; a igualdad, la más reciente. Simple y explicable; no pretende ser una recomendación personalizada.
 - **Forma reducida:** `{id, name, username, is_private}`. Nunca email ni teléfono.
-- **El botón de seguir actúa sobre el endpoint real** (`ADR-007`/`ADR-018`): refleja «Siguiendo» o «Solicitado» según responda el servidor.
+- **El botón de seguir actúa sobre el endpoint real** (`ADR-007`/`ADR-022`): refleja «Siguiendo» o «Solicitado» según responda el servidor.
 
 El interruptor «Mostrar cuentas sugeridas» **sigue siendo una preferencia local** (en el navegador) y ahora sí controla el panel. Es una decisión consciente: mostrar u ocultar un panel es presentación pura, no protege ningún dato ni es una regla de servidor, así que no justifica una columna ni un endpoint.
 
@@ -98,7 +98,7 @@ El interruptor «Mostrar cuentas sugeridas» **sigue siendo una preferencia loca
 ## Riesgos asumidos
 
 - **Depende de que el autor marque su contenido.** Un post sensible sin marcar se ve igual para todos. Es la limitación de no tener moderación, y la pantalla lo dice.
-- **El filtro de temas es una regex por fila de `muted_topics` sobre `posts.content`.** Con 50 temas es una evaluación de hasta 50 patrones por post candidato. Acotado por el tope y por el `LIMIT` del feed; **no usa índice** (como el `ILIKE` de `ADR-020`). Si el feed crece, la salida es la tabla de hashtags de la opción descartada.
+- **El filtro de temas es una regex por fila de `muted_topics` sobre `posts.content`.** Con 50 temas es una evaluación de hasta 50 patrones por post candidato. Acotado por el tope y por el `LIMIT` del feed; **no usa índice** (como el `ILIKE` de `ADR-024`). Si el feed crece, la salida es la tabla de hashtags de la opción descartada.
 - **La clase `[[:alnum:]]` de PostgreSQL depende de la configuración regional de la base** para reconocer letras con acentos. Con la configuración por defecto del contenedor (`en_US.utf8`) las reconoce; una base creada con `C` trataría `#música` distinto. Hay una prueba que lo verifica con `#música`.
 - **La marca de sensible no se puede quitar ni poner** después de publicar. Quien se equivoca tiene que borrar y volver a publicar.
 - **Las sugerencias dejan a la persona ver quién existe.** Es una lista reducida de cuentas ya visibles en el feed; no expone datos privados, pero sí incluye cuentas privadas (con «Solicitar»). Se acepta: el username de una cuenta privada ya es público en la plataforma.
@@ -113,5 +113,5 @@ Ver `API_CONTRACT.md` §4.15.
 `backend/tests/test_content_preferences.py` — 32 pruebas contra PostgreSQL real, **sobre lo que devuelve el feed**, no solo sobre los endpoints:
 
 - **Sensible:** por defecto no es sensible; el autor la marca; rechaza no-booleanos; la preferencia se guarda; sin filtro todos la ven; con filtro desaparece del feed; el autor nunca pierde la suya; desactivar la restituye.
-- **Temas:** autenticación; alta, listado y baja; normalización de `#`, mayúsculas y espacios; idempotencia; rechazo de temas inválidos; `404` al quitar uno inexistente; aislamiento entre cuentas; tope de 50; el feed oculta por tema; **la etiqueta se compara completa, no por prefijo**; mayúsculas y bordes del texto; acentos; el propio post no se oculta; quitar el tema lo restituye; las palabras ocultas de `ADR-020` siguen funcionando junto a los temas.
+- **Temas:** autenticación; alta, listado y baja; normalización de `#`, mayúsculas y espacios; idempotencia; rechazo de temas inválidos; `404` al quitar uno inexistente; aislamiento entre cuentas; tope de 50; el feed oculta por tema; **la etiqueta se compara completa, no por prefijo**; mayúsculas y bordes del texto; acentos; el propio post no se oculta; quitar el tema lo restituye; las palabras ocultas de `ADR-024` siguen funcionando junto a los temas.
 - **Sugerencias:** autenticación; solo cuentas reales y nunca la propia; forma reducida; excluye seguidas y solicitadas (incluida una cuenta privada); excluye bloqueos en ambos sentidos; orden por seguidores; máximo 5.

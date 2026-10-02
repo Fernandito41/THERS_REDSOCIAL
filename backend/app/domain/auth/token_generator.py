@@ -65,7 +65,7 @@ def generate_otp_code():
 
 
 # Longitud de un codigo de recuperacion de 2FA
-# (ADR-022-two-factor-authentication.md). Diez caracteres de un alfabeto
+# (ADR-026-two-factor-authentication.md). Diez caracteres de un alfabeto
 # base32 sin ambiguedades visuales (sin I/L/O/0/1) = ~48 bits de entropia:
 # muy por encima de los 10^6 de un OTP de 6 digitos, porque un codigo de
 # recuperacion NO expira -- vive hasta que se usa, asi que no puede depender

@@ -20,10 +20,10 @@ class MessageNotFoundError(Exception):
 class MessagesNotAllowedError(Exception):
     """El destinatario no acepta mensajes de quien escribe, segun su
     preferencia `who_can_message`
-    (ADR-020-content-filters-and-privacy-preferences.md).
+    (ADR-024-content-filters-and-privacy-preferences.md).
 
     La route lo traduce a **403, no a 404**: a diferencia de una cuenta
-    privada (ADR-018), aca no hay nada que ocultar -- quien escribe ya sabia
+    privada (ADR-022), aca no hay nada que ocultar -- quien escribe ya sabia
     que esa persona existe (le estaba escribiendo) y mentirle con un 404 solo
     lo haria reintentar. Lo que la preferencia protege es la bandeja, no la
     existencia de la cuenta."""

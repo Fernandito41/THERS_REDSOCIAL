@@ -1,5 +1,5 @@
 # Adaptador SQLAlchemy del puerto `SuggestionRepository`
-# (domain/follows/suggestions.py), ADR-026-content-preferences.md.
+# (domain/follows/suggestions.py), ADR-030-content-preferences.md.
 
 from sqlalchemy import and_, func, or_, select
 
@@ -13,7 +13,7 @@ from app.infrastructure.persistence.models import Follow, User, UserRestriction
 class SQLAlchemySuggestionRepository(SuggestionRepository):
     def list_for_user(self, viewer_id, limit):
         # Cuántos seguidores ACEPTADOS tiene cada candidato. Una solicitud
-        # pendiente no suma (mismo criterio que followers_count, ADR-018).
+        # pendiente no suma (mismo criterio que followers_count, ADR-022).
         followers_count = (
             select(func.count())
             .select_from(Follow)
@@ -29,7 +29,7 @@ class SQLAlchemySuggestionRepository(SuggestionRepository):
             .exists()
         )
 
-        # Bloqueo en cualquier sentido (ADR-025).
+        # Bloqueo en cualquier sentido (ADR-029).
         blocked_either_way = (
             select(UserRestriction.id)
             .where(

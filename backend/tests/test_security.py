@@ -2,8 +2,8 @@
 # PostgreSQL 16 real (thers_test, ver conftest.py) -- no mocks.
 #
 # Cubre los dos ADR que la implementan:
-#   · ADR-021-session-registry.md -- sesiones activas y alertas de inicio de sesión
-#   · ADR-022-two-factor-authentication.md -- 2FA con TOTP y códigos de recuperación
+#   · ADR-025-session-registry.md -- sesiones activas y alertas de inicio de sesión
+#   · ADR-026-two-factor-authentication.md -- 2FA con TOTP y códigos de recuperación
 #
 # Los dos controles que YA funcionaban antes de estos ADR (el correo de cambio de
 # contraseña, ADR-010, y la verificación de email, ADR-011) tienen sus propias
@@ -81,7 +81,7 @@ def _enable_two_factor(client, token):
 
 
 # ===========================================================================
-# ADR-021 — Sesiones activas
+# ADR-025 — Sesiones activas
 # ===========================================================================
 class TestSessionRegistry:
     def test_login_creates_a_listable_session(self, client):
@@ -99,7 +99,7 @@ class TestSessionRegistry:
         sessions = client.get("/api/sessions", headers=_auth_headers(token)).get_json()["sessions"]
 
         # El `jti` es lo que valida cada petición: exponerlo convertiría la
-        # lista en una lista de identificadores de token (ADR-021 §Contrato API).
+        # lista en una lista de identificadores de token (ADR-025 §Contrato API).
         assert "jti" not in sessions[0]
 
     def test_each_login_adds_a_session(self, client):
@@ -136,7 +136,7 @@ class TestSessionRegistry:
         assert response.status_code == 200
         assert response.get_json() == {"revoked": True, "was_current": False}
         # El token revocado deja de servir: es justamente lo que antes de
-        # ADR-021 era imposible.
+        # ADR-025 era imposible.
         assert client.get("/api/users/me", headers=_auth_headers(second)).status_code == 401
         # Y el que revocó sigue funcionando.
         assert client.get("/api/users/me", headers=_auth_headers(first)).status_code == 200
@@ -162,7 +162,7 @@ class TestSessionRegistry:
         )
 
         # Se permite cerrar la propia, y se informa para que el Frontend
-        # redirija a /login (ADR-021 §Decisión).
+        # redirija a /login (ADR-025 §Decisión).
         assert response.get_json() == {"revoked": True, "was_current": True}
         assert client.get("/api/users/me", headers=_auth_headers(token)).status_code == 401
 
@@ -178,7 +178,7 @@ class TestSessionRegistry:
         )
 
         # Mismo 404 que una sesión inexistente -- no revela que existe
-        # (ADR-021 §Seguridad).
+        # (ADR-025 §Seguridad).
         assert response.status_code == 404
         assert client.get("/api/users/me", headers=_auth_headers(token_b)).status_code == 200
 
@@ -205,7 +205,7 @@ class TestSessionRegistry:
         assert response.status_code == 200
         assert response.get_json() == {"revoked_count": 2}
         # La propia sobrevive: cerrar las demás no debe dejar afuera a quien lo
-        # pide (ADR-021 §Decisión).
+        # pide (ADR-025 §Decisión).
         assert client.get("/api/users/me", headers=_auth_headers(first)).status_code == 200
         assert client.get("/api/users/me", headers=_auth_headers(second)).status_code == 401
         assert client.get("/api/users/me", headers=_auth_headers(third)).status_code == 401
@@ -225,7 +225,7 @@ class TestSessionRegistry:
         assert client.delete(f"/api/sessions/{fake}").status_code == 401
 
     def test_changing_the_password_closes_every_session(self, app, client):
-        # ADR-021 §Decisión: antes del registro de sesiones esto era imposible,
+        # ADR-025 §Decisión: antes del registro de sesiones esto era imposible,
         # y era un agujero -- quien restablecía su contraseña porque sospechaba
         # un acceso ajeno no echaba a ese acceso.
         #
@@ -267,7 +267,7 @@ class TestSessionRegistry:
 
 
 # ===========================================================================
-# ADR-021 — Alertas de inicio de sesión
+# ADR-025 — Alertas de inicio de sesión
 # ===========================================================================
 class TestLoginAlertPreference:
     def test_enabled_by_default(self, client):
@@ -278,7 +278,7 @@ class TestLoginAlertPreference:
         ).get_json()["security"]
 
         # Nace activada: una alerta de seguridad que hay que descubrir y
-        # encender no protege a nadie (ADR-021 §Decisión).
+        # encender no protege a nadie (ADR-025 §Decisión).
         assert security["login_alerts_enabled"] is True
 
     def test_can_be_turned_off(self, client):
@@ -331,7 +331,7 @@ class TestLoginAlertPreference:
 
 
 # ===========================================================================
-# ADR-022 — 2FA con TOTP
+# ADR-026 — 2FA con TOTP
 # ===========================================================================
 class TestTwoFactorSetup:
     def test_disabled_by_default(self, client):
@@ -363,7 +363,7 @@ class TestTwoFactorSetup:
         status = client.get("/api/2fa", headers=_auth_headers(token)).get_json()["two_factor"]
 
         # Escanear el QR y abandonar NO debe dejar la cuenta exigiendo un código
-        # (ADR-022 §Decisión): hasta confirmar, el 2FA sigue apagado.
+        # (ADR-026 §Decisión): hasta confirmar, el 2FA sigue apagado.
         assert status["enabled"] is False
         assert status["setup_pending"] is True
 
@@ -429,7 +429,7 @@ class TestTwoFactorLogin:
         body = _login(client, email)
 
         # 200 y no 4xx: nada salió mal, falta el segundo paso
-        # (ADR-022 §Contrato API).
+        # (ADR-026 §Contrato API).
         assert body["two_factor_required"] is True
         assert "two_factor_token" in body
         # Y crucialmente NO hay token de sesión.
@@ -443,7 +443,7 @@ class TestTwoFactorLogin:
         response = client.get("/api/users/me", headers=_auth_headers(challenge))
 
         # No tiene fila en `sessions`, así que el blocklist loader lo rechaza
-        # (ADR-022 §Seguridad). Un desafío no sirve para leer el feed.
+        # (ADR-026 §Seguridad). Un desafío no sirve para leer el feed.
         assert response.status_code == 401
 
     def test_verifying_with_a_valid_totp_returns_a_session(self, client):
@@ -483,7 +483,7 @@ class TestTwoFactorLogin:
 
         # Sin la comprobación de `purpose`, cualquiera con una sesión válida
         # podría emitirse sesiones nuevas sin el segundo factor
-        # (ADR-022 §Seguridad).
+        # (ADR-026 §Seguridad).
         assert response.status_code == 401
 
     def test_recovery_code_works_and_is_single_use(self, client):
@@ -518,7 +518,7 @@ class TestTwoFactorLogin:
         )
 
         # Que alguien lo escriba sin el guion no debería dejarlo fuera de su
-        # propia cuenta (ADR-022 §Decisión).
+        # propia cuenta (ADR-026 §Decisión).
         assert response.status_code == 200
 
     def test_verify_requires_both_fields(self, client):
@@ -556,7 +556,7 @@ class TestTwoFactorDisableAndRecoveryCodes:
         assert response.status_code == 200
         assert response.get_json()["enabled"] is False
         # Bajar la protección de la cuenta fuerza un login nuevo
-        # (ADR-021/ADR-022 §Decisión).
+        # (ADR-025/ADR-026 §Decisión).
         assert client.get("/api/users/me", headers=_auth_headers(token)).status_code == 401
         # Y el login vuelve a ser de un solo paso.
         assert "token" in _login(client, email)

@@ -1,5 +1,5 @@
 # Puerto del repositorio de bloqueos y restricciones
-# (ADR-025-blocked-and-restricted-accounts.md). Sin SQLAlchemy ni Flask.
+# (ADR-029-blocked-and-restricted-accounts.md). Sin SQLAlchemy ni Flask.
 
 from abc import ABC, abstractmethod
 

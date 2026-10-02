@@ -20,7 +20,7 @@ _BRAND_COLOR = "#6C4DF6"  # mismo morado de marca que Frontend/tailwind.config.j
 def _escape(value):
     """Escapa el texto antes de interpolarlo en el HTML de un correo.
 
-    Hasta ADR-021 ninguna plantilla interpolaba un valor que no controlara el
+    Hasta ADR-025 ninguna plantilla interpolaba un valor que no controlara el
     servidor (nombres y códigos venían validados). `login_alert_email` sí: el
     `User-Agent` es texto arbitrario que manda el cliente, así que sin escapar
     podría inyectar HTML en el correo de otra persona.
@@ -176,7 +176,7 @@ def registration_code_email(name, code, ttl_minutes):
 
 
 def login_alert_email(name, user_agent, ip_address, when):
-    # ADR-021-session-registry.md. Se manda solo cuando el `user_agent` no se
+    # ADR-025-session-registry.md. Se manda solo cuando el `user_agent` no se
     # había visto antes en esta cuenta -- no en cada login, que convertiría la
     # alerta en ruido y haría que nadie la leyera.
     #

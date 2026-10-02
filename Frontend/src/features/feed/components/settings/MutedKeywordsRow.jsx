@@ -8,7 +8,7 @@ import { useLanguage } from "@shared/i18n";
 
 // Editor de términos filtrados
 // (GET/POST/DELETE /api/users/me/muted-keywords --
-// ADR-020-content-filters-and-privacy-preferences.md).
+// ADR-024-content-filters-and-privacy-preferences.md).
 //
 // El servidor devuelve la lista completa en cada respuesta (incluido el POST y
 // el DELETE), así que este componente nunca tiene que reconstruirla a mano ni
@@ -16,7 +16,7 @@ import { useLanguage } from "@shared/i18n";
 //
 // El término se manda en el body también en el DELETE, no en la URL: puede
 // llevar espacios, acentos y `/`, y meterlo en el path obligaría a
-// percent-encoding en los dos lados para nada (ADR-020 §Contrato API).
+// percent-encoding en los dos lados para nada (ADR-024 §Contrato API).
 
 const MAX_KEYWORD_LENGTH = 60;
 

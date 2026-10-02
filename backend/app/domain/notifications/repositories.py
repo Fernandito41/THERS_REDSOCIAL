@@ -27,7 +27,7 @@ class NotificationRepository(ABC):
         fijo (mismo criterio que `CommentRepository.list_for_post`).
 
         `excluded_actor_ids` descarta las disparadas por esas cuentas
-        (bloqueos, ADR-025-blocked-and-restricted-accounts.md)."""
+        (bloqueos, ADR-029-blocked-and-restricted-accounts.md)."""
 
     @abstractmethod
     def mark_as_read(self, notification_id, user_id):

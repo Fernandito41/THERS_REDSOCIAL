@@ -1,9 +1,9 @@
 # Caso de uso: editar una publicación propia (PATCH /api/posts/<post_id>,
-# ADR-017-content-editing.md). `author_id` viene exclusivamente de
+# ADR-021-content-editing.md). `author_id` viene exclusivamente de
 # get_jwt_identity() en la route; `content` ya llega validado en formato por
 # la route (domain/posts/validators.py, mismo validador que POST /api/posts)
 # -- este caso de uso solo orquesta, mismo patrón que
-# delete_post_use_case.py (ADR-015).
+# delete_post_use_case.py (ADR-019).
 
 from app.application.mentions.resolve_mentions import resolve_post_mentions
 from app.application.posts.post_presenter import to_public_post
@@ -19,10 +19,10 @@ def update_post(
     if post is None:
         # Mismo error tanto si el id no existe como si existe pero es de otro
         # autor -- la route los traduce al mismo 404, sin revelar cuál de los
-        # dos ocurrió (ADR-017 §Seguridad, mismo criterio que delete_post).
+        # dos ocurrió (ADR-021 §Seguridad, mismo criterio que delete_post).
         raise PostNotFoundError()
 
-    # Las menciones se recalculan sobre el texto nuevo (ADR-019 §Decisión):
+    # Las menciones se recalculan sobre el texto nuevo (ADR-023 §Decisión):
     # quitar un @username de una publicación quita la mención; agregar uno
     # nuevo la crea y la notifica. Quien ya estaba mencionado no se re-notifica.
     mentions = resolve_post_mentions(
@@ -32,13 +32,13 @@ def update_post(
 
     # A diferencia de create_post, acá los contadores NO pueden asumirse en 0:
     # la publicación ya existía y pudo haber acumulado likes y comentarios,
-    # que la edición no toca (el `id` de la fila no cambia, ADR-017
+    # que la edición no toca (el `id` de la fila no cambia, ADR-021
     # §Consecuencias). Devolver 0 dejaría al Frontend pisando su propio
     # estado con contadores falsos.
     post_ids = [post.id]
     likes_counts = like_repository.counts_for_posts(post_ids)
     liked_ids = like_repository.liked_post_ids(author_id, post_ids)
-    # Mismo filtro que el feed y que el panel (ADR-020): el autor cuenta los
+    # Mismo filtro que el feed y que el panel (ADR-024): el autor cuenta los
     # comentarios que él mismo ve, con sus propios términos filtrados aplicados.
     muted_keywords = muted_keyword_repository.list_for_user(author_id)
     comment_counts = comment_repository.counts_for_posts(post_ids, author_id, muted_keywords)

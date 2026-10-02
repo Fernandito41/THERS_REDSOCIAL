@@ -118,9 +118,9 @@ class SQLAlchemyMessageRepository(MessageRepository):
 
     def update_content(self, message_id, sender_id, content):
         # Mismo criterio que SQLAlchemyPostRepository.update_content
-        # (ADR-017-content-editing.md). `read_at` no aparece en los values:
+        # (ADR-021-content-editing.md). `read_at` no aparece en los values:
         # editar un mensaje que la otra persona ya leyó no lo devuelve a no
-        # leído (ADR-017 §Decisión).
+        # leído (ADR-021 §Decisión).
         result = db.session.execute(
             update(Message)
             .where(Message.id == message_id, Message.sender_id == sender_id)

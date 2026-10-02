@@ -4,8 +4,8 @@ Revision ID: d5f9c3e1b764
 Revises: c3e7b1d9a482
 Create Date: 2026-10-01 00:00:00.000000
 
-Menciones con @username (ADR-019-mentions.md —
-docs/architecture/ADR-019-mentions.md). Resuelve el control "Menciones y
+Menciones con @username (ADR-023-mentions.md —
+docs/architecture/ADR-023-mentions.md). Resuelve el control "Menciones y
 etiquetas" de la pantalla de Privacidad (REF-SET-02), que era `pending` con el
 motivo "No existe el modelo de menciones ni etiquetas".
 
@@ -15,7 +15,7 @@ Dos cambios:
    en un comentario. `post_id` y `comment_id` son ambas nullable con una CHECK
    que obliga a que exactamente una esté presente: es la misma entidad
    ("alguien fue mencionado en algo"), no dos tablas casi idénticas
-   (ADR-019 §Opciones consideradas). Tercera CHECK del esquema, después de
+   (ADR-023 §Opciones consideradas). Tercera CHECK del esquema, después de
    `ck_follows_no_self_follow` (ADR-007) y `ck_messages_no_self_message`
    (ADR-013).
 
@@ -23,14 +23,14 @@ Dos cambios:
    porque el permiso (`who_can_mention`) se evalúa al escribir: si mañana la
    persona cambia su preferencia, las menciones que ya aceptó siguen siendo
    válidas, y un @username que nunca tuvo permiso no se convierte en mención
-   retroactivamente (ADR-019 §Decisión).
+   retroactivamente (ADR-023 §Decisión).
 
 2. `users.who_can_mention` — `VARCHAR(20) NOT NULL DEFAULT 'everyone'`
    ('everyone' | 'followers' | 'nobody'). `'everyone'` preserva el
    comportamiento más abierto, que es el que había de hecho hasta ahora (no
    existían las menciones, así que nadie tenía una preferencia que respetar).
    Discriminador validado en la aplicación, no ENUM de PostgreSQL -- mismo
-   criterio que `notifications.type` (ADR-008) y `follows.status` (ADR-018).
+   criterio que `notifications.type` (ADR-008) y `follows.status` (ADR-022).
 
 Escrita a mano (no autogenerada), mismo criterio que las migraciones
 anteriores.
@@ -75,7 +75,7 @@ def upgrade():
         ),
         # Quién la escribió -- redundante con posts.author_id/comments.author_id,
         # pero guardarlo evita un JOIN en cada lectura y deja la fila
-        # auto-explicativa (ADR-019 §Modelo de datos).
+        # auto-explicativa (ADR-023 §Modelo de datos).
         sa.Column(
             'author_id',
             UUID(as_uuid=True),
@@ -112,7 +112,7 @@ def upgrade():
     # mención), pero una UNIQUE sobre (mentioned_user_id, post_id, comment_id)
     # no serviría -- en PostgreSQL dos filas con NULL en una columna del índice
     # no se consideran duplicadas, así que no impediría nada
-    # (ADR-019 §Índices).
+    # (ADR-023 §Índices).
     op.create_index(
         'uq_mentions_user_post',
         'mentions',

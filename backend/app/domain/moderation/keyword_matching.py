@@ -1,5 +1,5 @@
 # Normalización y comparación de términos filtrados
-# (ADR-020-content-filters-and-privacy-preferences.md). Solo tipos nativos de
+# (ADR-024-content-filters-and-privacy-preferences.md). Solo tipos nativos de
 # Python -- domain/ no importa Flask ni SQLAlchemy (BACKEND_ARCHITECTURE.md
 # §7/§17), mismo patrón que domain/posts/validators.py.
 #
@@ -15,7 +15,7 @@ MAX_KEYWORD_LENGTH = 60
 
 #: Cuántos términos puede tener una persona. Sin este límite, una lista de
 #: miles de keywords haría que cada lectura del feed evaluara miles de ILIKE
-#: (ADR-020 §Riesgos).
+#: (ADR-024 §Riesgos).
 MAX_KEYWORDS_PER_USER = 100
 
 
@@ -28,7 +28,7 @@ def normalize_keyword(value):
 
     No se quitan acentos ni se normaliza Unicode: "mañana" y "manana" son
     términos distintos a propósito. Hacerlo equivalentes es una decisión de
-    producto que nadie tomó todavía (ADR-020 §Decisiones pendientes).
+    producto que nadie tomó todavía (ADR-024 §Decisiones pendientes).
     """
     if not isinstance(value, str):
         return None
@@ -43,7 +43,7 @@ def text_matches_any(text, keywords):
 
     Coincidencia por **subcadena**, no por palabra completa: filtrar "spoiler"
     también oculta "spoilers". El efecto colateral conocido es que un término
-    corto puede coincidir dentro de otra palabra (ADR-020 §Riesgos).
+    corto puede coincidir dentro de otra palabra (ADR-024 §Riesgos).
 
     Es el equivalente en Python del `ILIKE '%' || keyword || '%'` que usan las
     consultas; existe para los caminos que ya tienen el texto en memoria y no

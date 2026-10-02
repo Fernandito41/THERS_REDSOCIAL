@@ -1,8 +1,8 @@
-# ADR-019 — Menciones con @username
+# ADR-023 — Menciones con @username
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-019-mentions.md` |
+| Documento | `docs/architecture/ADR-023-mentions.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea (ver §Decisión) |
@@ -52,7 +52,7 @@ Mencionar es, además, la única forma que tiene el producto de dirigir contenid
 
 ### `users.who_can_mention` — `VARCHAR(20) NOT NULL DEFAULT 'everyone'`
 
-Tres valores, del vocabulario compartido `domain/privacy/audience.py`: `'everyone'`, `'followers'`, `'nobody'`. Un único vocabulario para esta preferencia y para `who_can_message` (`ADR-020`) porque significan lo mismo — duplicarlo invitaría a que se desincronizaran.
+Tres valores, del vocabulario compartido `domain/privacy/audience.py`: `'everyone'`, `'followers'`, `'nobody'`. Un único vocabulario para esta preferencia y para `who_can_message` (`ADR-024`) porque significan lo mismo — duplicarlo invitaría a que se desincronizaran.
 
 `'everyone'` es el default porque es el comportamiento que había de hecho: no existían las menciones, así que nadie tenía una preferencia que respetar.
 
@@ -102,7 +102,7 @@ Extensión **aditiva** en `POST`/`GET`/`PATCH` de publicaciones y comentarios. S
 
 ### Notificación `'mention'`
 
-Cuarto tipo, junto a `like`/`comment`/`follow` (`ADR-008`). Lleva `post_id`; una mención en un comentario notifica apuntando al post que lo contiene, porque `notifications` no guarda `comment_id` (limitación que `ADR-016` §Riesgos ya había registrado) — y es además adónde hay que navegar para verla.
+Cuarto tipo, junto a `like`/`comment`/`follow` (`ADR-008`). Lleva `post_id`; una mención en un comentario notifica apuntando al post que lo contiene, porque `notifications` no guarda `comment_id` (limitación que `ADR-020` §Riesgos ya había registrado) — y es además adónde hay que navegar para verla.
 
 Al **editar**, solo se notifica a quien no estaba mencionado antes. Corregir un tipeo en un texto que ya mencionaba a alguien no vuelve a molestarlo.
 
@@ -132,7 +132,7 @@ Al **editar**, solo se notifica a quien no estaba mencionado antes. Corregir un 
 
 ## Riesgos
 
-- **Una mención puede notificar contenido que el destinatario no puede ver.** Si una cuenta privada (`ADR-018`) menciona a alguien que no la sigue, la notificación llega pero el post no se abre. Las alternativas eran peores: no notificar (y que la mención fuera inútil) o conceder acceso implícito (y convertir la mención en una forma de saltarse la privacidad). Se deja como está y se señala.
+- **Una mención puede notificar contenido que el destinatario no puede ver.** Si una cuenta privada (`ADR-022`) menciona a alguien que no la sigue, la notificación llega pero el post no se abre. Las alternativas eran peores: no notificar (y que la mención fuera inútil) o conceder acceso implícito (y convertir la mención en una forma de saltarse la privacidad). Se deja como está y se señala.
 - **Coincidencia por `username`, que puede cambiar.** `PATCH /api/users/me` permite cambiar el username (`ADR-003`, con cooldown). El texto guarda el `@username` viejo, así que tras un cambio el enlace sigue funcionando (la fila apunta al `id`) pero el texto visible queda desactualizado. Reescribir textos ajenos es peor que esto.
 - **Coincidencia por subcadena en el patrón, no por identidad exacta.** Mitigado ordenando por longitud en el Frontend y con `\b` en el parser, pero no se puede descartar un caso raro con usernames muy solapados.
 - **Sin *rate limiting*.** Diez menciones por publicación, pero nada limita cuántas publicaciones por minuto. Coherente con el resto del proyecto (`API_CONTRACT.md` §9).
@@ -142,7 +142,7 @@ Al **editar**, solo se notifica a quien no estaba mencionado antes. Corregir un 
 - Autocompletado de `@` (necesita endpoint de búsqueda de usuarios).
 - Quitarse una mención ajena ("destaguearse").
 - Listar las publicaciones donde me mencionaron.
-- Añadir `comment_id` a `notifications` para que una mención en un comentario apunte al comentario — heredada de `ADR-016`.
+- Añadir `comment_id` a `notifications` para que una mención en un comentario apunte al comentario — heredada de `ADR-020`.
 - Menciones en mensajes directos.
 
 ## Consecuencias
@@ -155,9 +155,9 @@ Al **editar**, solo se notifica a quien no estaba mencionado antes. Corregir un 
 
 - `docs/architecture/ADR-008-notifications-minimal-model.md` — entidad `notifications` que este ADR extiende.
 - `docs/architecture/ADR-002-user-profile-fields.md` §3 — reglas de `username` que el parser replica.
-- `docs/architecture/ADR-017-content-editing.md` — la edición que obliga a recalcular menciones.
-- `docs/architecture/ADR-018-private-accounts.md` — de donde sale el vocabulario de audiencias y el caso de §Riesgos.
-- `docs/architecture/ADR-020-content-filters-and-privacy-preferences.md` — el tercer ADR de la misma pantalla.
+- `docs/architecture/ADR-021-content-editing.md` — la edición que obliga a recalcular menciones.
+- `docs/architecture/ADR-022-private-accounts.md` — de donde sale el vocabulario de audiencias y el caso de §Riesgos.
+- `docs/architecture/ADR-024-content-filters-and-privacy-preferences.md` — el tercer ADR de la misma pantalla.
 - `CLAUDE.md` — jerarquía de fuentes (§4), regla de alcance (§14).
 
 ---

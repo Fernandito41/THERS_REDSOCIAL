@@ -1,5 +1,5 @@
 # Forma pública de una solicitud de seguimiento pendiente, devuelta por
-# GET /api/follow-requests (ADR-018-private-accounts.md §Contrato API) --
+# GET /api/follow-requests (ADR-022-private-accounts.md §Contrato API) --
 # centralizada acá para no duplicarla, mismo patrón que
 # application/notifications/notification_presenter.py.
 #

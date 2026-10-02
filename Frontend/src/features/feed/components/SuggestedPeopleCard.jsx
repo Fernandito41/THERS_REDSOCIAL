@@ -7,12 +7,12 @@ import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 
 // «Personas que resuenan» -- cuentas REALES de GET /api/users/suggestions
-// (ADR-026-content-preferences.md). Antes eran cinco personas de ejemplo
+// (ADR-030-content-preferences.md). Antes eran cinco personas de ejemplo
 // rotuladas como tal; ahora el servidor sugiere cuentas que existen, que la
 // persona todavía no sigue y con las que no hay un bloqueo.
 //
 // El botón de seguir actúa sobre el endpoint real (POST/DELETE
-// /api/users/<id>/follow, ADR-007/ADR-018) y refleja lo que el servidor
+// /api/users/<id>/follow, ADR-007/ADR-022) y refleja lo que el servidor
 // responde: «Siguiendo» o «Solicitado» si la cuenta es privada. Mantiene su
 // propio estado en vez de reutilizar el de AppShell: ese Set en memoria existía
 // para las personas de ejemplo.

@@ -32,7 +32,7 @@ from app.extensions import db
 
 
 def reset_rate_limits():
-    """Borra todos los contadores de rate limiting (ADR-023-rate-limiting.md).
+    """Borra todos los contadores de rate limiting (ADR-027-rate-limiting.md).
 
     `_clean_tables` ya trunca `rate_limit_buckets` ENTRE tests, así que la
     inmensa mayoría no necesita esto. Hace falta solo dentro de un test que
@@ -111,12 +111,12 @@ def _clean_tables(app):
     # `users` una vez cada una (ADR-009-password-reset-and-email-verification.md),
     # `user_identities` referencia a `users` una vez
     # (ADR-012-google-sign-in.md), `mentions` referencia a `users` dos veces y
-    # a `posts`/`comments` una cada una (ADR-019-mentions.md) y
+    # a `posts`/`comments` una cada una (ADR-023-mentions.md) y
     # `muted_keywords` referencia a `users` una vez
-    # (ADR-020-content-filters-and-privacy-preferences.md), y `sessions`
-    # (ADR-021-session-registry.md) y `two_factor_recovery_codes`
-    # (ADR-022-two-factor-authentication.md) referencian a `users` una vez cada
-    # una, y `rate_limit_buckets` (ADR-023-rate-limiting.md) no referencia a
+    # (ADR-024-content-filters-and-privacy-preferences.md), y `sessions`
+    # (ADR-025-session-registry.md) y `two_factor_recovery_codes`
+    # (ADR-026-two-factor-authentication.md) referencian a `users` una vez cada
+    # una, y `rate_limit_buckets` (ADR-027-rate-limiting.md) no referencia a
     # ninguna (su identidad es un hash, puede ser una IP o un email inexistente)
     # pero se trunca igual: si no, los contadores de un test se arrastrarian al
     # siguiente y un test con varios intentos de login empezaria ya limitado --

@@ -11,7 +11,7 @@ import { formatRelativeTime } from "../lib/formatRelativeTime";
 
 // Mensajes directos reales (POST/GET/PATCH/DELETE .../messages,
 // GET /api/conversations -- ADR-013-messages-minimal-model.md,
-// ADR-014-messages-ux-improvements.md, ADR-017-content-editing.md).
+// ADR-014-messages-ux-improvements.md, ADR-021-content-editing.md).
 // `conversations` llega por contexto desde AppShell.jsx (mismo patrón que
 // `capsules`/`notifications`: se carga una sola vez ahí, no en cada página).
 // El hilo abierto, su envío/borrado y el indicador de "escribiendo" son
@@ -19,11 +19,11 @@ import { formatRelativeTime } from "../lib/formatRelativeTime";
 //
 // Presencia: `mockConversations` tenía un campo `online` inventado, que se
 // quitó por no tener dato real detrás. Desde
-// ADR-020-content-filters-and-privacy-preferences.md sí existe uno:
+// ADR-024-content-filters-and-privacy-preferences.md sí existe uno:
 // `user.last_seen_at` en GET /api/conversations. Llega en `null` cuando la otra
 // persona oculta su actividad O cuando nunca registró ninguna -- los dos casos
 // son indistinguibles a propósito, para que apagar el interruptor no se note
-// (ADR-020 §Seguridad). Se sigue sin mostrar un indicador "en línea" en verde:
+// (ADR-024 §Seguridad). Se sigue sin mostrar un indicador "en línea" en verde:
 // el dato es "última vez activo", no presencia en tiempo real.
 
 function authHeaders() {
@@ -55,7 +55,7 @@ export default function Messages() {
   // Mensaje pendiente de confirmar para borrar (ADR-014). `null` = diálogo
   // cerrado. Se guarda el id, no un booleano, para saber cuál borrar al confirmar.
   const [pendingDeleteId, setPendingDeleteId] = useState(null);
-  // Mensaje en edición en línea (PATCH /api/messages/<id>, ADR-017). `null` =
+  // Mensaje en edición en línea (PATCH /api/messages/<id>, ADR-021). `null` =
   // ninguno. Sin ConfirmDialog, a diferencia de borrar: una edición se puede
   // volver a editar, así que no hace falta confirmar nada.
   const [editingId, setEditingId] = useState(null);
@@ -203,7 +203,7 @@ export default function Messages() {
     }
   };
 
-  // PATCH /api/messages/<id> (ADR-017). Solo quien mandó el mensaje puede
+  // PATCH /api/messages/<id> (ADR-021). Solo quien mandó el mensaje puede
   // editarlo -- el backend lo verifica contra el JWT y responde 404 si no
   // existe o es de otra persona; acá solo se evita ofrecer el lápiz donde no
   // aplica. El polling del hilo (THREAD_POLL_MS) reemplaza `thread` cada pocos
@@ -435,7 +435,7 @@ export default function Messages() {
                           >
                             {message.content}
                             {/* `edited` es un booleano en el contrato
-                                (ADR-017): se dice QUE se editó, no cuándo. */}
+                                (ADR-021): se dice QUE se editó, no cuándo. */}
                             {message.edited && (
                               <span
                                 className={`ml-2 text-[10px] ${

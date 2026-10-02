@@ -1,5 +1,5 @@
 # Regla de visibilidad de contenido de una cuenta privada
-# (ADR-018-private-accounts.md). Función pura: recibe hechos ya resueltos y
+# (ADR-022-private-accounts.md). Función pura: recibe hechos ya resueltos y
 # devuelve una decisión -- sin Flask, sin SQLAlchemy, sin repositorios
 # (BACKEND_ARCHITECTURE.md §7/§17). Quien la llama es responsable de averiguar
 # esos hechos; esta es la única definición de la regla en todo el backend, para
@@ -23,7 +23,7 @@ def can_view_content_of(author_is_private, author_id, viewer_id, viewer_is_accep
          propias publicaciones.
       3. El espectador tiene un follow **aceptado** hacia el autor. Una
          solicitud en `pending` no alcanza: pedir no es seguir
-         (ADR-018 §Decisión).
+         (ADR-022 §Decisión).
     """
     if not author_is_private:
         return True

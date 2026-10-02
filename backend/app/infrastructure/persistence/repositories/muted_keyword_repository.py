@@ -46,7 +46,7 @@ class SQLAlchemyMutedKeywordRepository(MutedKeywordRepository):
         # `user_id` en el propio WHERE: nadie puede borrar un término de otra
         # persona, y eso se confirma en la misma sentencia que la existencia
         # (mismo principio que las operaciones sobre contenido propio,
-        # ADR-015/ADR-016/ADR-017).
+        # ADR-019/ADR-020/ADR-021).
         result = db.session.execute(
             delete(MutedKeyword).where(
                 MutedKeyword.user_id == user_id, MutedKeyword.keyword == keyword

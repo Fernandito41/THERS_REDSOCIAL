@@ -375,7 +375,7 @@ class TestTypingIndicator:
 
 
 class TestUpdateMessage:
-    # PATCH /api/messages/<message_id> (ADR-017-content-editing.md).
+    # PATCH /api/messages/<message_id> (ADR-021-content-editing.md).
 
     def _send(self, client, token, recipient_id, content="original"):
         res = client.post(
@@ -442,7 +442,7 @@ class TestUpdateMessage:
         )
 
         # Mismo 404 que un mensaje inexistente -- editar es solo de quien lo
-        # mandó, igual que borrar (ADR-014/ADR-017 §Seguridad).
+        # mandó, igual que borrar (ADR-014/ADR-021 §Seguridad).
         assert response.status_code == 404
         thread = client.get(
             f"/api/users/{id_a}/messages", headers=_auth_headers(token_b)
@@ -528,7 +528,7 @@ class TestUpdateMessage:
         )
 
         # `read` sigue en true: editar no devuelve el mensaje a no leído
-        # (ADR-017 §Decisión) -- el separador de no-leídos no se reordena.
+        # (ADR-021 §Decisión) -- el separador de no-leídos no se reordena.
         thread = client.get(
             f"/api/users/{id_b}/messages", headers=_auth_headers(token_a)
         ).get_json()["messages"]
@@ -548,7 +548,7 @@ class TestUpdateMessage:
 
         message = response.get_json()["message"]
         # Ni el destinatario ni el estado de lectura se dejan pisar desde el
-        # body (ADR-017 §Seguridad).
+        # body (ADR-021 §Seguridad).
         assert message["recipient_id"] == id_b
         assert message["read"] is False
         assert client.get(
@@ -571,7 +571,7 @@ class TestUpdateMessage:
 
         # El resumen de la conversación muestra el texto vigente, no el que se
         # mandó primero. No lleva `edited` -- es una vista derivada, no el
-        # mensaje (ADR-017 §Contrato API).
+        # mensaje (ADR-021 §Contrato API).
         assert conversations[0]["last_message"]["content"] == "texto final"
 
     def test_deleted_message_cannot_be_edited(self, client):

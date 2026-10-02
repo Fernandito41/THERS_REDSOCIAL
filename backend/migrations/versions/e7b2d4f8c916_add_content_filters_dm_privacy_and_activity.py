@@ -5,7 +5,7 @@ Revises: d5f9c3e1b764
 Create Date: 2026-10-01 00:00:00.000000
 
 Filtros de contenido, privacidad de mensajes directos y estado de actividad
-(ADR-020-content-filters-and-privacy-preferences.md). Resuelve los tres
+(ADR-024-content-filters-and-privacy-preferences.md). Resuelve los tres
 controles restantes de la pantalla de Privacidad (REF-SET-02):
 "Ocultar comentarios ofensivos", "Filtros de palabras clave personalizadas",
 "Mensajes directos" y "Estado de actividad".
@@ -18,14 +18,14 @@ Cambios:
    impide duplicados. Es una tabla y no un array/JSON en `users` porque hay
    que poder buscar "¿algún keyword de este usuario aparece en este texto?"
    desde SQL, dentro del mismo WHERE que lista los comentarios
-   (ADR-020 §Opciones consideradas).
+   (ADR-024 §Opciones consideradas).
 
 2. `users.hide_offensive_comments` — `BOOLEAN NOT NULL DEFAULT false`.
    `false` preserva el comportamiento actual: nadie empieza a ver su hilo
    filtrado sin haberlo pedido. La lista de términos del sistema vive en el
    repositorio (domain/moderation/offensive_words.py), no en la base de datos
    -- es un placeholder revisable por el equipo, igual que
-   MAX_CONTENT_LENGTH, no dato de usuario (ADR-020 §Decisión).
+   MAX_CONTENT_LENGTH, no dato de usuario (ADR-024 §Decisión).
 
 3. `users.who_can_message` — `VARCHAR(20) NOT NULL DEFAULT 'everyone'`
    ('everyone' | 'followers' | 'nobody'). `'everyone'` es el comportamiento
@@ -70,7 +70,7 @@ def upgrade():
 
     # Nullable y sin default: NULL = "nunca se registró actividad". No se
     # rellena con now() -- eso afirmaría que todo el mundo estuvo activo en el
-    # instante de la migración (ADR-020 §Modelo de datos).
+    # instante de la migración (ADR-024 §Modelo de datos).
     op.add_column(
         'users',
         sa.Column('last_seen_at', sa.DateTime(timezone=True), nullable=True),

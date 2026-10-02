@@ -73,7 +73,7 @@ class TestGetCurrentUser:
         # Token válido (firma correcta, no expirado) pero emitido sin pasar por
         # `POST /api/login`, así que no tiene fila en `sessions`.
         #
-        # **Antes de ADR-021-session-registry.md esto devolvía 404**: el JWT era
+        # **Antes de ADR-025-session-registry.md esto devolvía 404**: el JWT era
         # puramente stateless, llegaba a la route y ahí se descubría que su `sub`
         # no correspondía a ningún usuario. Desde el registro de sesiones, un
         # token sin sesión viva ya no autentica nada y se rechaza con 401 antes
@@ -85,7 +85,7 @@ class TestGetCurrentUser:
         # ON DELETE CASCADE, así que si la cuenta se borra su sesión se borra
         # con ella y el token cae en este mismo 401. La rama se conserva en el
         # código como defensa, no porque haya un camino que la produzca
-        # (ADR-021 §Consecuencias).
+        # (ADR-025 §Consecuencias).
         with app.app_context():
             token = create_access_token(identity=str(uuid.uuid4()))
 

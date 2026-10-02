@@ -8,7 +8,7 @@ import { useLanguage } from "@shared/i18n";
 import { formatRelativeTime } from "../../lib/formatRelativeTime";
 
 // Exportación de datos (POST/GET /api/data-exports y
-// GET /api/data-exports/<id>/download -- ADR-024-data-export.md).
+// GET /api/data-exports/<id>/download -- ADR-028-data-export.md).
 //
 // Antes de ese ADR estos controles eran `pending` ("No existe el trabajo de
 // exportación en el servidor"). Ahora el servidor genera un ZIP real con los

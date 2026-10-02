@@ -1,5 +1,5 @@
 # Endpoints de la pantalla "Descarga de datos y archivo" (REF-SET-09,
-# ADR-024-data-export.md):
+# ADR-028-data-export.md):
 #   · POST /api/data-exports                    genera un archivo nuevo
 #   · GET  /api/data-exports                    historial de solicitudes
 #   · GET  /api/data-exports/<id>/download      descarga el ZIP

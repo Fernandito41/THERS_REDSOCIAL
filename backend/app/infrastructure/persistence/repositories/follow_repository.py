@@ -23,7 +23,7 @@ class SQLAlchemyFollowRepository(FollowRepository):
             # UNIQUE (follower_id, followed_id) -- ya existía la fila;
             # idempotente por diseño (ADR-007 §Decisión). No se le toca el
             # `status`: un POST repetido no degrada a 'pending' un follow ya
-            # aceptado, ni reabre una solicitud (ADR-018 §Decisión).
+            # aceptado, ni reabre una solicitud (ADR-022 §Decisión).
             db.session.rollback()
             return False
         return True
@@ -38,7 +38,7 @@ class SQLAlchemyFollowRepository(FollowRepository):
 
     def is_following(self, follower_id, followed_id):
         # Solo cuenta un follow aceptado -- una solicitud pendiente no concede
-        # visibilidad ni cuenta como relación (ADR-018 §Decisión).
+        # visibilidad ni cuenta como relación (ADR-022 §Decisión).
         return (
             db.session.execute(
                 select(Follow.id).where(
@@ -62,7 +62,7 @@ class SQLAlchemyFollowRepository(FollowRepository):
         # `followed_id` en el propio WHERE: quien acepta/rechaza solo puede
         # tocar solicitudes dirigidas a sí mismo, y eso se confirma en la misma
         # sentencia que la existencia (mismo principio que las operaciones
-        # sobre contenido propio, ADR-015/ADR-016/ADR-017).
+        # sobre contenido propio, ADR-019/ADR-020/ADR-021).
         result = db.session.execute(
             update(Follow)
             .where(
@@ -112,7 +112,7 @@ class SQLAlchemyFollowRepository(FollowRepository):
 
     def followers_count(self, user_id):
         # Solo aceptados: una solicitud pendiente no suma un seguidor
-        # (ADR-018 §Decisión) -- si no, el contador anunciaría gente que
+        # (ADR-022 §Decisión) -- si no, el contador anunciaría gente que
         # todavía no tiene acceso a nada.
         return db.session.execute(
             select(func.count())
@@ -132,7 +132,7 @@ class SQLAlchemyFollowRepository(FollowRepository):
             return {}
         # Sin filtrar por status: devuelve el estado real de cada relación
         # (incluidas las pendientes), y es quien llama el que decide qué
-        # significa cada uno (ADR-018 §Contrato API).
+        # significa cada uno (ADR-022 §Contrato API).
         rows = db.session.execute(
             select(Follow.followed_id, Follow.status).where(
                 Follow.follower_id == follower_id,

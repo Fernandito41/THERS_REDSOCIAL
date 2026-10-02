@@ -1,5 +1,5 @@
 # Casos de uso de temas silenciados (GET/POST/DELETE /api/users/me/muted-topics,
-# ADR-026-content-preferences.md). Mismo patrón que muted_keywords_use_case.py:
+# ADR-030-content-preferences.md). Mismo patrón que muted_keywords_use_case.py:
 # cada respuesta devuelve la lista completa, así la pantalla nunca tiene que
 # reconstruirla ni volver a pedirla.
 

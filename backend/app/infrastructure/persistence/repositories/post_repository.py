@@ -41,7 +41,7 @@ class SQLAlchemyPostRepository(PostRepository):
         # los dos lugares -- están deliberadamente nombrados uno en el otro.
         #
         # Va en el WHERE y no en Python a propósito: filtrar después del
-        # LIMIT devolvería páginas cortas (ADR-018 §Decisión).
+        # LIMIT devolvería páginas cortas (ADR-022 §Decisión).
         visible_to_viewer = or_(
             User.is_private.is_(False),
             Post.author_id == viewer_id,
@@ -55,7 +55,7 @@ class SQLAlchemyPostRepository(PostRepository):
         )
 
         # Un bloqueo en CUALQUIERA de los dos sentidos oculta el post
-        # (ADR-025-blocked-and-restricted-accounts.md). También en el WHERE, por
+        # (ADR-029-blocked-and-restricted-accounts.md). También en el WHERE, por
         # el mismo motivo: filtrar después del LIMIT devolvería páginas cortas.
         not_blocked = ~(
             select(UserRestriction.id)
@@ -75,7 +75,7 @@ class SQLAlchemyPostRepository(PostRepository):
             .exists()
         )
 
-        # Preferencias de contenido (ADR-026-content-preferences.md). Mismas
+        # Preferencias de contenido (ADR-030-content-preferences.md). Mismas
         # reglas que el resto de filtros: en el WHERE, y su propio post nunca
         # se le oculta a quien lo escribió.
         #
@@ -124,7 +124,7 @@ class SQLAlchemyPostRepository(PostRepository):
 
         conditions = [visible_to_viewer, not_blocked, sensitive_ok, topics_ok]
 
-        # Términos filtrados del espectador (ADR-020). Su propio post nunca se
+        # Términos filtrados del espectador (ADR-024). Su propio post nunca se
         # le oculta: filtrar una palabra no debería hacer desaparecer lo que
         # uno mismo escribió.
         if muted_keywords:
@@ -165,7 +165,7 @@ class SQLAlchemyPostRepository(PostRepository):
     def update_content(self, post_id, author_id, content):
         # Mismo WHERE que delete() -- existencia y pertenencia en una sola
         # sentencia, sin leer la fila para compararla después
-        # (ADR-017-content-editing.md §Seguridad).
+        # (ADR-021-content-editing.md §Seguridad).
         #
         # `edited_at=func.now()` sin coalesce, a diferencia de
         # NotificationRepository.mark_as_read/mark_thread_as_read: ahí

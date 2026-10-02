@@ -1,10 +1,10 @@
 # Endpoints de la pantalla "Preferencias de contenido y feed" (REF-SET-12,
-# ADR-026-content-preferences.md):
+# ADR-030-content-preferences.md):
 #   · GET/POST/DELETE /api/users/me/muted-topics   temas silenciados
 #   · GET /api/users/suggestions                   cuentas sugeridas
 #
 # Lo demás de la pantalla ya existía y no se toca: las palabras ocultas son
-# `/api/users/me/muted-keywords` (ADR-020) y el filtro de contenido sensible es
+# `/api/users/me/muted-keywords` (ADR-024) y el filtro de contenido sensible es
 # un campo más de `PATCH /api/users/me/privacy`.
 #
 # Todos protegidos: la identidad sale del JWT. Composition root igual que el
@@ -86,7 +86,7 @@ def post_muted_topic():
 @content_bp.route("/users/me/muted-topics", methods=["DELETE"])
 @jwt_required()
 def delete_muted_topic():
-    # El tema va en el body, igual que en muted-keywords (ADR-020): puede llevar
+    # El tema va en el body, igual que en muted-keywords (ADR-024): puede llevar
     # acentos y no hay motivo para obligar a percent-encoding en la URL.
     user_id = get_jwt_identity()
 

@@ -1,4 +1,4 @@
-# Excepciones de dominio del rate limiting (ADR-023-rate-limiting.md).
+# Excepciones de dominio del rate limiting (ADR-027-rate-limiting.md).
 
 
 class RateLimitExceededError(Exception):

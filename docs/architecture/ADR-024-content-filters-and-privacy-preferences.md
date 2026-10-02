@@ -1,21 +1,21 @@
-# ADR-020 — Filtros de contenido, privacidad de mensajes y estado de actividad
+# ADR-024 — Filtros de contenido, privacidad de mensajes y estado de actividad
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-020-content-filters-and-privacy-preferences.md` |
+| Documento | `docs/architecture/ADR-024-content-filters-and-privacy-preferences.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea (ver §Decisión) |
 | Alcance | `backend/` — entidad `muted_keywords`, `users.hide_offensive_comments`/`who_can_message`/`show_activity_status`/`last_seen_at`, filtrado de feed y comentarios, `GET`/`POST`/`DELETE /api/users/me/muted-keywords`; `Frontend/` — `MutedKeywordsRow.jsx`, controles en Configuración › Privacidad, presencia en Mensajes |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §4) |
 
-> Cierra los tres controles restantes de REF-SET-02 que `ADR-018` y `ADR-019` no cubrieron. Junta cuatro preferencias en un ADR porque comparten una migración y **un único endpoint** (`PATCH /api/users/me/privacy`), cuya forma se decide acá para las siete preferencias de la pantalla.
+> Cierra los tres controles restantes de REF-SET-02 que `ADR-022` y `ADR-023` no cubrieron. Junta cuatro preferencias en un ADR porque comparten una migración y **un único endpoint** (`PATCH /api/users/me/privacy`), cuya forma se decide acá para las siete preferencias de la pantalla.
 
 ---
 
 ## Contexto
 
-Tras `ADR-018` (cuenta privada) y `ADR-019` (menciones), la pantalla de Privacidad tenía cuatro controles sin resolver:
+Tras `ADR-022` (cuenta privada) y `ADR-023` (menciones), la pantalla de Privacidad tenía cuatro controles sin resolver:
 
 | Control | Motivo que daba la pantalla |
 |---|---|
@@ -82,7 +82,7 @@ Son semánticas distintas porque los controles prometen cosas distintas. Un filt
 
 ## Opciones consideradas — `muted_keywords` como tabla
 
-Tabla y no un array/JSON en `users`: hay que poder preguntar "¿algún término de este usuario aparece en este texto?" **desde el mismo `WHERE`** que lista publicaciones y comentarios. Con un array habría que traer la lista a Python y filtrar después, que es justo lo que rompe el `LIMIT` de la página (mismo razonamiento que `ADR-018` para el feed).
+Tabla y no un array/JSON en `users`: hay que poder preguntar "¿algún término de este usuario aparece en este texto?" **desde el mismo `WHERE`** que lista publicaciones y comentarios. Con un array habría que traer la lista a Python y filtrar después, que es justo lo que rompe el `LIMIT` de la página (mismo razonamiento que `ADR-022` para el feed).
 
 ## Decisión
 
@@ -98,7 +98,7 @@ Tabla y no un array/JSON en `users`: hay que poder preguntar "¿algún término 
 
 ### `GET`/`POST`/`DELETE /api/users/me/muted-keywords`
 
-Las tres devuelven **la lista completa** (`{"muted_keywords": [...]}`), también el `POST` y el `DELETE`: la pantalla siempre muestra la lista entera, así que devolverla ahorra una segunda petición (mismo criterio que `PATCH /api/posts/<id>`, `ADR-017`).
+Las tres devuelven **la lista completa** (`{"muted_keywords": [...]}`), también el `POST` y el `DELETE`: la pantalla siempre muestra la lista entera, así que devolverla ahorra una segunda petición (mismo criterio que `PATCH /api/posts/<id>`, `ADR-021`).
 
 - `POST` → `200`, no `201`: es idempotente, agregar un término que ya tenías devuelve el mismo estado (mismo criterio que `POST .../like`, `ADR-005`).
 - `DELETE` → **lleva el término en el body**, no en la URL. Es el único `DELETE` del proyecto con body, y es por un motivo concreto: un término puede contener espacios, acentos y `/`, y meterlo en el path obligaría a *percent-encoding* en los dos lados para nada.
@@ -109,13 +109,13 @@ Las tres devuelven **la lista completa** (`{"muted_keywords": [...]}`), también
 
 El filtro de ofensivos se correlaciona con el **autor de la publicación** (`EXISTS` sobre `posts`→`users`), no con el espectador — es su flag el que decide.
 
-Para el feed, `list_recent` suma la condición de términos propios al `WHERE` que `ADR-018` ya había introducido.
+Para el feed, `list_recent` suma la condición de términos propios al `WHERE` que `ADR-022` ya había introducido.
 
 ### `users.who_can_message` — `VARCHAR(20) NOT NULL DEFAULT 'everyone'`
 
-Mismo vocabulario que `who_can_mention` (`domain/privacy/audience.py`, `ADR-019`). **Dirección de `'followers'`:** quien escribe tiene que seguir al destinatario — es el destinatario el que pone la condición sobre su propia bandeja. Una solicitud pendiente (`ADR-018`) **no alcanza**.
+Mismo vocabulario que `who_can_mention` (`domain/privacy/audience.py`, `ADR-023`). **Dirección de `'followers'`:** quien escribe tiene que seguir al destinatario — es el destinatario el que pone la condición sobre su propia bandeja. Una solicitud pendiente (`ADR-022`) **no alcanza**.
 
-Se traduce a **`403`, no `404`**, y es la excepción deliberada al criterio de `ADR-018`: quien escribe ya sabía que esa cuenta existe (le estaba escribiendo), así que mentirle con un `404` no protegería nada y solo lo haría reintentar. Lo que la preferencia protege es la bandeja, no la existencia de la cuenta.
+Se traduce a **`403`, no `404`**, y es la excepción deliberada al criterio de `ADR-022`: quien escribe ya sabía que esa cuenta existe (le estaba escribiendo), así que mentirle con un `404` no protegería nada y solo lo haría reintentar. Lo que la preferencia protege es la bandeja, no la existencia de la cuenta.
 
 ### `users.show_activity_status` (`DEFAULT true`) y `users.last_seen_at` (nullable)
 
@@ -157,7 +157,7 @@ En `GET /api/users/me/privacy` se expone siempre, aunque esté oculto: lo que la
 - `application/moderation/muted_keywords_use_case.py` (nuevo).
 - `application/messages/send_message_use_case.py`: respeta `who_can_message`.
 - `interfaces/activity_tracker.py` (nuevo), registrado en el *app factory*.
-- `interfaces/routes/privacy_routes.py`: los cinco endpoints de este ADR y de `ADR-018`.
+- `interfaces/routes/privacy_routes.py`: los cinco endpoints de este ADR y de `ADR-022`.
 - Tests de integración en `tests/test_privacy.py` (`TestMutedKeywords`, `TestHideOffensiveComments`, `TestWhoCanMessage`, `TestActivityStatus`).
 
 ## Riesgos
@@ -190,7 +190,7 @@ En `GET /api/users/me/privacy` se expone siempre, aunque esté oculto: lo que la
 - `docs/architecture/ADR-013-messages-minimal-model.md`, `ADR-014-messages-ux-improvements.md` — la mensajería que el control decía inexistente.
 - `docs/architecture/ADR-006-comments-minimal-model.md` — los comentarios que este ADR filtra.
 - `docs/architecture/ADR-003-profile-update-contract.md` — el `PATCH` cuyo alcance este ADR decide no ampliar.
-- `docs/architecture/ADR-018-private-accounts.md`, `ADR-019-mentions.md` — los otros dos ADR de la misma pantalla; de `ADR-019` sale el vocabulario de audiencias.
+- `docs/architecture/ADR-022-private-accounts.md`, `ADR-023-mentions.md` — los otros dos ADR de la misma pantalla; de `ADR-023` sale el vocabulario de audiencias.
 - `CLAUDE.md` §15 — el hueco de política de moderación que este ADR no cierra.
 
 ---

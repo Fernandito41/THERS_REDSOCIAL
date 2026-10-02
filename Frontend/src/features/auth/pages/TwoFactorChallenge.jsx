@@ -9,7 +9,7 @@ import AuthCard from "../components/AuthCard";
 import { useAuth } from "../context/AuthContext";
 
 // Segundo paso del login cuando la cuenta tiene 2FA
-// (POST /api/2fa/verify, ADR-022-two-factor-authentication.md).
+// (POST /api/2fa/verify, ADR-026-two-factor-authentication.md).
 //
 // El `two_factor_token` llega por router state desde Login.jsx / AuthPage.jsx /
 // Register.jsx (los tres caminos que pueden iniciar un login). **No se guarda en
@@ -76,7 +76,7 @@ export default function TwoFactorChallenge() {
     } catch (error) {
       if (error.response?.status === 401) {
         // El backend no distingue "TOTP incorrecto" de "código de recuperación
-        // inválido o ya usado" a propósito (ADR-022 §Seguridad), así que acá
+        // inválido o ya usado" a propósito (ADR-026 §Seguridad), así que acá
         // tampoco se adivina cuál de los dos falló.
         toast.error("El código no es válido. Revisá que la hora de tu teléfono esté bien.");
         setCode("");

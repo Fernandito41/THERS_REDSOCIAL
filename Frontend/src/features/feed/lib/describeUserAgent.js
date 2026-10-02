@@ -1,5 +1,5 @@
 // Resume un `User-Agent` para mostrarlo en la lista de sesiones
-// (ADR-021-session-registry.md).
+// (ADR-025-session-registry.md).
 //
 // El servidor lo guarda **crudo** a propósito: no tiene una base de datos de
 // user agents y adivinar ahí produciría etiquetas equivocadas que quedarían

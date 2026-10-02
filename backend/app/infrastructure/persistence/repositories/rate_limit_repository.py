@@ -5,7 +5,7 @@
 #
 # Usa PostgreSQL y no memoria del proceso: un contador en memoria se pierde al
 # reiniciar y no se comparte entre workers, así que con dos workers el límite
-# real sería el doble del configurado. Mismo razonamiento por el que ADR-021
+# real sería el doble del configurado. Mismo razonamiento por el que ADR-025
 # descartó una lista negra en memoria para revocar tokens.
 
 import hashlib
@@ -24,7 +24,7 @@ from app.infrastructure.persistence.models import RateLimitBucket
 #:
 #: Es una purga **oportunista**, no un proceso programado: el proyecto no tiene
 #: tareas periódicas (DevOps sin documentación oficial, `CLAUDE.md` §15). No es
-#: lo ideal y está registrado como tal (ADR-023 §Riesgos).
+#: lo ideal y está registrado como tal (ADR-027 §Riesgos).
 _PURGE_PROBABILITY_DENOMINATOR = 200
 
 #: Las filas se purgan cuando su ventana venció hace más de esto. Holgado a
@@ -91,7 +91,7 @@ class SQLAlchemyRateLimitRepository(RateLimitRepository):
             #     instante de inicio de transacción: la siguiente llamada a
             #     `hit()` reutilizaría ese `now()` rancio y nunca vería la
             #     ventana como vencida. Era un bug real, detectado al probar el
-            #     reinicio de ventana (ADR-023 §Decisión).
+            #     reinicio de ventana (ADR-027 §Decisión).
             .returning(
                 RateLimitBucket.attempts,
                 func.extract(

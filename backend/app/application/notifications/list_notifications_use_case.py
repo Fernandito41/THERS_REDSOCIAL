@@ -13,7 +13,7 @@ def list_notifications(
     user_id, notification_repository, restriction_repository, limit=DEFAULT_LIMIT
 ):
     # No se muestran las notificaciones de cuentas con las que hay un bloqueo
-    # en cualquier sentido (ADR-025). Se filtra en el WHERE y no en Python para
+    # en cualquier sentido (ADR-029). Se filtra en el WHERE y no en Python para
     # no devolver una página más corta que el límite.
     blocked_ids = restriction_repository.blocked_ids_either_way(user_id)
     notifications = notification_repository.list_for_user(user_id, limit, blocked_ids)

@@ -52,7 +52,7 @@ class UserRepository(ABC):
         """Devuelve los usuarios cuyo `username` está en `usernames`,
         comparando **sin distinguir mayúsculas**. Usado para resolver las
         menciones de un texto en una sola consulta en vez de una por
-        @username (ADR-019-mentions.md) -- mismo criterio anti N+1 que
+        @username (ADR-023-mentions.md) -- mismo criterio anti N+1 que
         FollowRepository.follow_statuses.
 
         La comparación es case-insensitive aunque `users.username` sea
@@ -63,7 +63,7 @@ class UserRepository(ABC):
     def touch_last_seen(self, user_id, min_interval_seconds):
         """Marca `last_seen_at = now()` para `user_id`, pero solo si la marca
         anterior es más vieja que `min_interval_seconds`
-        (ADR-020-content-filters-and-privacy-preferences.md).
+        (ADR-024-content-filters-and-privacy-preferences.md).
 
         El throttle vive en el propio WHERE, no en memoria del proceso: así
         funciona igual con varios workers, que es justo donde un caché en
@@ -87,10 +87,10 @@ class UserRepository(ABC):
 
 class TwoFactorRecoveryCodeRepository(ABC):
     """Puerto de los codigos de recuperacion de 2FA
-    (ADR-022-two-factor-authentication.md). Separado de `UserRepository`
+    (ADR-026-two-factor-authentication.md). Separado de `UserRepository`
     porque es otra tabla con su propio ciclo de vida, aunque siempre cuelgue
     de un usuario -- mismo criterio que separa `MutedKeywordRepository` de
-    las preferencias que viven en columnas de `users` (ADR-020)."""
+    las preferencias que viven en columnas de `users` (ADR-024)."""
 
     @abstractmethod
     def replace_all(self, user_id, code_hashes):

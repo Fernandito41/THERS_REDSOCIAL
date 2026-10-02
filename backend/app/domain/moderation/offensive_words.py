@@ -1,12 +1,12 @@
 # Lista base de términos que activan "Ocultar comentarios ofensivos"
-# (ADR-020-content-filters-and-privacy-preferences.md).
+# (ADR-024-content-filters-and-privacy-preferences.md).
 #
 # ───────────────────────────────────────────────────────────────────────────
 # ESTA LISTA ES UN PLACEHOLDER DE PRODUCTO, NO UNA POLÍTICA DE MODERACIÓN.
 #
 # THERS no tiene política de moderación documentada: `CLAUDE.md` §15 lo
 # registra como hueco y `DATABASE_ARCHITECTURE.md` §4.B no tiene ninguna
-# candidata de roles/moderación ratificada. El equipo decidió (ADR-020
+# candidata de roles/moderación ratificada. El equipo decidió (ADR-024
 # §Decisión) implementar el mecanismo con una lista base en el repositorio,
 # explícitamente revisable, en vez de dejar el interruptor sin efecto.
 #

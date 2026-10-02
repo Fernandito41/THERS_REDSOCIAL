@@ -7,7 +7,7 @@ import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 
 // Editor de temas silenciados
-// (GET/POST/DELETE /api/users/me/muted-topics -- ADR-026-content-preferences.md).
+// (GET/POST/DELETE /api/users/me/muted-topics -- ADR-030-content-preferences.md).
 //
 // Un tema es un hashtag: silenciar `viajes` oculta del feed las publicaciones
 // que contienen `#viajes` (la etiqueta completa, no `#viajes2`). Mismo reparto
@@ -15,7 +15,7 @@ import { useLanguage } from "@shared/i18n";
 // respuesta y acá solo se reemplaza el estado con lo que llegó.
 //
 // El tema va en el body también en el DELETE (igual que las palabras
-// ocultas, ADR-020): puede llevar acentos y no hay motivo para percent-encoding.
+// ocultas, ADR-024): puede llevar acentos y no hay motivo para percent-encoding.
 
 const MAX_TOPIC_LENGTH = 50;
 

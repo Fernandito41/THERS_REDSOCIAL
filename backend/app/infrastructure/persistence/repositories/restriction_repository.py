@@ -1,5 +1,5 @@
 # Adaptador SQLAlchemy del puerto `RestrictionRepository`
-# (domain/restrictions/repositories.py), ADR-025-blocked-and-restricted-accounts.md.
+# (domain/restrictions/repositories.py), ADR-029-blocked-and-restricted-accounts.md.
 
 from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert

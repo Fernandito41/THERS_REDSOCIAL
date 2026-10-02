@@ -184,7 +184,7 @@ class TestListPosts:
 
 
 class TestDeletePost:
-    # DELETE /api/posts/<post_id> (ADR-015-post-deletion.md).
+    # DELETE /api/posts/<post_id> (ADR-019-post-deletion.md).
 
     def _create_post(self, client, token, content="Post para borrar"):
         response = client.post(
@@ -218,7 +218,7 @@ class TestDeletePost:
         response = client.delete(f"/api/posts/{post_id}", headers=_auth_headers(token_b))
 
         # Mismo 404 que un post inexistente -- no revela que el post existe
-        # pero es de otra persona (ADR-015 §Seguridad).
+        # pero es de otra persona (ADR-019 §Seguridad).
         assert response.status_code == 404
         # y sigue estando en el feed
         contents = [p["content"] for p in client.get(
@@ -305,7 +305,7 @@ class TestDeletePost:
 
 
 class TestUpdatePost:
-    # PATCH /api/posts/<post_id> (ADR-017-content-editing.md).
+    # PATCH /api/posts/<post_id> (ADR-021-content-editing.md).
 
     def _create_post(self, client, token, content="Texto original"):
         return client.post(
@@ -336,7 +336,7 @@ class TestUpdatePost:
         feed = client.get("/api/posts", headers=_auth_headers(token)).get_json()["posts"]
 
         # `edited` viaja tanto al crear como al listar, siempre en false hasta
-        # que haya una edición real (ADR-017 §Contrato API).
+        # que haya una edición real (ADR-021 §Contrato API).
         assert created["edited"] is False
         assert feed[0]["edited"] is False
 
@@ -366,7 +366,7 @@ class TestUpdatePost:
         )
 
         # Mismo 404 que un post inexistente -- no revela que el post existe
-        # pero es de otra persona (ADR-017 §Seguridad).
+        # pero es de otra persona (ADR-021 §Seguridad).
         assert response.status_code == 404
         # y el texto original sigue intacto
         feed = client.get("/api/posts", headers=_auth_headers(token_a)).get_json()["posts"]
@@ -461,7 +461,7 @@ class TestUpdatePost:
         post = response.get_json()["post"]
         assert post["content"] == "Solo esto se aplica"
         # Ni el autor ni el id ni las fechas se dejan pisar desde el body
-        # (ADR-017 §Seguridad, mismo principio anti mass-assignment que
+        # (ADR-021 §Seguridad, mismo principio anti mass-assignment que
         # POST /api/posts).
         assert post["id"] == post_id
         assert post["author"]["id"] != b_id
@@ -470,7 +470,7 @@ class TestUpdatePost:
 
     def test_editing_a_post_preserves_its_likes_and_comments(self, client):
         # El `id` de la fila no cambia al editar, así que likes y comentarios
-        # siguen apuntando al mismo post (ADR-017 §Consecuencias) -- y los
+        # siguen apuntando al mismo post (ADR-021 §Consecuencias) -- y los
         # contadores que devuelve el PATCH son los reales, no 0.
         token_a = _register_and_login(client, username="user_a", email="a@example.com")
         token_b = _register_and_login(client, username="user_b", email="b@example.com")
@@ -525,7 +525,7 @@ class TestUpdatePost:
         ).get_json()["post"]
 
         # Editar no "revive" la publicación en el feed: su posición depende de
-        # created_at, que no se toca (ADR-017 §Decisión).
+        # created_at, que no se toca (ADR-021 §Decisión).
         assert edited["created_at"] == created["created_at"]
 
     def test_editing_twice_keeps_reporting_edited(self, client):
@@ -539,7 +539,7 @@ class TestUpdatePost:
             f"/api/posts/{post_id}", json={"content": "Segunda"}, headers=_auth_headers(token)
         )
 
-        # Sin historial de versiones (ADR-017 §No objetivos): solo queda el
+        # Sin historial de versiones (ADR-021 §No objetivos): solo queda el
         # texto final y el flag, que no "se gasta" con la segunda edición.
         assert response.get_json()["post"]["content"] == "Segunda"
         assert response.get_json()["post"]["edited"] is True

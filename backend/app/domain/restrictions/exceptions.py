@@ -7,4 +7,4 @@ class AccountBlockedError(Exception):
 
     Es distinta del caso inverso (el destino bloqueó a quien actúa): a quien
     bloqueó se le puede decir qué pasa; a quien fue bloqueado no se le revela,
-    se le responde como si la cuenta no existiera (ADR-025 §Seguridad)."""
+    se le responde como si la cuenta no existiera (ADR-029 §Seguridad)."""

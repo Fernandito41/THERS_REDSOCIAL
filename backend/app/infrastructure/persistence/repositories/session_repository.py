@@ -49,7 +49,7 @@ class SQLAlchemySessionRepository(SessionRepository):
         # `user_id` y `revoked_at IS NULL` en el propio WHERE: confirma
         # existencia, pertenencia y que siga viva en una sola sentencia, sin
         # ventana entre comprobar y actuar (mismo principio que el resto de
-        # operaciones sobre recursos propios, ADR-015/ADR-016/ADR-017).
+        # operaciones sobre recursos propios, ADR-019/ADR-020/ADR-021).
         # RETURNING jti: el mismo UPDATE confirma que había algo que revocar
         # y dice cuál era, así que no hace falta un SELECT previo para saber si
         # la sesión cerrada era la del propio token.
@@ -91,7 +91,7 @@ class SQLAlchemySessionRepository(SessionRepository):
 
     def touch(self, jti, min_interval_seconds):
         # Throttle en el WHERE, no en memoria del proceso -- mismo criterio y
-        # mismo motivo que SQLAlchemyUserRepository.touch_last_seen (ADR-020):
+        # mismo motivo que SQLAlchemyUserRepository.touch_last_seen (ADR-024):
         # funciona igual con varios workers.
         db.session.execute(
             update(Session)

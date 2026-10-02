@@ -1,6 +1,6 @@
 # POST /api/posts y GET /api/posts (ADR-004-posts-minimal-model.md), más
-# DELETE /api/posts/<post_id> (ADR-015-post-deletion.md) y
-# PATCH /api/posts/<post_id> (ADR-017-content-editing.md).
+# DELETE /api/posts/<post_id> (ADR-019-post-deletion.md) y
+# PATCH /api/posts/<post_id> (ADR-021-content-editing.md).
 # Blueprint separado de auth_bp/users_bp -- primer endpoint de una entidad
 # social real, no de autenticación ni de perfil. Composition root igual que
 # el resto de interfaces/routes/ (BACKEND_ARCHITECTURE.md §17): único punto
@@ -50,14 +50,14 @@ _post_repository = SQLAlchemyPostRepository()
 _like_repository = SQLAlchemyLikeRepository()
 _comment_repository = SQLAlchemyCommentRepository()
 _follow_repository = SQLAlchemyFollowRepository()
-# ADR-019-mentions.md (resolver @username al crear/editar) y
-# ADR-020-content-filters-and-privacy-preferences.md (términos filtrados del
+# ADR-023-mentions.md (resolver @username al crear/editar) y
+# ADR-024-content-filters-and-privacy-preferences.md (términos filtrados del
 # espectador al listar).
 _user_repository = SQLAlchemyUserRepository()
 _mention_repository = SQLAlchemyMentionRepository()
 _notification_repository = SQLAlchemyNotificationRepository()
 _muted_keyword_repository = SQLAlchemyMutedKeywordRepository()
-# ADR-025-blocked-and-restricted-accounts.md: un bloqueo anula la mención.
+# ADR-029-blocked-and-restricted-accounts.md: un bloqueo anula la mención.
 _restriction_repository = SQLAlchemyRestrictionRepository()
 
 
@@ -81,7 +81,7 @@ def create():
             {"msg": f"El contenido debe tener entre 1 y {MAX_CONTENT_LENGTH} caracteres"}
         ), 400
 
-    # `is_sensitive` es opcional (ADR-026): lo que el autor declara. Con
+    # `is_sensitive` es opcional (ADR-030): lo que el autor declara. Con
     # `isinstance(..., bool)` y no truthiness -- "false" (texto) es verdadero en
     # Python y marcaría como sensible algo que quien escribe no marcó.
     is_sensitive = data.get("is_sensitive", False)
@@ -117,7 +117,7 @@ def list_all():
 def update(post_id):
     # Solo el autor puede editar su propia publicación -- la pertenencia se
     # resuelve contra el JWT, nunca contra nada que venga del cliente
-    # (ADR-017-content-editing.md, mismo criterio que DELETE /api/posts/<id>).
+    # (ADR-021-content-editing.md, mismo criterio que DELETE /api/posts/<id>).
     author_id = get_jwt_identity()
 
     data = request.get_json(silent=True)
@@ -156,7 +156,7 @@ def update(post_id):
 def delete(post_id):
     # Solo el autor puede borrar su propia publicación -- la pertenencia se
     # resuelve contra el JWT, nunca contra nada que venga del cliente
-    # (ADR-015-post-deletion.md, mismo criterio que DELETE /api/messages/<id>).
+    # (ADR-019-post-deletion.md, mismo criterio que DELETE /api/messages/<id>).
     #
     # `<uuid:post_id>`: el conversor `uuid` de Flask/Werkzeug ya devuelve 404
     # para cualquier segmento que no sea un UUID válido, sin validarlo a mano

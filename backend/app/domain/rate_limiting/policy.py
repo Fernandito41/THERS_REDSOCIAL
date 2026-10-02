@@ -1,4 +1,4 @@
-# Política de rate limiting (ADR-023-rate-limiting.md). Solo tipos nativos de
+# Política de rate limiting (ADR-027-rate-limiting.md). Solo tipos nativos de
 # Python -- domain/ no importa Flask ni SQLAlchemy (BACKEND_ARCHITECTURE.md
 # §7/§17), mismo criterio que domain/auth/token_policy.py.
 #

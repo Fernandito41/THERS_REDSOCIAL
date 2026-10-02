@@ -1,6 +1,6 @@
 # Casos de uso: listar y cerrar sesiones activas
 # (GET /api/sessions, DELETE /api/sessions/<id>, DELETE /api/sessions --
-# ADR-021-session-registry.md).
+# ADR-025-session-registry.md).
 #
 # Los tres en el mismo módulo: son el CRUD completo de una colección pequeña
 # que siempre pertenece al usuario autenticado. `user_id` y `current_jti` salen
@@ -31,7 +31,7 @@ def revoke_session(user_id, session_id, current_jti, session_repository):
     revoked_jti = session_repository.revoke(session_id, user_id)
     if revoked_jti is None:
         # Mismo 404 si no existe, si ya estaba cerrada o si es de otra persona
-        # -- un 403 confirmaría que esa sesión existe (ADR-021 §Seguridad).
+        # -- un 403 confirmaría que esa sesión existe (ADR-025 §Seguridad).
         raise SessionNotFoundError()
 
     # `was_current` le dice al Frontend si el token con el que acaba de hacer
@@ -46,7 +46,7 @@ def revoke_other_sessions(user_id, current_jti, session_repository):
     Nunca cierra la propia: "cerrar las demás sesiones" no debe dejar afuera a
     quien lo pide. Es la acción que alguien ejecuta justamente cuando sospecha
     que otro dispositivo tiene acceso -- hacerlo salir también sería
-    contraproducente (ADR-021 §Decisión).
+    contraproducente (ADR-025 §Decisión).
     """
     revoked = session_repository.revoke_all_except(user_id, current_jti)
     return {"revoked_count": revoked}

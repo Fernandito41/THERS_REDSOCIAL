@@ -1,4 +1,4 @@
-# Temas silenciados (ADR-026-content-preferences.md). Función pura -- sin
+# Temas silenciados (ADR-030-content-preferences.md). Función pura -- sin
 # Flask, sin SQLAlchemy (BACKEND_ARCHITECTURE.md §7/§17).
 #
 # Un «tema» es un hashtag. Se reconoce dentro del texto de la publicación; el

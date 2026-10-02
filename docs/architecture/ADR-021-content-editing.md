@@ -1,15 +1,15 @@
-# ADR-017 — Edición de contenido propio: publicaciones, comentarios y mensajes
+# ADR-021 — Edición de contenido propio: publicaciones, comentarios y mensajes
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-017-content-editing.md` |
+| Documento | `docs/architecture/ADR-021-content-editing.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea (ver §Decisión) |
 | Alcance | `backend/` — `PATCH /api/posts/<post_id>`, `PATCH /api/comments/<comment_id>`, `PATCH /api/messages/<message_id>`; `Frontend/` — edición en línea en `CapsuleCard.jsx` (publicaciones y comentarios) y `Messages.jsx` (mensajes) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §4) |
 
-> Extiende `ADR-004-posts-minimal-model.md`, `ADR-006-comments-minimal-model.md` y `ADR-013-messages-minimal-model.md`, que crearon las tres entidades sin ninguna operación de actualización. Cierra el ítem "Editar una publicación" de `ADR-015-post-deletion.md` §Decisiones pendientes, "Editar un comentario" de `ADR-016-comment-deletion.md` §Decisiones pendientes, y la edición de mensajes que `ADR-014` no cubrió. **Introduce una columna nueva (`edited_at`) en tres tablas** — es el único ADR de esta serie con migración.
+> Extiende `ADR-004-posts-minimal-model.md`, `ADR-006-comments-minimal-model.md` y `ADR-013-messages-minimal-model.md`, que crearon las tres entidades sin ninguna operación de actualización. Cierra el ítem "Editar una publicación" de `ADR-019-post-deletion.md` §Decisiones pendientes, "Editar un comentario" de `ADR-020-comment-deletion.md` §Decisiones pendientes, y la edición de mensajes que `ADR-014` no cubrió. **Introduce una columna nueva (`edited_at`) en tres tablas** — es el único ADR de esta serie con migración.
 
 ---
 
@@ -19,17 +19,17 @@ Las tres superficies de contenido propio del producto se pueden crear y borrar, 
 
 | Entidad | Crear | Listar | Borrar | **Editar** |
 |---|---|---|---|---|
-| `posts` | `ADR-004` | `ADR-004` | `ADR-015` | **este ADR** |
-| `comments` | `ADR-006` | `ADR-006` | `ADR-016` | **este ADR** |
+| `posts` | `ADR-004` | `ADR-004` | `ADR-019` | **este ADR** |
+| `comments` | `ADR-006` | `ADR-006` | `ADR-020` | **este ADR** |
 | `messages` | `ADR-013` | `ADR-013` | `ADR-014` | **este ADR** |
 
-Hasta ahora, la única forma de corregir un error de tipeo era borrar y volver a publicar — lo que en una publicación significa perder sus likes y los comentarios que otras personas escribieron (`ADR-015` §Riesgos), y en un mensaje significa que la otra persona ve desaparecer el mensaje y aparecer otro. El propio producto lo registra: el artículo de ayuda `editar-o-eliminar-publicaciones` (`Frontend/src/features/help/data/articles.js`) decía que "no hay una opción para editar el texto de una Cápsula ya publicada", y recomendaba justamente ese camino destructivo.
+Hasta ahora, la única forma de corregir un error de tipeo era borrar y volver a publicar — lo que en una publicación significa perder sus likes y los comentarios que otras personas escribieron (`ADR-019` §Riesgos), y en un mensaje significa que la otra persona ve desaparecer el mensaje y aparecer otro. El propio producto lo registra: el artículo de ayuda `editar-o-eliminar-publicaciones` (`Frontend/src/features/help/data/articles.js`) decía que "no hay una opción para editar el texto de una Cápsula ya publicada", y recomendaba justamente ese camino destructivo.
 
 Los tres ADR de borrado dejaron la edición explícitamente fuera por el mismo motivo: es una operación distinta, con contrato propio (`PATCH`), con preguntas propias (¿historial de versiones? ¿qué pasa con los likes de la versión anterior?) y con una columna nueva. Este ADR las responde.
 
 ### Por qué un solo ADR y no tres
 
-`ADR-015` y `ADR-016` se separaron porque la semántica del borrado **difiere** por entidad: borrar una publicación ejerce tres `ON DELETE CASCADE`, borrar un comentario ninguno. Acá la decisión es **la misma** en las tres: mismo verbo, mismo body, mismo `404` indistinguible, misma columna, misma migración. Partirla en tres documentos obligaría a repetir el mismo razonamiento tres veces —  lo que `CLAUDE.md` §6 prohíbe explícitamente ("cada decisión vive en un único documento") — y dejaría la migración compartida colgando de uno de los tres de forma arbitraria.
+`ADR-019` y `ADR-020` se separaron porque la semántica del borrado **difiere** por entidad: borrar una publicación ejerce tres `ON DELETE CASCADE`, borrar un comentario ninguno. Acá la decisión es **la misma** en las tres: mismo verbo, mismo body, mismo `404` indistinguible, misma columna, misma migración. Partirla en tres documentos obligaría a repetir el mismo razonamiento tres veces —  lo que `CLAUDE.md` §6 prohíbe explícitamente ("cada decisión vive en un único documento") — y dejaría la migración compartida colgando de uno de los tres de forma arbitraria.
 
 ## Objetivos
 
@@ -43,7 +43,7 @@ Los tres ADR de borrado dejaron la edición explícitamente fuera por el mismo m
 - **No** guarda historial de versiones ni permite ver el texto anterior. La fila se sobrescribe; lo único que queda es que hubo una edición. Un historial exige una tabla nueva (`post_revisions` o equivalente) y es su propio ADR — ver §Decisiones pendientes.
 - **No** expone *cuándo* se editó. `edited_at` se persiste pero la API solo expone el booleano `edited`; la UI dice «editado», nunca «editado hace 5 minutos» (ver §Opciones consideradas).
 - **No** impone una ventana de tiempo para editar (del tipo "solo dentro de los primeros 15 minutos"). Coherente con el resto del proyecto, que no tiene *rate limiting* ni ventanas en ningún endpoint (`API_CONTRACT.md` §9).
-- **No** permite editar contenido ajeno, ni al dueño de la publicación sobre los comentarios que recibió — mismo criterio que `ADR-016` ya fijó para el borrado.
+- **No** permite editar contenido ajeno, ni al dueño de la publicación sobre los comentarios que recibió — mismo criterio que `ADR-020` ya fijó para el borrado.
 - **No** notifica a nadie de una edición. Nadie se enterará de que un mensaje que ya leyó cambió, salvo que vuelva a mirarlo (ver §Riesgos).
 - **No** permite editar nada que no sea el texto: ni agregar/quitar una imagen (no existen, `ADR-004`), ni mover un comentario a otra publicación, ni reasignar un mensaje.
 - **No** toca `updated_at` como señal de edición (ver §Opciones consideradas).
@@ -78,12 +78,12 @@ Reemplazan el texto de un contenido propio. Auth requerida. Los tres comparten e
 **Response 200:** el recurso completo y actualizado, con la misma forma que devuelve su endpoint de creación — `{"post": {...}}`, `{"comment": {...}}`, `{"message": {...}}`. Devolver el recurso entero (y no, por ejemplo, `{"updated": true}`) permite al Frontend reemplazar el objeto en memoria por la respuesta del servidor, sin adivinar el resultado ni pedir el recurso otra vez.
 
 - `400` si el body está vacío o `content` falta, queda vacío tras `trim()` o excede el límite. **`content` es obligatorio**, no opcional: a diferencia de `PATCH /api/users/me` (`ADR-003`), donde el `PATCH` elige entre varios campos, acá es el único campo editable y un `PATCH` sin él no tiene nada que hacer.
-- `404` si el id no existe **o** existe pero no le pertenece a quien hace la petición — mismo mensaje y código en ambos casos, sin distinguir cuál ocurrió. Incluye cualquier segmento de URL que no sea un UUID válido (conversor `uuid` de Flask/Werkzeug). Mismo criterio que los tres `DELETE` equivalentes (`ADR-014`/`ADR-015`/`ADR-016`).
+- `404` si el id no existe **o** existe pero no le pertenece a quien hace la petición — mismo mensaje y código en ambos casos, sin distinguir cuál ocurrió. Incluye cualquier segmento de URL que no sea un UUID válido (conversor `uuid` de Flask/Werkzeug). Mismo criterio que los tres `DELETE` equivalentes (`ADR-014`/`ADR-019`/`ADR-020`).
 - `401` estándar.
 
 **Verbo `PATCH`, no `PUT`:** se actualiza un campo de un recurso que tiene más campos, no se reemplaza el recurso entero. Es además el verbo que el proyecto ya usa para actualización parcial (`PATCH /api/users/me` §4.2, `PATCH /api/notifications/<id>/read` §4.7).
 
-**Rutas planas**, no anidadas: `/comments/<id>` y no `/posts/<id>/comments/<id>`; `/messages/<id>` y no `/users/<id>/messages/<id>`. Editar depende de quién escribió el contenido, no del recurso donde está — mismo razonamiento que ya fijaron `DELETE /api/messages/<id>` (`ADR-014`) y `DELETE /api/comments/<id>` (`ADR-016`). Cada endpoint vive en el blueprint que ya tenía la entidad (`posts_bp`, `comments_bp`, `messages_bp`).
+**Rutas planas**, no anidadas: `/comments/<id>` y no `/posts/<id>/comments/<id>`; `/messages/<id>` y no `/users/<id>/messages/<id>`. Editar depende de quién escribió el contenido, no del recurso donde está — mismo razonamiento que ya fijaron `DELETE /api/messages/<id>` (`ADR-014`) y `DELETE /api/comments/<id>` (`ADR-020`). Cada endpoint vive en el blueprint que ya tenía la entidad (`posts_bp`, `comments_bp`, `messages_bp`).
 
 **Idempotente en su efecto observable:** repetir el mismo `PATCH` deja el mismo texto y `edited` sigue en `true`. Lo único que cambia es `edited_at`, que no se expone. A diferencia de `DELETE`, un segundo `PATCH` sobre contenido que sigue existiendo es `200`, no `404`.
 
@@ -146,7 +146,7 @@ En las tres superficies, «Guardar» queda deshabilitado si el texto no cambió:
 ## Riesgos
 
 - **Reescritura silenciosa de lo ya leído.** La marca «editado» dice *que* cambió, no *qué* cambió: alguien puede editar un mensaje o una publicación después de que se leyera o se le respondiera, y quien lo leyó no se enterará salvo que vuelva a mirar. Es el trade-off aceptado al descartar el historial de versiones (§No objetivos); la marca es la mitigación mínima, no una solución completa.
-- **Likes y comentarios sobre una versión que ya no existe.** Quien dio like o comentó la versión anterior queda asociado a un texto distinto. Es la consecuencia directa de mantener el `id` de la fila (que es lo que evita perder esos likes y comentarios al corregir un tipeo) — exactamente la pregunta que `ADR-015` había dejado abierta, y se resuelve a favor de preservar el contenido acumulado. Si el equipo prefiere invalidar los likes al editar, es una decisión de producto separada.
+- **Likes y comentarios sobre una versión que ya no existe.** Quien dio like o comentó la versión anterior queda asociado a un texto distinto. Es la consecuencia directa de mantener el `id` de la fila (que es lo que evita perder esos likes y comentarios al corregir un tipeo) — exactamente la pregunta que `ADR-019` había dejado abierta, y se resuelve a favor de preservar el contenido acumulado. Si el equipo prefiere invalidar los likes al editar, es una decisión de producto separada.
 - **Sin ventana de arrepentimiento ni límite de frecuencia.** Nada impide editar una publicación de hace un año, ni editarla cien veces. Coherente con el resto de endpoints del proyecto (`API_CONTRACT.md` §9 ya registra el *rate limiting* como pendiente transversal).
 - **Sin bloqueo de concurrencia.** Si la misma persona edita el mismo contenido desde dos pestañas, gana la última escritura, sin aviso. No hay *optimistic locking* en ningún endpoint del proyecto; se deja señalado, no se resuelve acá.
 - **`last_message` de `GET /api/conversations` no expone `edited`.** Es una vista derivada, no el mensaje: muestra el texto vigente (correcto) pero sin la marca. El Frontend muestra la marca en el hilo, donde el mensaje sí viaja completo. Se deja así a propósito; extenderlo es aditivo si el equipo lo pide.
@@ -156,20 +156,20 @@ En las tres superficies, «Guardar» queda deshabilitado si el texto no cambió:
 - Historial de versiones y poder ver el texto anterior de una edición.
 - Exponer `edited_at` como timestamp, para poder decir "editado hace 5 minutos".
 - Ventana de tiempo para editar, y/o *rate limiting* (transversal, no solo de estos endpoints).
-- Que el autor de una publicación pueda moderar (borrar/ocultar) comentarios ajenos en ella — heredada de `ADR-016`, sigue abierta.
-- Añadir `comment_id` a `notifications` — heredada de `ADR-016`, sigue abierta.
+- Que el autor de una publicación pueda moderar (borrar/ocultar) comentarios ajenos en ella — heredada de `ADR-020`, sigue abierta.
+- Añadir `comment_id` a `notifications` — heredada de `ADR-020`, sigue abierta.
 - *Optimistic locking* para escrituras concurrentes.
 
 ## Consecuencias
 
-- **`DATABASE_ARCHITECTURE.md` cambia** — a diferencia de `ADR-015`/`ADR-016`, este ADR agrega una columna a tres tablas ya implementadas. `posts`, `comments` y `messages` pasan a tener `edited_at`.
+- **`DATABASE_ARCHITECTURE.md` cambia** — a diferencia de `ADR-019`/`ADR-020`, este ADR agrega una columna a tres tablas ya implementadas. `posts`, `comments` y `messages` pasan a tener `edited_at`.
 - `API_CONTRACT.md` se actualiza el mismo día que este contrato se implementa (`HB-001` §15.1) → v0.22, incluyendo el campo `edited` aditivo en las tres entidades.
 - Ningún endpoint existente cambia de contrato en forma incompatible: `edited` es un campo nuevo en respuestas que ya existían.
 
 ## Referencias
 
 - `docs/architecture/ADR-004-posts-minimal-model.md`, `ADR-006-comments-minimal-model.md`, `ADR-013-messages-minimal-model.md` — las tres entidades que este ADR extiende.
-- `docs/architecture/ADR-015-post-deletion.md`, `ADR-016-comment-deletion.md`, `ADR-014-messages-ux-improvements.md` — los tres borrados cuyo criterio (propio, `404` indistinguible, ruta plana) este ADR replica, y cuyas §Decisiones pendientes listaban esta edición.
+- `docs/architecture/ADR-019-post-deletion.md`, `ADR-020-comment-deletion.md`, `ADR-014-messages-ux-improvements.md` — los tres borrados cuyo criterio (propio, `404` indistinguible, ruta plana) este ADR replica, y cuyas §Decisiones pendientes listaban esta edición.
 - `docs/architecture/ADR-003-profile-update-contract.md` — precedente de `PATCH` y del principio anti *mass-assignment*.
 - `docs/architecture/ADR-008-notifications-minimal-model.md` — origen del idioma `read_at` NULL → booleano `read` que `edited_at`/`edited` reutiliza.
 - `docs/architecture/DATABASE_ARCHITECTURE.md` — modelo de datos, actualizado por este ADR.

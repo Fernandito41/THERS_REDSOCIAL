@@ -1,5 +1,5 @@
 # Adaptador SQLAlchemy del puerto `MutedTopicRepository`
-# (domain/moderation/topic_repositories.py), ADR-026-content-preferences.md.
+# (domain/moderation/topic_repositories.py), ADR-030-content-preferences.md.
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError

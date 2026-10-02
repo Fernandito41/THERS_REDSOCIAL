@@ -1,14 +1,14 @@
 # Endpoints de la pantalla de Seguridad (REF-SET-03):
-#   · GET/PATCH /api/users/me/security                      (ADR-021-session-registry.md)
-#   · GET/DELETE /api/sessions y DELETE /api/sessions/<id>  (ADR-021-session-registry.md)
+#   · GET/PATCH /api/users/me/security                      (ADR-025-session-registry.md)
+#   · GET/DELETE /api/sessions y DELETE /api/sessions/<id>  (ADR-025-session-registry.md)
 #   · GET/POST /api/2fa/setup, POST /api/2fa/confirm, POST /api/2fa/disable,
-#     POST /api/2fa/recovery-codes                           (ADR-022-two-factor-authentication.md)
+#     POST /api/2fa/recovery-codes                           (ADR-026-two-factor-authentication.md)
 #
 # `POST /api/2fa/verify` NO vive acá sino en auth_routes.py: es el segundo paso
 # de un login, no una operación sobre una cuenta ya autenticada -- es el único
 # de estos endpoints que no lleva `@jwt_required()`.
 #
-# Blueprint propio, separado de privacy_bp (ADR-018/ADR-019/ADR-020): privacidad
+# Blueprint propio, separado de privacy_bp (ADR-022/ADR-023/ADR-024): privacidad
 # es "quién ve qué", seguridad es "quién puede entrar". Comparten pantalla de
 # Configuración pero no dominio.
 #
@@ -62,14 +62,14 @@ _user_repository = SQLAlchemyUserRepository()
 _session_repository = SQLAlchemySessionRepository()
 _recovery_code_repository = SQLAlchemyTwoFactorRecoveryCodeRepository()
 _totp_provider = PyotpTotpProvider()
-# ADR-023-rate-limiting.md: los tres endpoints que verifican una credencial
+# ADR-027-rate-limiting.md: los tres endpoints que verifican una credencial
 # (un código TOTP al confirmar, la contraseña al desactivar o regenerar)
 # limitan intentos.
 _rate_limit_repository = SQLAlchemyRateLimitRepository()
 
 
 def _rate_limited_response(error):
-    """429 uniforme con `Retry-After` (ADR-023 §Contrato API). Mismo formato que
+    """429 uniforme con `Retry-After` (ADR-027 §Contrato API). Mismo formato que
     el de auth_routes.py; se repite acá porque son blueprints distintos y
     compartirlo exigiría un módulo común para seis líneas."""
     response = jsonify({
@@ -87,7 +87,7 @@ def _enforce_two_factor_manage_limit(user_id):
     Por cuenta y no por IP: estos endpoints son protegidos, así que la identidad
     ya está probada -- quien intenta adivinar la contraseña acá es alguien que
     robó el token de sesión, y lo que hay que acotar son sus intentos sobre
-    **esta** cuenta (ADR-023).
+    **esta** cuenta (ADR-027).
     """
     rate_limit_guard.enforce(
         policy.TWO_FACTOR_MANAGE, f"user:{user_id}", _rate_limit_repository
@@ -111,7 +111,7 @@ def _current_jti():
 
 
 # ===========================================================================
-# Sesiones activas (ADR-021)
+# Sesiones activas (ADR-025)
 # ===========================================================================
 @security_bp.route("/sessions", methods=["GET"])
 @jwt_required()
@@ -150,7 +150,7 @@ def delete_other_sessions():
 
 
 # ===========================================================================
-# 2FA (ADR-022)
+# 2FA (ADR-026)
 # ===========================================================================
 @security_bp.route("/2fa", methods=["GET"])
 @jwt_required()
@@ -171,7 +171,7 @@ def two_factor_setup():
     # Primer paso del alta: genera un secreto y lo guarda SIN activar el 2FA.
     # La respuesta lleva el secreto en claro (hace falta para el QR y para el
     # alta manual) -- por eso el endpoint es POST y protegido, y por eso el
-    # valor nunca se registra en un log (ADR-022 §Seguridad).
+    # valor nunca se registra en un log (ADR-026 §Seguridad).
     user_id = get_jwt_identity()
 
     try:
@@ -205,7 +205,7 @@ def two_factor_confirm():
         return jsonify({"msg": "Falta el código de tu app autenticadora"}), 400
 
     # Un código TOTP son 10^6 combinaciones: también acá hay que acotar los
-    # intentos, aunque la identidad ya esté probada (ADR-023).
+    # intentos, aunque la identidad ya esté probada (ADR-027).
     try:
         _enforce_two_factor_manage_limit(user_id)
     except RateLimitExceededError as error:
@@ -239,7 +239,7 @@ def two_factor_confirm():
 def two_factor_disable():
     # Pide la CONTRASEÑA, no un código TOTP: si alguien perdió el dispositivo,
     # exigir un código lo dejaría atrapado con el 2FA puesto para siempre
-    # (ADR-022 §Decisión).
+    # (ADR-026 §Decisión).
     #
     # Es POST y no DELETE aunque "apague" algo: además de desactivar, borra los
     # códigos de recuperación y cierra todas las sesiones. No es la eliminación
@@ -312,9 +312,9 @@ def two_factor_regenerate_recovery_codes():
 
 
 # ===========================================================================
-# Preferencias de seguridad (ADR-021)
+# Preferencias de seguridad (ADR-025)
 # ===========================================================================
-# Endpoint propio y NO parte de `PATCH /api/users/me/privacy` (ADR-020): aquel
+# Endpoint propio y NO parte de `PATCH /api/users/me/privacy` (ADR-024): aquel
 # contrato es "quién ve qué" y este es "quién puede entrar". Hoy transporta una
 # sola preferencia, y es el lugar correcto para ella -- meterla en el de
 # privacidad obligaría a la próxima persona a buscarla donde no está.

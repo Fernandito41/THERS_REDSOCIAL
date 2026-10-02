@@ -72,7 +72,7 @@ export function AuthProvider({ children }) {
     return loggedInUser;
   };
 
-  // Desde ADR-022-two-factor-authentication.md, `POST /api/login` tiene DOS
+  // Desde ADR-026-two-factor-authentication.md, `POST /api/login` tiene DOS
   // respuestas posibles con 200: la sesión de siempre, o un desafío de segundo
   // factor (`two_factor_required`). En el segundo caso **no hay token todavía**
   // y no se guarda nada -- la sesión no existe hasta que el código valide.
@@ -119,7 +119,7 @@ export function AuthProvider({ children }) {
 
     // Google autenticó la identidad, pero si la cuenta tiene 2FA ese segundo
     // factor también aplica acá -- si no, "Continuar con Google" sería una
-    // puerta que lo saltea (ADR-022 §Seguridad).
+    // puerta que lo saltea (ADR-026 §Seguridad).
     if (res.data.two_factor_required) {
       return { twoFactorRequired: true, twoFactorToken: res.data.two_factor_token };
     }

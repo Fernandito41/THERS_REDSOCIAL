@@ -1,4 +1,4 @@
-# Reglas de negocio de la exportación de datos (ADR-024-data-export.md). Solo
+# Reglas de negocio de la exportación de datos (ADR-028-data-export.md). Solo
 # tipos nativos de Python -- domain/ no importa Flask ni SQLAlchemy
 # (BACKEND_ARCHITECTURE.md §7/§17). Placeholders de producto explícitos y
 # revisables, no parámetros de despliegue.

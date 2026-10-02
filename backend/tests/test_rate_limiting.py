@@ -1,4 +1,4 @@
-# Pruebas de integración del rate limiting (ADR-023-rate-limiting.md) contra
+# Pruebas de integración del rate limiting (ADR-027-rate-limiting.md) contra
 # PostgreSQL 16 real (thers_test, ver conftest.py) -- no mocks.
 #
 # Cierra el ítem 8 de `API_CONTRACT.md` §9. El caso que motivó el ADR es
@@ -103,7 +103,7 @@ class TestTwoFactorVerifyRateLimit:
 
         assert response.status_code == 429
         # El header es tan importante como el código: sin él el cliente
-        # reintenta a ciegas (ADR-023 §Contrato API).
+        # reintenta a ciegas (ADR-027 §Contrato API).
         assert "Retry-After" in response.headers
         retry_after = int(response.headers["Retry-After"])
         assert 0 < retry_after <= policy.TWO_FACTOR_VERIFY.window_seconds
@@ -131,7 +131,7 @@ class TestTwoFactorVerifyRateLimit:
 
     def test_a_success_clears_the_counter(self, app, client):
         # Lo que hay que frenar es *adivinar*, no *usar*: entrar bien varias
-        # veces no debe bloquear a nadie (ADR-023, clear_on_success=True).
+        # veces no debe bloquear a nadie (ADR-027, clear_on_success=True).
         email, secret = self._account_with_2fa(app, client)
 
         for _ in range(policy.TWO_FACTOR_VERIFY.limit + 2):
@@ -188,7 +188,7 @@ class TestTwoFactorVerifyRateLimit:
 
     def test_an_invalid_challenge_token_does_not_consume_the_budget(self, app, client):
         # El límite se aplica DESPUÉS de validar el token de desafío: así un
-        # token basura no gasta los intentos de una cuenta real (ADR-023).
+        # token basura no gasta los intentos de una cuenta real (ADR-027).
         email, secret = self._account_with_2fa(app, client)
 
         for _ in range(policy.TWO_FACTOR_VERIFY.limit + 3):
@@ -262,7 +262,7 @@ class TestLoginRateLimit:
     def test_a_nonexistent_email_also_counts(self, client):
         # Un intento contra un email inventado tiene que contar: si no, se
         # podría enumerar cuentas sin límite. Por eso `rate_limit_buckets` no
-        # tiene FK a `users` (ADR-023 §Modelo de datos).
+        # tiene FK a `users` (ADR-027 §Modelo de datos).
         for _ in range(policy.LOGIN.limit + 1):
             response = _login(client, "no-existe@example.com", "x")
 
@@ -286,7 +286,7 @@ class TestRegisterRateLimit:
 
         assert statuses[:limit] == [201] * limit
         # `clear_on_success=False`: acá el éxito ES el abuso, así que los
-        # registros exitosos cuentan (ADR-023).
+        # registros exitosos cuentan (ADR-027).
         assert statuses[limit] == 429
 
     def test_successful_registrations_count_unlike_login(self, client):
@@ -397,7 +397,7 @@ class TestTwoFactorManageRateLimit:
 class TestOtpVerifyRateLimit:
     def test_too_many_otp_attempts_from_one_ip_return_429(self, client):
         # Estos endpoints ya tienen 5 intentos POR CÓDIGO; esto acota el total
-        # por IP, porque pedir un código nuevo daba 5 intentos más (ADR-023).
+        # por IP, porque pedir un código nuevo daba 5 intentos más (ADR-027).
         email = _register(client)
 
         limit = policy.OTP_VERIFY.limit

@@ -24,31 +24,31 @@ import { formatRelativeTime } from "../lib/formatRelativeTime";
 //  · Comentarios (chat_bubble): REAL — GET/POST /api/posts/<id>/comments,
 //    ADR-006. El hilo se pide bajo demanda al abrir el panel, no de antemano.
 //  · Seguir al autor: REAL — POST/DELETE /api/users/<id>/follow, ADR-007.
-//  · Eliminar publicación: REAL — DELETE /api/posts/<id>, ADR-015. Solo
+//  · Eliminar publicación: REAL — DELETE /api/posts/<id>, ADR-019. Solo
 //    aparece sobre una publicación propia; pide confirmación (ConfirmDialog,
 //    no el cuadro nativo del navegador) porque el borrado no se puede
 //    deshacer y arrastra likes y comentarios.
-//  · Eliminar comentario: REAL — DELETE /api/comments/<id>, ADR-016. Solo
+//  · Eliminar comentario: REAL — DELETE /api/comments/<id>, ADR-020. Solo
 //    aparece sobre un comentario propio, con la misma confirmación.
 //  · Editar publicación y comentario: REAL — PATCH /api/posts/<id> y
-//    PATCH /api/comments/<id>, ADR-017. Solo sobre contenido propio. Edición
+//    PATCH /api/comments/<id>, ADR-021. Solo sobre contenido propio. Edición
 //    en línea (el cuerpo de la tarjeta se vuelve formulario), sin
 //    confirmación previa: una edición se puede volver a editar, a diferencia
 //    de un borrado. Una vez editado se muestra la marca «editado» junto a la
 //    hora — el contrato expone `edited` como booleano, nunca la hora de la
 //    edición, así que no se inventa un «editado hace 5 min».
-//  · Menciones: REAL — `mentions` viaja con cada post/comentario (ADR-019).
+//  · Menciones: REAL — `mentions` viaja con cada post/comentario (ADR-023).
 //    Solo se enlazan las que el servidor autorizó; un @username inexistente o
 //    no autorizado queda como texto plano, nunca como enlace.
 //  · Seguir una cuenta privada: REAL — el botón tiene tres estados según
-//    `author.follow_status` (ADR-018): Seguir / Solicitado / Siguiendo.
+//    `author.follow_status` (ADR-022): Seguir / Solicitado / Siguiendo.
 //  · Bloquear / restringir al autor: REAL — POST /api/users/me/blocks y
-//    /api/users/me/restrictions, ADR-025. Solo sobre publicaciones ajenas, con
+//    /api/users/me/restrictions, ADR-029. Solo sobre publicaciones ajenas, con
 //    confirmación. Tras bloquear, la tarjeta se oculta de inmediato (el
 //    servidor ya no devuelve sus publicaciones); restringir no cambia lo que
 //    ves, solo lo que ven los demás de sus comentarios en tus publicaciones.
 //  · Contenido sensible: REAL — `is_sensitive` lo declara el autor al publicar
-//    (ADR-026). Quien activó el filtro de contenido sensible ni siquiera
+//    (ADR-030). Quien activó el filtro de contenido sensible ni siquiera
 //    recibe la publicación; quien no, la ve con el texto oculto tras «Mostrar
 //    de todos modos». El autor siempre ve la suya.
 //  · Guardar (bookmark_add) y compartir (share): SIN ENDPOINT. Se dibujan
@@ -84,7 +84,7 @@ export default function CapsuleCard({
   // y comentario con la petición en vuelo (para deshabilitar su papelera).
   const [pendingCommentId, setPendingCommentId] = useState(null);
   const [deletingCommentId, setDeletingCommentId] = useState(null);
-  // Edición en línea (ADR-017). La publicación y los comentarios se editan de
+  // Edición en línea (ADR-021). La publicación y los comentarios se editan de
   // forma independiente: `editing` es el formulario de la publicación;
   // `editingCommentId` dice qué comentario del panel está en edición (`null`
   // = ninguno). Cada uno con su borrador y su propia petición en vuelo.
@@ -94,24 +94,24 @@ export default function CapsuleCard({
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [commentEditDraft, setCommentEditDraft] = useState("");
   const [savingCommentEdit, setSavingCommentEdit] = useState(false);
-  // Menú de la cuenta del autor (ADR-025): `menuOpen` es el desplegable,
+  // Menú de la cuenta del autor (ADR-029): `menuOpen` es el desplegable,
   // `pendingRestriction` el diálogo de confirmación ('block' | 'restrict' |
   // null) y `hidden` oculta la tarjeta tras bloquear.
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingRestriction, setPendingRestriction] = useState(null);
   const [applyingRestriction, setApplyingRestriction] = useState(false);
   const [hidden, setHidden] = useState(false);
-  // Contenido sensible (ADR-026): el texto de una publicación ajena marcada así
+  // Contenido sensible (ADR-030): el texto de una publicación ajena marcada así
   // queda oculto hasta que la persona decide mostrarlo.
   const [revealed, setRevealed] = useState(false);
 
   const isOwnCapsule = capsule.author.id === currentUserId;
-  // `follow_status` (ADR-018): null | 'pending' | 'accepted'. Se lee tal cual
+  // `follow_status` (ADR-022): null | 'pending' | 'accepted'. Se lee tal cual
   // del servidor -- es él quien sabe si seguir a esta persona crea una
   // relación o una solicitud.
   const followState = capsule.author.follow_status ?? null;
 
-  // DELETE /api/posts/<id> (ADR-015). La petición y el estado del feed los
+  // DELETE /api/posts/<id> (ADR-019). La petición y el estado del feed los
   // gobierna AppShell (optimistic update + rollback, mismo reparto que
   // onToggleLike); acá solo vive la confirmación previa -- un borrado no se
   // puede deshacer, mismo criterio que el borrado de un mensaje (ADR-014).
@@ -129,7 +129,7 @@ export default function CapsuleCard({
     }
   };
 
-  // DELETE /api/comments/<id> (ADR-016). A diferencia de la publicación, acá no
+  // DELETE /api/comments/<id> (ADR-020). A diferencia de la publicación, acá no
   // hay actualización optimista: el comentario sale del panel recién cuando el
   // servidor confirma, igual que publicarlo (handleSubmit). Si falla, queda
   // donde estaba y se avisa con un Toast.
@@ -149,7 +149,7 @@ export default function CapsuleCard({
     }
   };
 
-  // PATCH /api/posts/<id> (ADR-017). La petición y el estado del feed los
+  // PATCH /api/posts/<id> (ADR-021). La petición y el estado del feed los
   // gobierna AppShell (reemplaza la publicación con la respuesta del
   // servidor, que ya trae `edited` y los contadores reales); acá solo vive el
   // formulario. Sin confirmación previa, a diferencia de borrar.
@@ -178,7 +178,7 @@ export default function CapsuleCard({
     }
   };
 
-  // PATCH /api/comments/<id> (ADR-017). AppShell devuelve el comentario ya
+  // PATCH /api/comments/<id> (ADR-021). AppShell devuelve el comentario ya
   // editado y acá se reemplaza en la lista del panel -- mismo reparto que
   // handleConfirmDeleteComment.
   const handleStartCommentEdit = (comment) => {
@@ -205,7 +205,7 @@ export default function CapsuleCard({
     }
   };
 
-  // POST /api/users/me/blocks | /api/users/me/restrictions (ADR-025). El
+  // POST /api/users/me/blocks | /api/users/me/restrictions (ADR-029). El
   // servidor decide el efecto real; acá solo se confirma y se refleja.
   const handleConfirmRestriction = async () => {
     const kind = pendingRestriction;
@@ -283,7 +283,7 @@ export default function CapsuleCard({
             </p>
 
             {!isOwnCapsule && (
-              // Tres estados (ADR-018): sin relación, solicitud pendiente
+              // Tres estados (ADR-022): sin relación, solicitud pendiente
               // (solo posible hacia una cuenta privada) y follow aceptado.
               // `follow_status` viene del servidor; no se infiere de
               // `is_followed_by_me`, que solo distingue dos.
@@ -333,7 +333,7 @@ export default function CapsuleCard({
 
           <p className="mt-0.5 truncate text-body-sm text-th-fg-muted">
             @{capsule.author.username} · {formatRelativeTime(capsule.created_at)}
-            {/* `edited` es un booleano en el contrato (ADR-017): se puede
+            {/* `edited` es un booleano en el contrato (ADR-021): se puede
                 decir QUE se editó, no cuándo. */}
             {capsule.edited && <> · editado</>}
           </p>
@@ -496,7 +496,7 @@ export default function CapsuleCard({
           </div>
         </form>
       ) : capsule.is_sensitive && !isOwnCapsule && !revealed ? (
-        // Marcada como sensible por su autor (ADR-026). Quien no activó el
+        // Marcada como sensible por su autor (ADR-030). Quien no activó el
         // filtro la ve en el feed, pero el texto queda oculto hasta que lo pide.
         <div className="flex flex-col items-start gap-2 rounded-th-input border border-dashed border-th-border bg-th-surface-subtle p-4">
           <p className="flex items-center gap-2 text-label-lg font-bold text-th-fg-strong">

@@ -35,7 +35,7 @@ resend==2.45.0
 google-auth==2.58.0
 
 # TOTP (RFC 6238) para la verificación en dos pasos
-# (ADR-022-two-factor-authentication.md) -- el único punto del backend que la
+# (ADR-026-two-factor-authentication.md) -- el único punto del backend que la
 # importa es infrastructure/auth/pyotp_totp_provider.py
 # (BACKEND_ARCHITECTURE.md §17, mismo principio que confina `google-auth` y
 # `resend` a infrastructure/). No se implementa TOTP a mano: es un algoritmo de

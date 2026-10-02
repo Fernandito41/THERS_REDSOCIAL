@@ -1,8 +1,8 @@
-# ADR-023 — Rate limiting de los endpoints de autenticación
+# ADR-027 — Rate limiting de los endpoints de autenticación
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-023-rate-limiting.md` |
+| Documento | `docs/architecture/ADR-027-rate-limiting.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea (ver §Decisión) |
@@ -17,9 +17,9 @@
 
 Ningún endpoint de THERS limitaba intentos ni frecuencia. Durante años de versiones de este contrato eso fue una buena práctica ausente sin consecuencias graves: una contraseña tiene entropía suficiente para que la fuerza bruta exhaustiva no sea práctica.
 
-**`ADR-022` rompió esa suposición.** `POST /api/2fa/verify` acepta un código TOTP de **10⁶ combinaciones** dentro de una ventana de 30 segundos. Sin límite de intentos, quien ya tiene la contraseña (y por tanto el token de desafío) puede recorrer el espacio entero en minutos, y el segundo factor no protege nada. Era el agujero que `ADR-022` §Riesgos señaló como "el riesgo más serio de este ADR" y dejó abierto.
+**`ADR-026` rompió esa suposición.** `POST /api/2fa/verify` acepta un código TOTP de **10⁶ combinaciones** dentro de una ventana de 30 segundos. Sin límite de intentos, quien ya tiene la contraseña (y por tanto el token de desafío) puede recorrer el espacio entero en minutos, y el segundo factor no protege nada. Era el agujero que `ADR-026` §Riesgos señaló como "el riesgo más serio de este ADR" y dejó abierto.
 
-Hubo además un hallazgo de proceso: varios ADR (desde `ADR-015`) decían *"`API_CONTRACT.md` §9 ya registra el rate limiting como pendiente transversal"*. **No lo registraba.** La afirmación se propagó de ADR en ADR sin que nadie la verificara contra el documento. v0.24 lo corrigió añadiéndolo como ítem 8; este ADR lo resuelve.
+Hubo además un hallazgo de proceso: varios ADR (desde `ADR-019`) decían *"`API_CONTRACT.md` §9 ya registra el rate limiting como pendiente transversal"*. **No lo registraba.** La afirmación se propagó de ADR en ADR sin que nadie la verificara contra el documento. v0.24 lo corrigió añadiéndolo como ítem 8; este ADR lo resuelve.
 
 ### Qué ya estaba protegido (y no se duplica)
 
@@ -52,10 +52,10 @@ Este ADR **complementa** esos tres, no los reemplaza.
 
 | Opción | Trade-off |
 |---|---|
-| **A — Tabla en PostgreSQL (elegida)** | Correcto entre *workers* y sobrevive a un reinicio. Es el mismo criterio que el proyecto ya aplicó dos veces: `ADR-021` descartó una lista negra **en memoria** para revocar tokens por perderse al reiniciar, y `ADR-020`/`ADR-021` pusieron sus *throttles* en el propio `WHERE` para que funcionaran con varios *workers*. Cuesta una escritura por intento, pero solo en endpoints de autenticación |
+| **A — Tabla en PostgreSQL (elegida)** | Correcto entre *workers* y sobrevive a un reinicio. Es el mismo criterio que el proyecto ya aplicó dos veces: `ADR-025` descartó una lista negra **en memoria** para revocar tokens por perderse al reiniciar, y `ADR-024`/`ADR-025` pusieron sus *throttles* en el propio `WHERE` para que funcionaran con varios *workers*. Cuesta una escritura por intento, pero solo en endpoints de autenticación |
 | B — En memoria del proceso | Cero coste, pero con dos *workers* el límite real sería **el doble** del configurado, y un reinicio borraría todos los contadores. `ADR-014` sí se permitió memoria para el indicador de "escribiendo" y lo justificó explícitamente: es efímero y cosmético. Un control de seguridad no lo es |
 | C — Flask-Limiter | Es la librería estándar y resuelve esto bien, **pero su almacenamiento recomendado es Redis**, que no está en el stack (agregarlo es una decisión de infraestructura, y DevOps no tiene documentación oficial). Su backend en memoria tiene el defecto de la opción B, y su backend de base de datos no cubre PostgreSQL de forma nativa. La alternativa propia son ~80 líneas y una tabla |
-| D — Dejarlo pendiente | Es lo que había. Con `ADR-022` en producción, significa un segundo factor que no protege |
+| D — Dejarlo pendiente | Es lo que había. Con `ADR-026` en producción, significa un segundo factor que no protege |
 
 **Elegida: A.**
 
@@ -116,7 +116,7 @@ Son placeholders de producto explícitos y revisables, igual que `PASSWORD_RESET
 
 ### El guard se llama explícitamente, no desde un hook global
 
-A diferencia del registro de actividad (`ADR-020`/`ADR-021`, que **sí** es un `after_request`), el límite es una línea visible al principio de cada route.
+A diferencia del registro de actividad (`ADR-024`/`ADR-025`, que **sí** es un `after_request`), el límite es una línea visible al principio de cada route.
 
 Un hook global tendría que saber qué *scope* y qué identidad corresponden a cada ruta, y esa correspondencia es justamente la decisión de producto de cada endpoint (¿por IP o por cuenta? ¿cuenta los aciertos?). Un mapa de rutas a reglas escondido en un hook sería más difícil de auditar que una línea en cada route — y **en un control de seguridad, poder auditarlo de un vistazo vale más que ahorrar la línea**.
 
@@ -176,20 +176,20 @@ Las filas cuya ventana venció se borran de forma **oportunista**: una de cada 2
 
 - **`DATABASE_ARCHITECTURE.md` cambia** (tabla `rate_limit_buckets`) → v0.21.
 - `API_CONTRACT.md` → v0.25. **`429` se incorpora al formato de error (§3)** y nueve endpoints pueden devolverlo. Ninguno cambia de forma en su camino de éxito. **El ítem 8 de §9 queda resuelto** para los endpoints de autenticación, y se reescribe para reflejar qué parte sigue pendiente (los de producto).
-- `ADR-022` §Riesgos deja de tener su riesgo más serio abierto: el apartado se mantiene como registro histórico, con la referencia a este ADR.
+- `ADR-026` §Riesgos deja de tener su riesgo más serio abierto: el apartado se mantiene como registro histórico, con la referencia a este ADR.
 - Un cliente que reintente en bucle ante un error empezará a ver `429`. Es el comportamiento deseado, pero es un cambio observable.
 
 ## Referencias
 
-- `docs/architecture/ADR-022-two-factor-authentication.md` — el riesgo que este ADR cierra.
+- `docs/architecture/ADR-026-two-factor-authentication.md` — el riesgo que este ADR cierra.
 - `docs/architecture/ADR-010-password-reset-otp-flow.md`, `ADR-011-mandatory-email-verification.md` — los límites por código y cooldowns que ya existían, y el hueco que dejaban.
-- `docs/architecture/ADR-021-session-registry.md` — precedente de descartar memoria del proceso para un control de seguridad.
+- `docs/architecture/ADR-025-session-registry.md` — precedente de descartar memoria del proceso para un control de seguridad.
 - `docs/architecture/ADR-014-messages-ux-improvements.md` — el caso en que la memoria del proceso **sí** era aceptable, y por qué acá no.
-- `docs/architecture/ADR-020-content-filters-and-privacy-preferences.md` — precedente del *throttle* impuesto en el propio `WHERE`.
+- `docs/architecture/ADR-024-content-filters-and-privacy-preferences.md` — precedente del *throttle* impuesto en el propio `WHERE`.
 - `CLAUDE.md` §15 — DevOps sin documentar, de donde viene el límite de varias mitigaciones de §Riesgos.
 
 ---
 
 ## Cierre
 
-El agujero que `ADR-022` dejó señalado como el más serio queda cerrado: adivinar un código TOTP pasa de ser cuestión de minutos a ser inviable. Y de paso se corrige un defecto de proceso — una afirmación sobre el contrato que seis ADR repitieron sin que fuera cierta. Lo que sigue abierto está acotado y dicho: los endpoints de producto no tienen límite, y el límite por IP es evadible donde no hay una cuenta que anclar.
+El agujero que `ADR-026` dejó señalado como el más serio queda cerrado: adivinar un código TOTP pasa de ser cuestión de minutos a ser inviable. Y de paso se corrige un defecto de proceso — una afirmación sobre el contrato que seis ADR repitieron sin que fuera cierta. Lo que sigue abierto está acotado y dicho: los endpoints de producto no tienen límite, y el límite por IP es evadible donde no hay una cuenta que anclar.

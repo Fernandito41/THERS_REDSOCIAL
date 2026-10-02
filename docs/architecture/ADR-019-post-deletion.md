@@ -1,8 +1,8 @@
-# ADR-015 — Borrado de publicaciones propias
+# ADR-019 — Borrado de publicaciones propias
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-015-post-deletion.md` |
+| Documento | `docs/architecture/ADR-019-post-deletion.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 26/09/2026 |
 | Estado | **Aceptada** — implementada en esta tarea (ver §Decisión) |
@@ -31,7 +31,7 @@ Este ADR cubre **solo el borrado**. Editar una publicación ya hecha sigue sin e
 - **No** deja un placeholder tipo "Esta publicación fue eliminada" — se borra la fila, sin rastro. Mismo criterio que `ADR-014` ya adoptó para mensajes.
 - **No** implementa borrado lógico (`deleted_at`) ni papelera/deshacer — el borrado es inmediato y definitivo (ver §Opciones consideradas).
 - **No** implementa moderación: un administrador no puede borrar la publicación de otra persona. No existe el concepto de rol administrador en el producto — `DATABASE_ARCHITECTURE.md` §4.B no registra ninguna candidata de roles/permisos ratificada.
-- **No** implementa borrar comentarios propios — es otro recurso y otro contrato; lo cubre `ADR-016-comment-deletion.md`.
+- **No** implementa borrar comentarios propios — es otro recurso y otro contrato; lo cubre `ADR-020-comment-deletion.md`.
 
 ## Opciones consideradas — *hard delete* vs. borrado lógico
 
@@ -96,7 +96,7 @@ Likes (`ADR-005`), comentarios (`ADR-006`) y notificaciones (`ADR-008`) ya decla
 ## Decisiones pendientes (quedan fuera, cada una es su propio ADR futuro)
 
 - Editar una publicación ya hecha.
-- ~~Borrar un comentario propio (`ADR-006` no lo cubre).~~ — resuelto por `ADR-016-comment-deletion.md`.
+- ~~Borrar un comentario propio (`ADR-006` no lo cubre).~~ — resuelto por `ADR-020-comment-deletion.md`.
 - Placeholder "publicación eliminada" en vez de desaparición silenciosa.
 - Borrado de cuenta, que arrastraría todo el contenido de una persona — el `ON DELETE CASCADE` sobre `users.id` de cada entidad ya está preparado, pero la funcionalidad no existe ni está decidida.
 

@@ -1,14 +1,14 @@
-# ADR-022 — Verificación en dos pasos (2FA) con TOTP
+# ADR-026 — Verificación en dos pasos (2FA) con TOTP
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-022-two-factor-authentication.md` |
+| Documento | `docs/architecture/ADR-026-two-factor-authentication.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea (ver §Decisión) |
 | Alcance | `backend/` — `users.totp_secret`/`two_factor_enabled`, entidad `two_factor_recovery_codes`, `GET /api/2fa`, `POST /api/2fa/setup`/`confirm`/`disable`/`recovery-codes`, `POST /api/2fa/verify`, desafío en `login`/`auth/google`; `Frontend/` — `TwoFactorRow.jsx`, `TwoFactorChallenge.jsx` |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §4) |
-| Depende de | **`ADR-021-session-registry.md`** — el token de desafío se rechaza en endpoints protegidos precisamente porque no tiene fila en `sessions` |
+| Depende de | **`ADR-025-session-registry.md`** — el token de desafío se rechaza en endpoints protegidos precisamente porque no tiene fila en `sessions` |
 
 > Resuelve el control "Activar 2FA" de REF-SET-03, que decía `pending` con el motivo *"No está implementado. Mostrarlo como activo sería afirmar una protección inexistente (archivo maestro §10.2)"*.
 
@@ -62,7 +62,7 @@ Con 2FA, el login tiene dos pasos y hace falta algo que autorice el segundo. Tre
 
 | Opción | Trade-off |
 |---|---|
-| **A — JWT corto con un claim `purpose` (elegida)** | Sin tabla nueva. Y **gracias a `ADR-021` sale gratis que no sirva para nada más**: el *blocklist loader* exige que el `jti` tenga fila en `sessions`, y este token no la tiene, así que cualquier endpoint protegido lo rechaza sin necesidad de código extra. El endpoint que sí lo acepta lo decodifica a mano y comprueba `purpose` explícitamente |
+| **A — JWT corto con un claim `purpose` (elegida)** | Sin tabla nueva. Y **gracias a `ADR-025` sale gratis que no sirva para nada más**: el *blocklist loader* exige que el `jti` tenga fila en `sessions`, y este token no la tiene, así que cualquier endpoint protegido lo rechaza sin necesidad de código extra. El endpoint que sí lo acepta lo decodifica a mano y comprueba `purpose` explícitamente |
 | B — Token opaco en una tabla, estilo `reset_authorization` (`ADR-010`) | Es el patrón que el proyecto ya usa para "autorizar la etapa siguiente". Más seguro en abstracto (revocable, de un solo uso), pero exige otra tabla para algo que vive cinco minutos, y la propiedad clave (que no sirva en endpoints protegidos) ya la da la opción A |
 | C — Reutilizar el JWT de sesión y pedir el código después | Inaceptable: emitiría una sesión válida **antes** del segundo factor. El 2FA no protegería nada |
 
@@ -130,7 +130,7 @@ Ventana de tolerancia: ±1 intervalo (±30 s). Subirla amplía el tiempo en que 
 
 ### Seguridad
 
-- El token de desafío **no sirve en ningún endpoint protegido** (no tiene fila en `sessions`, `ADR-021`), y un token de sesión **no sirve como desafío** (se comprueba `purpose`). Las dos direcciones están cubiertas por prueba.
+- El token de desafío **no sirve en ningún endpoint protegido** (no tiene fila en `sessions`, `ADR-025`), y un token de sesión **no sirve como desafío** (se comprueba `purpose`). Las dos direcciones están cubiertas por prueba.
 - El secreto solo viaja a quien ya está autenticado, en la respuesta de `setup`.
 - Desactivar y regenerar exigen contraseña: son operaciones sobre credenciales de acceso.
 - Los códigos de recuperación se hashean con scrypt y son de un solo uso, garantizado bajo concurrencia por la condición en el `WHERE`.
@@ -178,11 +178,11 @@ Ventana de tolerancia: ±1 intervalo (±30 s). Subirla amplía el tiempo en que 
 - **`DATABASE_ARCHITECTURE.md` cambia** (tabla `two_factor_recovery_codes`, `users.totp_secret`/`two_factor_enabled`) → v0.20.
 - `API_CONTRACT.md` → v0.24. **`POST /api/login` y `POST /api/auth/google` ganan una segunda forma de respuesta `200`** — es el cambio de contrato más relevante: un cliente que asuma que un `200` siempre trae `token` se rompe. La forma vieja sigue siendo la de toda cuenta sin 2FA.
 - `requirements.txt` gana una dependencia; `Frontend/package.json` gana `qrcode`. Ninguna versión del proyecto está ratificada formalmente como estándar (`CLAUDE.md` §5), así que estas tampoco.
-- Depende de `ADR-021`: sin el registro de sesiones, el token de desafío no podría distinguirse de un token de sesión sin código extra.
+- Depende de `ADR-025`: sin el registro de sesiones, el token de desafío no podría distinguirse de un token de sesión sin código extra.
 
 ## Referencias
 
-- `docs/architecture/ADR-021-session-registry.md` — dependencia directa.
+- `docs/architecture/ADR-025-session-registry.md` — dependencia directa.
 - `docs/architecture/ADR-010-password-reset-otp-flow.md`, `ADR-011-mandatory-email-verification.md` — los OTP por correo, y por qué su hashing no aplica al secreto TOTP.
 - `docs/architecture/ADR-012-google-sign-in.md` — el camino de Google que también pasa por el desafío, y las cuentas sin contraseña.
 - `docs/architecture/BACKEND_ARCHITECTURE.md` §17 — la regla que confina `pyotp` a infraestructura.

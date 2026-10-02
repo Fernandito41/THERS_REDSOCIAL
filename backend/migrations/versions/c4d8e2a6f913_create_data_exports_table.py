@@ -4,8 +4,8 @@ Revision ID: c4d8e2a6f913
 Revises: b6e3a9d4f270
 Create Date: 2026-10-01 00:00:00.000000
 
-Exportación de datos personales (ADR-024-data-export.md —
-docs/architecture/ADR-024-data-export.md). Una fila por archivo ZIP generado.
+Exportación de datos personales (ADR-028-data-export.md —
+docs/architecture/ADR-028-data-export.md). Una fila por archivo ZIP generado.
 
 `content` guarda el ZIP mientras no caduque y pasa a NULL al caducar; la fila
 queda como historial. Va en la base y no en disco porque el proyecto no tiene

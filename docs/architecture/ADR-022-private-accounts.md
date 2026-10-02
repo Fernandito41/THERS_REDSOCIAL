@@ -1,8 +1,8 @@
-# ADR-018 — Cuentas privadas y solicitudes de seguimiento
+# ADR-022 — Cuentas privadas y solicitudes de seguimiento
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-018-private-accounts.md` |
+| Documento | `docs/architecture/ADR-022-private-accounts.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea (ver §Decisión) |
@@ -122,11 +122,11 @@ Aceptar es `POST` (crea una relación nueva); rechazar es `DELETE` (la solicitud
 
 ### `GET`/`PATCH /api/users/me/privacy`
 
-Endpoint propio, no parte de `PATCH /api/users/me` (`ADR-003`) — ver `ADR-020` §Opciones consideradas, que lo decide para el conjunto de las siete preferencias. Acá transporta `is_private` y `pending_follow_requests_count`.
+Endpoint propio, no parte de `PATCH /api/users/me` (`ADR-003`) — ver `ADR-024` §Opciones consideradas, que lo decide para el conjunto de las siete preferencias. Acá transporta `is_private` y `pending_follow_requests_count`.
 
 ### Seguridad
 
-- **`404`, nunca `403`,** al pedir contenido de una cuenta privada. Un `403` confirmaría que ese post existe y de quién es — exactamente lo que la cuenta no quiere revelar. Mismo criterio que el `404` indistinguible de `ADR-015`/`ADR-016`/`ADR-017`.
+- **`404`, nunca `403`,** al pedir contenido de una cuenta privada. Un `403` confirmaría que ese post existe y de quién es — exactamente lo que la cuenta no quiere revelar. Mismo criterio que el `404` indistinguible de `ADR-019`/`ADR-020`/`ADR-021`.
 - La pertenencia de una solicitud se confirma **en el propio `WHERE` del `UPDATE`/`DELETE`** (`followed_id = <JWT>` y `status = 'pending'`), no leyendo la fila y comparando después.
 - El estado de un follow lo decide el servidor a partir de `is_private` de la cuenta destino; **ningún campo del body puede influir en él**.
 - `is_private` se expone en el objeto `user` (lo necesita el Frontend en cada arranque de sesión para saber si mostrar la bandeja); el resto de preferencias vive solo en su endpoint.
@@ -147,7 +147,7 @@ Endpoint propio, no parte de `PATCH /api/users/me` (`ADR-003`) — ver `ADR-020`
 - `domain/follows/repositories.py` + su adaptador: `get_status`, `set_status`, `remove_pending`, `list_pending_requests`, `pending_requests_count`; `followed_user_ids` se **reemplaza** por `follow_statuses` (devuelve el estado, no un sí/no, y resuelve los tres estados del botón en una sola consulta); `is_following`/`followers_count`/`following_count` pasan a contar solo `'accepted'`.
 - `domain/posts/repositories.py` + adaptador: `list_recent` toma `viewer_id` y filtra en SQL.
 - `application/follows/`: `follow_presenter.py`, `list_follow_requests_use_case.py`, `respond_follow_request_use_case.py` (nuevos); `follow_user`/`unfollow_user` reescritos.
-- `application/privacy/privacy_presenter.py`, `privacy_settings_use_case.py` (nuevos, compartidos con `ADR-019`/`ADR-020`).
+- `application/privacy/privacy_presenter.py`, `privacy_settings_use_case.py` (nuevos, compartidos con `ADR-023`/`ADR-024`).
 - Los cuatro casos de uso de comentarios/likes reciben `follow_repository` y llaman al guard.
 - `interfaces/routes/follow_routes.py` (tres endpoints nuevos), `privacy_routes.py` (nuevo).
 - Tests de integración nuevos en `tests/test_privacy.py`; cuatro aserciones de `tests/test_follows.py` actualizadas por el campo aditivo `follow_status`.
@@ -177,8 +177,8 @@ Endpoint propio, no parte de `PATCH /api/users/me` (`ADR-003`) — ver `ADR-020`
 
 - `docs/architecture/ADR-007-follows-minimal-model.md` — entidad `follows` que este ADR extiende.
 - `docs/architecture/ADR-004-posts-minimal-model.md` — feed global que este ADR pasa a filtrar.
-- `docs/architecture/ADR-015-post-deletion.md`, `ADR-016-comment-deletion.md`, `ADR-017-content-editing.md` — origen del criterio del `404` indistinguible.
-- `docs/architecture/ADR-019-mentions.md`, `ADR-020-content-filters-and-privacy-preferences.md` — los otros dos ADR de la misma pantalla.
+- `docs/architecture/ADR-019-post-deletion.md`, `ADR-020-comment-deletion.md`, `ADR-021-content-editing.md` — origen del criterio del `404` indistinguible.
+- `docs/architecture/ADR-023-mentions.md`, `ADR-024-content-filters-and-privacy-preferences.md` — los otros dos ADR de la misma pantalla.
 - `CLAUDE.md` — jerarquía de fuentes (§4), regla de alcance (§14).
 
 ---

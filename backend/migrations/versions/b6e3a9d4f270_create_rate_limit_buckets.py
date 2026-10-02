@@ -4,8 +4,8 @@ Revision ID: b6e3a9d4f270
 Revises: a3c9f5b1e648
 Create Date: 2026-10-01 00:00:00.000000
 
-Rate limiting de los endpoints de autenticación (ADR-023-rate-limiting.md —
-docs/architecture/ADR-023-rate-limiting.md). Cierra el ítem 8 de
+Rate limiting de los endpoints de autenticación (ADR-027-rate-limiting.md —
+docs/architecture/ADR-027-rate-limiting.md). Cierra el ítem 8 de
 `API_CONTRACT.md` §9, que v0.24 registró como pendiente explícito tras
 descubrir que en `POST /api/2fa/verify` esa ausencia era explotable: un código
 TOTP son 10^6 combinaciones dentro de una ventana de 30 segundos.
@@ -19,7 +19,7 @@ Contador de ventana fija, una fila por (scope, identidad):
     **Se hashea a propósito:** esta tabla solo necesita *contar*, nunca saber
     de quién. Guardar emails o IPs en claro acumularía datos personales en una
     tabla puramente operativa, cuando un hash cumple la misma función
-    (ADR-023 §Seguridad). Mismo criterio que `password_reset_tokens.code_hash`:
+    (ADR-027 §Seguridad). Mismo criterio que `password_reset_tokens.code_hash`:
     si no hace falta el valor original, no se guarda.
 
   · `window_started_at` + `attempts` — el contador. Reiniciar la ventana y
@@ -27,12 +27,12 @@ Contador de ventana fija, una fila por (scope, identidad):
     DO UPDATE ... RETURNING), así que dos peticiones simultáneas no pueden
     ninguna de las dos "perder" su incremento. Es lo que hace que el límite sea
     cierto bajo concurrencia, que es justamente el escenario de un ataque de
-    fuerza bruta (ADR-023 §Decisión).
+    fuerza bruta (ADR-027 §Decisión).
 
 Por qué PostgreSQL y no memoria del proceso: un contador en memoria se pierde
 al reiniciar y no se comparte entre workers, así que con dos workers el límite
 real sería el doble del configurado. Es el mismo razonamiento por el que
-ADR-021 descartó una lista negra en memoria para revocar tokens, y la razón por
+ADR-025 descartó una lista negra en memoria para revocar tokens, y la razón por
 la que el indicador de "escribiendo" de ADR-014 sí podía permitírselo (es
 efímero y cosmético; esto es un control de seguridad).
 
@@ -87,7 +87,7 @@ def upgrade():
     #
     # Este sí hace falta, pero para otra cosa: purgar las filas cuya ventana ya
     # venció. Sin purga la tabla crece con cada IP que haya intentado entrar
-    # alguna vez (ADR-023 §Riesgos).
+    # alguna vez (ADR-027 §Riesgos).
     op.create_index(
         'ix_rate_limit_buckets_window_started_at',
         'rate_limit_buckets',

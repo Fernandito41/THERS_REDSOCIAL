@@ -1,6 +1,6 @@
 # GET y PATCH /api/users/me/privacy, y GET/POST/DELETE
-# /api/users/me/muted-keywords (ADR-018-private-accounts.md,
-# ADR-019-mentions.md, ADR-020-content-filters-and-privacy-preferences.md).
+# /api/users/me/muted-keywords (ADR-022-private-accounts.md,
+# ADR-023-mentions.md, ADR-024-content-filters-and-privacy-preferences.md).
 #
 # Blueprint propio, separado de users_bp: `PATCH /api/users/me` (ADR-003) es el
 # contrato del perfil público y tiene reglas que no aplican acá (el cooldown de
@@ -63,7 +63,7 @@ _BOOLEAN_FIELDS = (
     "is_private",
     "hide_offensive_comments",
     "show_activity_status",
-    # ADR-026-content-preferences.md
+    # ADR-030-content-preferences.md
     "hide_sensitive_content",
 )
 _AUDIENCE_FIELDS = (
@@ -173,7 +173,7 @@ def post_muted_keyword():
 def delete_muted_keyword():
     # El término va en el body, no en la URL: puede contener espacios, acentos
     # y `/`, y meterlo en el path obligaría a percent-encoding en los dos lados
-    # para nada (ADR-020 §Contrato API). Es el único DELETE del proyecto con
+    # para nada (ADR-024 §Contrato API). Es el único DELETE del proyecto con
     # body, y es por eso.
     user_id = get_jwt_identity()
 

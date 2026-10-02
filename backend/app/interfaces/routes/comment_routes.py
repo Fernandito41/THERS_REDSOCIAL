@@ -1,6 +1,6 @@
 # POST y GET /api/posts/<post_id>/comments (ADR-006-comments-minimal-model.md)
-# DELETE /api/comments/<comment_id> (ADR-016-comment-deletion.md) y
-# PATCH /api/comments/<comment_id> (ADR-017-content-editing.md).
+# DELETE /api/comments/<comment_id> (ADR-020-comment-deletion.md) y
+# PATCH /api/comments/<comment_id> (ADR-021-content-editing.md).
 # Blueprint separado de posts_bp -- "comments" es su propia entidad (mismo
 # criterio que separa auth_bp de users_bp, y que like_routes.py de posts_bp),
 # aunque su URL anide bajo /posts/<id> por ser un sub-recurso natural de un
@@ -53,14 +53,14 @@ comments_bp = Blueprint("comments", __name__)
 _post_repository = SQLAlchemyPostRepository()
 _comment_repository = SQLAlchemyCommentRepository()
 _notification_repository = SQLAlchemyNotificationRepository()
-# ADR-018-private-accounts.md: el hilo de una cuenta privada no se lee ni se
+# ADR-022-private-accounts.md: el hilo de una cuenta privada no se lee ni se
 # comenta desde fuera.
 _follow_repository = SQLAlchemyFollowRepository()
-# ADR-019-mentions.md / ADR-020-content-filters-and-privacy-preferences.md.
+# ADR-023-mentions.md / ADR-024-content-filters-and-privacy-preferences.md.
 _user_repository = SQLAlchemyUserRepository()
 _mention_repository = SQLAlchemyMentionRepository()
 _muted_keyword_repository = SQLAlchemyMutedKeywordRepository()
-# ADR-025-blocked-and-restricted-accounts.md: bloqueos y restricciones.
+# ADR-029-blocked-and-restricted-accounts.md: bloqueos y restricciones.
 _restriction_repository = SQLAlchemyRestrictionRepository()
 
 
@@ -107,7 +107,7 @@ def create(post_id):
 @jwt_required()
 def list_all(post_id):
     # viewer_id: el hilo de una cuenta privada no se lee desde fuera
-    # (ADR-018-private-accounts.md).
+    # (ADR-022-private-accounts.md).
     viewer_id = get_jwt_identity()
 
     try:
@@ -126,7 +126,7 @@ def list_all(post_id):
 @jwt_required()
 def update(comment_id):
     # Ruta plana, igual que DELETE: editar depende de quién escribió el
-    # comentario, no de en qué publicación está (ADR-017-content-editing.md).
+    # comentario, no de en qué publicación está (ADR-021-content-editing.md).
     author_id = get_jwt_identity()
 
     data = request.get_json(silent=True)

@@ -31,7 +31,7 @@ export function getErrorMessage(error, t) {
   const { status, data } = error.response;
 
   if (status === 429) {
-    // Rate limiting (ADR-023-rate-limiting.md). Se construye el mensaje acá en
+    // Rate limiting (ADR-027-rate-limiting.md). Se construye el mensaje acá en
     // vez de usar el `msg` del backend porque ese texto no puede incluir la
     // espera ya formateada -- y decir "demasiados intentos" sin decir cuánto
     // esperar deja a la persona reintentando a ciegas.

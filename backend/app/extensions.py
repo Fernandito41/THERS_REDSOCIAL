@@ -31,7 +31,7 @@ def _expired_token_callback(jwt_header, jwt_payload):
     return jsonify({"msg": "El token ha expirado"}), 401
 
 # ---------------------------------------------------------------------------
-# Registro de sesiones (ADR-021-session-registry.md)
+# Registro de sesiones (ADR-025-session-registry.md)
 # ---------------------------------------------------------------------------
 # Acá el JWT de THERS deja de ser puramente *stateless*. Sigue siendo
 # autocontenido y firmado, pero además su `jti` tiene que corresponder a una
@@ -39,7 +39,7 @@ def _expired_token_callback(jwt_header, jwt_payload):
 # sin esto, un token firmado valía hasta expirar y no había forma de revocarlo
 # (que es exactamente el motivo por el que ese control estaba `pending`).
 #
-# Consecuencias asumidas, documentadas en ADR-021 §Riesgos:
+# Consecuencias asumidas, documentadas en ADR-025 §Riesgos:
 #   · Una consulta a la base de datos por cada petición protegida.
 #   · Los tokens emitidos ANTES de esta migración no tienen fila, así que
 #     dejan de valer: todo el mundo se desloguea una vez.
@@ -59,7 +59,7 @@ def _is_token_revoked(jwt_header, jwt_payload):
         SQLAlchemySessionRepository,
     )
 
-    # Los tokens de desafío de 2FA (ADR-022) se emiten a propósito SIN fila de
+    # Los tokens de desafío de 2FA (ADR-026) se emiten a propósito SIN fila de
     # sesión: todavía no hay sesión, falta el segundo factor. Eso hace que este
     # loader los rechace en cualquier endpoint protegido, que es justo lo que
     # se quiere -- un token de desafío no debe servir para leer el feed. El

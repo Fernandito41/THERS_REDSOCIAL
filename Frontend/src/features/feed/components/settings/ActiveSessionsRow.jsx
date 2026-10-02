@@ -10,7 +10,7 @@ import { formatRelativeTime } from "../../lib/formatRelativeTime";
 import { describeUserAgent } from "../../lib/describeUserAgent";
 
 // Sesiones activas (GET /api/sessions, DELETE /api/sessions/<id>,
-// DELETE /api/sessions -- ADR-021-session-registry.md).
+// DELETE /api/sessions -- ADR-025-session-registry.md).
 //
 // Antes de ese ADR este control era `pending` con el motivo "El JWT no se
 // registra por dispositivo, así que no hay nada que listar ni revocar de

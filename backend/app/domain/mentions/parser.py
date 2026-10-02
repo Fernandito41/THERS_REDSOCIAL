@@ -1,5 +1,5 @@
 # Extracción de @username del texto de una publicación o comentario
-# (ADR-019-mentions.md). Función pura sobre strings -- domain/ no importa
+# (ADR-023-mentions.md). Función pura sobre strings -- domain/ no importa
 # Flask ni SQLAlchemy (BACKEND_ARCHITECTURE.md §7/§17), mismo patrón que
 # domain/posts/validators.py.
 #
@@ -23,7 +23,7 @@ _MENTION_PATTERN = re.compile(r"(?<![A-Za-z0-9_@])@([A-Za-z0-9_]{3,20})\b")
 
 #: Cuántas menciones se aceptan por publicación/comentario. Sin un límite, un
 #: solo post podría generar cientos de notificaciones -- es el vector de spam
-#: obvio de esta función (ADR-019 §Riesgos). Placeholder explícito y revisable,
+#: obvio de esta función (ADR-023 §Riesgos). Placeholder explícito y revisable,
 #: mismo criterio que MAX_CONTENT_LENGTH.
 MAX_MENTIONS_PER_CONTENT = 10
 

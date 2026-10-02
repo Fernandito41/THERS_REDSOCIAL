@@ -4,15 +4,15 @@ Revision ID: f1a4c8e2d573
 Revises: e7b2d4f8c916
 Create Date: 2026-10-01 00:00:00.000000
 
-Registro de sesiones y alertas de inicio de sesión (ADR-021-session-registry.md
-— docs/architecture/ADR-021-session-registry.md). Resuelve "Sesiones activas" y
+Registro de sesiones y alertas de inicio de sesión (ADR-025-session-registry.md
+— docs/architecture/ADR-025-session-registry.md). Resuelve "Sesiones activas" y
 "Alertas de inicio de sesión" de la pantalla de Seguridad (REF-SET-03), que
 estaban marcadas como `pending` con el motivo "El JWT no se registra por
 dispositivo, así que no hay nada que listar ni revocar de verdad".
 
 Ese motivo era exacto, y esta migración es lo que lo deja de ser: el JWT pasa
 de ser puramente *stateless* a tener una fila que lo representa. Es un cambio
-arquitectónico, no una columna más -- ver ADR-021 §Opciones consideradas.
+arquitectónico, no una columna más -- ver ADR-025 §Opciones consideradas.
 
 1. Tabla `sessions` — una fila por token emitido. `jti` (el identificador único
    que flask_jwt_extended ya pone en cada JWT) es la bisagra: el token sigue
@@ -74,7 +74,7 @@ def upgrade():
         # Lo que el navegador dijo de sí mismo. TEXT y nullable: un cliente
         # puede no mandar User-Agent, y no se valida ni se parsea en el
         # servidor -- se guarda crudo y es el Frontend quien lo resume para
-        # mostrarlo (ADR-021 §Decisión).
+        # mostrarlo (ADR-025 §Decisión).
         sa.Column('user_agent', sa.Text(), nullable=True),
         # 45 caracteres: longitud máxima de una IPv6 en texto, incluido el
         # formato mapeado a IPv4 (::ffff:255.255.255.255).
@@ -86,7 +86,7 @@ def upgrade():
             server_default=sa.text('now()'),
         ),
         # Se actualiza con throttle en cada petición autenticada, igual que
-        # `users.last_seen_at` (ADR-020) y por el mismo motivo: sin throttle, el
+        # `users.last_seen_at` (ADR-024) y por el mismo motivo: sin throttle, el
         # polling del chat escribiría en cada request.
         sa.Column(
             'last_used_at',
@@ -96,7 +96,7 @@ def upgrade():
         ),
         # NULL = sesión viva. Revocar no borra la fila: así "cerrar sesión en
         # ese dispositivo" queda registrado y la lista puede distinguir una
-        # sesión que terminó de una que nunca existió (ADR-021 §Decisión).
+        # sesión que terminó de una que nunca existió (ADR-025 §Decisión).
         sa.Column('revoked_at', sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint('jti', name='uq_sessions_jti'),
     )

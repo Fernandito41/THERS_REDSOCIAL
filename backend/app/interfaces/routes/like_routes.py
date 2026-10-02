@@ -34,10 +34,10 @@ likes_bp = Blueprint("likes", __name__)
 _post_repository = SQLAlchemyPostRepository()
 _like_repository = SQLAlchemyLikeRepository()
 _notification_repository = SQLAlchemyNotificationRepository()
-# ADR-018-private-accounts.md: no se le puede dar like a lo que no se puede
+# ADR-022-private-accounts.md: no se le puede dar like a lo que no se puede
 # ver, así que estos endpoints necesitan resolver la relación de seguimiento.
 _follow_repository = SQLAlchemyFollowRepository()
-# ADR-025-blocked-and-restricted-accounts.md: tampoco se da like a quien bloqueó
+# ADR-029-blocked-and-restricted-accounts.md: tampoco se da like a quien bloqueó
 # o fue bloqueado.
 _restriction_repository = SQLAlchemyRestrictionRepository()
 

@@ -9,7 +9,7 @@ import { useLanguage } from "@shared/i18n";
 // Cuentas bloqueadas y restringidas
 // (GET/POST /api/users/me/blocks y DELETE /api/users/me/blocks/<id>;
 // GET/POST /api/users/me/restrictions y DELETE /api/users/me/restrictions/<id> --
-// ADR-025-blocked-and-restricted-accounts.md).
+// ADR-029-blocked-and-restricted-accounts.md).
 //
 // Antes de ese ADR estos controles eran `pending` ("Requiere comprobación de
 // acceso en el servidor, que no existe"). Ahora el servidor corta el acceso

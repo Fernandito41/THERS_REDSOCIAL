@@ -1,5 +1,5 @@
 # Tipos de relación de restricción entre cuentas
-# (ADR-025-blocked-and-restricted-accounts.md). Strings y no ENUM de
+# (ADR-029-blocked-and-restricted-accounts.md). Strings y no ENUM de
 # PostgreSQL, mismo criterio que domain/follows/follow_status.py.
 
 #: Bloqueo: en ambos sentidos nadie ve ni interactúa con el otro.

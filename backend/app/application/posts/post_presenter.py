@@ -29,7 +29,7 @@ def to_public_post(
             # sigue significando exactamente lo mismo: relación efectiva. Una
             # solicitud pendiente es `false` acá -- pedir no es seguir.
             "is_followed_by_me": follow_status == ACCEPTED,
-            # `follow_status` (ADR-018): null | 'pending' | 'accepted'. Es lo
+            # `follow_status` (ADR-022): null | 'pending' | 'accepted'. Es lo
             # que permite al Frontend dibujar el tercer estado del botón
             # ("Solicitado") sin inferirlo de `is_followed_by_me`.
             "follow_status": follow_status,
@@ -38,17 +38,17 @@ def to_public_post(
             "is_private": post.author.is_private,
         },
         "content": post.content,
-        # Lo que el AUTOR declaró al publicar (ADR-026-content-preferences.md);
+        # Lo que el AUTOR declaró al publicar (ADR-030-content-preferences.md);
         # no es una clasificación del servidor.
         "is_sensitive": post.is_sensitive,
         "created_at": post.created_at.isoformat(),
-        # Quiénes están mencionados de verdad en `content` (ADR-019). El texto
+        # Quiénes están mencionados de verdad en `content` (ADR-023). El texto
         # conserva el @username tal como se escribió; esta lista es la que
         # permite enlazarlo, y deja fuera los @algo que no son menciones
         # reales (username inexistente, o que no autorizó la mención).
         "mentions": to_public_mentions(mentions),
         # Booleano, nunca el timestamp `edited_at` crudo -- mismo criterio
-        # que `read` en messages/notifications (ADR-017-content-editing.md).
+        # que `read` en messages/notifications (ADR-021-content-editing.md).
         "edited": post.edited_at is not None,
         "likes_count": likes_count,
         "liked_by_me": liked_by_me,

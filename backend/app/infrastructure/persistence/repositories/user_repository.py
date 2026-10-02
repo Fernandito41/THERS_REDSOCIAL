@@ -76,7 +76,7 @@ class SQLAlchemyUserRepository(UserRepository):
         # (es una expresión sobre la columna). Se acepta porque `usernames`
         # trae como máximo MAX_MENTIONS_PER_CONTENT (10) elementos y solo
         # corre al crear/editar contenido, nunca al leer el feed
-        # (ADR-019 §Riesgos).
+        # (ADR-023 §Riesgos).
         lowered = [u.lower() for u in usernames]
         return (
             db.session.execute(
@@ -89,7 +89,7 @@ class SQLAlchemyUserRepository(UserRepository):
     def touch_last_seen(self, user_id, min_interval_seconds):
         # Un único UPDATE condicional, sin SELECT previo: si la marca es
         # reciente, el WHERE no matchea y no se escribe nada. Barato y sin
-        # estado en el proceso (ADR-020 §Decisión).
+        # estado en el proceso (ADR-024 §Decisión).
         db.session.execute(
             update(User)
             .where(

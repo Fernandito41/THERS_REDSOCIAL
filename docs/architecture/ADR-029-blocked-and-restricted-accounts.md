@@ -1,15 +1,15 @@
-# ADR-025 — Cuentas bloqueadas y restringidas
+# ADR-029 — Cuentas bloqueadas y restringidas
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-025-blocked-and-restricted-accounts.md` |
+| Documento | `docs/architecture/ADR-029-blocked-and-restricted-accounts.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea, a pedido del propietario del proyecto. Pendiente de la revisión humana que exige `HB-001` §19 |
 | Alcance | `backend/` — entidad `user_restrictions` y su aplicación en feed, comentarios, likes, follows, mensajes, notificaciones y menciones; `GET`/`POST`/`DELETE /api/users/me/blocks` y `/api/users/me/restrictions`; `Frontend/` — `RestrictedAccountsRow.jsx`, menú de la tarjeta de publicación y la sección «Cuentas bloqueadas y restringidas» (REF-SET-10) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §4) |
 
-> **Es un ADR transversal:** a diferencia de `ADR-024`, no agrega una función aislada. Un bloqueo solo significa algo si **cada** camino que lee o escribe contenido lo respeta, así que toca feed, comentarios, likes, follows, mensajes, notificaciones y menciones a la vez.
+> **Es un ADR transversal:** a diferencia de `ADR-028`, no agrega una función aislada. Un bloqueo solo significa algo si **cada** camino que lee o escribe contenido lo respeta, así que toca feed, comentarios, likes, follows, mensajes, notificaciones y menciones a la vez.
 
 ---
 
@@ -60,9 +60,9 @@ Si A bloquea a B, **ninguno de los dos** ve ni interactúa con el otro. La relac
 
 | Dónde se aplica | Qué ocurre |
 |---|---|
-| **Feed** (`GET /api/posts`) | Los posts del otro no aparecen. En el `WHERE`, no en Python: filtrar después del `LIMIT` devolvería páginas cortas (mismo motivo que `ADR-018`) |
-| **Comentarios** (listar y contar) | Sus comentarios no aparecen y **no cuentan**. Contador y lista comparten una única definición del predicado, como en `ADR-020` |
-| **Ver / comentar / dar like a un post** | `404`, el mismo que un post inexistente (guardia `assert_post_visible`, la misma de `ADR-018`) |
+| **Feed** (`GET /api/posts`) | Los posts del otro no aparecen. En el `WHERE`, no en Python: filtrar después del `LIMIT` devolvería páginas cortas (mismo motivo que `ADR-022`) |
+| **Comentarios** (listar y contar) | Sus comentarios no aparecen y **no cuentan**. Contador y lista comparten una única definición del predicado, como en `ADR-024` |
+| **Ver / comentar / dar like a un post** | `404`, el mismo que un post inexistente (guardia `assert_post_visible`, la misma de `ADR-022`) |
 | **Seguir** | Se cortan los follows en **ambos sentidos** (aceptados y pendientes) al bloquear. Seguir queda prohibido |
 | **Mensajes** | No se puede escribir; el hilo da `404`; las conversaciones desaparecen de la lista y **no suman al badge** de no leídos. No se borra nada: reaparece al desbloquear |
 | **Escribiendo...** | El aviso se descarta en silencio |
@@ -83,7 +83,7 @@ Es la decisión de seguridad central: **el bloqueo no debe revelarse al bloquead
 
 Los comentarios de la cuenta restringida **en publicaciones de quien la restringió** quedan ocultos para todos, **excepto**:
 
-- su **autor** — no debe notar nada; si no, se daría cuenta de que está restringido y escribiría de nuevo pensando que falló (mismo razonamiento que `ADR-020` para los filtros);
+- su **autor** — no debe notar nada; si no, se daría cuenta de que está restringido y escribiría de nuevo pensando que falló (mismo razonamiento que `ADR-024` para los filtros);
 - el **dueño de la publicación** — es quien restringió y necesita ver lo que esa persona escribe para moderarlo.
 
 Alcance acotado: solo afecta a **las publicaciones de quien restringió**. Los comentarios de la cuenta restringida en el resto de publicaciones se ven con normalidad. Todo lo demás (ver, dar like, seguir, escribir mensajes) funciona igual.

@@ -20,7 +20,7 @@ def create_app():
     register_error_handlers(app)
 
     # Marca `users.last_seen_at` en cada petición autenticada que resuelve
-    # bien, con throttle (ADR-020-content-filters-and-privacy-preferences.md).
+    # bien, con throttle (ADR-024-content-filters-and-privacy-preferences.md).
     # Se registra acá y no en cada route para que ningún endpoint nuevo se
     # olvide de hacerlo.
     from app.interfaces.activity_tracker import register_activity_tracker

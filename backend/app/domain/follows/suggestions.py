@@ -1,5 +1,5 @@
 # Puerto del repositorio de cuentas sugeridas (GET /api/users/suggestions,
-# ADR-026-content-preferences.md). Sin SQLAlchemy ni Flask.
+# ADR-030-content-preferences.md). Sin SQLAlchemy ni Flask.
 
 from abc import ABC, abstractmethod
 
@@ -16,5 +16,5 @@ class SuggestionRepository(ABC):
 
         Excluye: la propia cuenta, a quien ya sigue o ya le pidió seguir, y
         cualquier cuenta con la que haya un bloqueo en cualquiera de los dos
-        sentidos (ADR-025) -- sugerirle a alguien la cuenta que bloqueó, o a
+        sentidos (ADR-029) -- sugerirle a alguien la cuenta que bloqueó, o a
         quien lo bloqueó a él, deshace el bloqueo en la práctica."""

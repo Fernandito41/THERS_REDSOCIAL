@@ -11,7 +11,7 @@ class PostRepository(ABC):
     def create(self, author_id, content, is_sensitive=False):
         """Crea un post y devuelve el registro creado (con `id`/`created_at`
         generados por PostgreSQL, y el autor ya resuelto). `is_sensitive` es lo
-        que el autor declara (ADR-026-content-preferences.md)."""
+        que el autor declara (ADR-030-content-preferences.md)."""
 
     @abstractmethod
     def list_recent(self, limit, viewer_id, muted_keywords=()):
@@ -21,12 +21,12 @@ class PostRepository(ABC):
 
         Sigue siendo un feed global (no se filtra por a quién seguís --
         ADR-004 §Opciones consideradas, ADR-007 §No objetivos), pero desde
-        ADR-018-private-accounts.md excluye los posts de cuentas privadas que
+        ADR-022-private-accounts.md excluye los posts de cuentas privadas que
         `viewer_id` no sigue. Ese filtro va en el WHERE, no en Python: si se
         descartara después de traer la página, una página de 50 podría
-        devolver 3 (ADR-018 §Decisión).
+        devolver 3 (ADR-022 §Decisión).
 
-        Desde ADR-020-content-filters-and-privacy-preferences.md excluye
+        Desde ADR-024-content-filters-and-privacy-preferences.md excluye
         además los posts cuyo texto contiene alguno de los `muted_keywords`
         del espectador -- por el mismo motivo va en el WHERE y no en Python.
         Nunca se le oculta a alguien su propio post."""
@@ -42,7 +42,7 @@ class PostRepository(ABC):
         """Borra el post `post_id` solo si su autor es `author_id`. Devuelve
         True si borró algo, False si no existía o era de otro autor -- la
         pertenencia se confirma en la misma operación que la existencia, no
-        en un chequeo aparte (ADR-015-post-deletion.md, mismo criterio que
+        en un chequeo aparte (ADR-019-post-deletion.md, mismo criterio que
         MessageRepository.delete, ADR-014)."""
 
     @abstractmethod
@@ -51,6 +51,6 @@ class PostRepository(ABC):
         `author_id`, y marca `edited_at`. Devuelve el post actualizado (con
         el autor ya resuelto), o None si no existía o era de otro autor --
         misma estrategia que delete(): la pertenencia se confirma en el
-        propio WHERE, no en un chequeo aparte (ADR-017-content-editing.md).
+        propio WHERE, no en un chequeo aparte (ADR-021-content-editing.md).
         El `id` de la fila no cambia, así que likes y comentarios siguen
-        apuntando al mismo post (ADR-017 §Consecuencias)."""
+        apuntando al mismo post (ADR-021 §Consecuencias)."""

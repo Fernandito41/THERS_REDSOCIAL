@@ -1,4 +1,4 @@
-# Resolución de menciones de un texto (ADR-019-mentions.md). Es el único lugar
+# Resolución de menciones de un texto (ADR-023-mentions.md). Es el único lugar
 # del backend que decide a quién se menciona de verdad, y lo usan los cuatro
 # caminos que escriben contenido: crear/editar una publicación y crear/editar
 # un comentario.
@@ -12,7 +12,7 @@
 # El permiso se evalúa al ESCRIBIR, no al leer: así una mención ya aceptada
 # sigue siendo válida si después la persona cierra sus menciones, y un
 # @username que nunca tuvo permiso no se convierte en mención retroactivamente
-# (ADR-019 §Decisión).
+# (ADR-023 §Decisión).
 
 from app.domain.follows.follow_status import ACCEPTED
 from app.domain.mentions.parser import extract_usernames
@@ -28,10 +28,10 @@ def _authorized_mentions(
         return []
 
     # Una sola consulta para todos los @username del texto, no una por
-    # mención (ADR-019 §Riesgos).
+    # mención (ADR-023 §Riesgos).
     candidates = user_repository.find_by_usernames(usernames)
 
-    # Un bloqueo en cualquier sentido anula la mención (ADR-025): ni se
+    # Un bloqueo en cualquier sentido anula la mención (ADR-029): ni se
     # notifica a quien bloqueó, ni se le "etiqueta" a quien fue bloqueado. Una
     # sola consulta para todos los candidatos.
     blocked_ids = restriction_repository.blocked_ids_either_way(author_id)
@@ -65,7 +65,7 @@ def _notify(mentioned_users, newly_added_ids, author_id, post_id, notification_r
     for user in mentioned_users:
         if str(user.id) not in {str(i) for i in newly_added_ids}:
             # Ya estaba mencionado antes de esta edición -- no se re-notifica
-            # (ADR-019 §Decisión).
+            # (ADR-023 §Decisión).
             continue
         if str(user.id) == str(author_id):
             # Nadie se notifica a sí mismo, mismo criterio que like/comment
@@ -106,7 +106,7 @@ def resolve_comment_mentions(
 
     `post_id` se recibe solo para la notificación: `notifications` guarda
     `post_id` pero no `comment_id` (ADR-008 §Modelo de datos, limitación que
-    ADR-016 §Riesgos ya dejó registrada), así que una mención en un comentario
+    ADR-020 §Riesgos ya dejó registrada), así que una mención en un comentario
     notifica apuntando al post que la contiene -- que es además adónde hay que
     navegar para verla.
     """

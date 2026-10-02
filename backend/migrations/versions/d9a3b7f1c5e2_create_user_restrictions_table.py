@@ -4,7 +4,7 @@ Revision ID: d9a3b7f1c5e2
 Revises: c4d8e2a6f913
 Create Date: 2026-10-01 00:00:00.000000
 
-Bloqueo y restricción de cuentas (ADR-025-blocked-and-restricted-accounts.md).
+Bloqueo y restricción de cuentas (ADR-029-blocked-and-restricted-accounts.md).
 Una fila por par (owner, target) con un `kind` ('block' | 'restrict'): una
 cuenta está bloqueada o restringida, nunca ambas -- la UNIQUE sobre el par lo
 garantiza a nivel de motor.

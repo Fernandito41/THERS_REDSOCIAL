@@ -1,6 +1,6 @@
 # Casos de uso: leer y actualizar las preferencias de privacidad
-# (GET y PATCH /api/users/me/privacy -- ADR-018-private-accounts.md,
-# ADR-019-mentions.md, ADR-020-content-filters-and-privacy-preferences.md).
+# (GET y PATCH /api/users/me/privacy -- ADR-022-private-accounts.md,
+# ADR-023-mentions.md, ADR-024-content-filters-and-privacy-preferences.md).
 #
 # Los dos en el mismo módulo porque son las dos mitades del mismo recurso y
 # comparten presenter, igual que get/update del perfil están repartidos por
@@ -30,7 +30,7 @@ def update_privacy_settings(user_id, fields, user_repository, follow_repository)
         raise UserNotFoundError()
 
     # Volverse privado NO convierte a los seguidores actuales en solicitudes
-    # pendientes: quien ya tenía acceso lo conserva (ADR-018 §Decisión). Por eso
+    # pendientes: quien ya tenía acceso lo conserva (ADR-022 §Decisión). Por eso
     # acá no hay ningún recálculo de `follows` -- el interruptor solo cambia qué
     # pasa con los follows FUTUROS.
     return to_privacy_settings(

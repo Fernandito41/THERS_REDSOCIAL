@@ -50,9 +50,9 @@ class MessageRepository(ABC):
         """Reemplaza el texto del mensaje `message_id` solo si lo mandó
         `sender_id`, y marca `edited_at`. Devuelve el mensaje actualizado,
         o None si no existía o lo mandó otra persona -- mismo criterio que
-        PostRepository.update_content (ADR-017-content-editing.md). No toca
+        PostRepository.update_content (ADR-021-content-editing.md). No toca
         `read_at`: editar un mensaje ya leído no lo devuelve a no leído
-        (ADR-017 §Decisión)."""
+        (ADR-021 §Decisión)."""
 
 
 class TypingRepository(ABC):

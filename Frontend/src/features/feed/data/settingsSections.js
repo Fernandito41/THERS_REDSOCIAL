@@ -18,7 +18,7 @@
  * pagos, tokens...) es `pending` con su motivo, porque guardar un booleano
  * en el navegador no protege ningún dato (archivo maestro §8.10 y §10.2).
  * Privacidad, sesiones, 2FA y exportación de datos ya se aplican en el
- * servidor (ADR-018..ADR-024) y usan sus propios tipos de fila.
+ * servidor (ADR-022..ADR-028) y usan sus propios tipos de fila.
  */
 
 export const SETTINGS_CONTENT = {
@@ -43,7 +43,7 @@ export const SETTINGS_CONTENT = {
       "Gestiona la exposición de tu identidad en THERS, define quién puede interactuar con tus resonancias y mantén el control de tu visibilidad.",
     notice: {
       tone: "info",
-      text: "Estos controles SÍ se aplican en el servidor (ADR-018, ADR-019, ADR-020): filtran cada consulta, deciden permisos y ocultan datos. No son preferencias de este navegador. El único control de esta pantalla que sigue sin soporte es el de canales de audio, porque esa función todavía no existe en el producto.",
+      text: "Estos controles SÍ se aplican en el servidor (ADR-022, ADR-023, ADR-024): filtran cada consulta, deciden permisos y ocultan datos. No son preferencias de este navegador. El único control de esta pantalla que sigue sin soporte es el de canales de audio, porque esa función todavía no existe en el producto.",
     },
     groups: [
       {
@@ -115,7 +115,7 @@ export const SETTINGS_CONTENT = {
             label: "Estado de actividad en los canales de audio",
             description: "Mostrar cuándo estuviste activo en los canales de audio.",
             reason:
-              "Los canales de audio no existen en el producto: no hay modelo, endpoints ni interfaz. Un interruptor de privacidad sobre una función inexistente no protegería nada. La presencia general sí está implementada, en el control de arriba (ADR-020).",
+              "Los canales de audio no existen en el producto: no hay modelo, endpoints ni interfaz. Un interruptor de privacidad sobre una función inexistente no protegería nada. La presencia general sí está implementada, en el control de arriba (ADR-024).",
           },
         ],
       },
@@ -128,7 +128,7 @@ export const SETTINGS_CONTENT = {
     description: "Credenciales de acceso, verificación en dos pasos y control de sesiones.",
     notice: {
       tone: "info",
-      text: "Todos los controles de esta pantalla se aplican en el servidor. La verificación en dos pasos usa una app autenticadora (TOTP, ADR-022); las sesiones se registran por dispositivo y cerrarlas invalida su token de inmediato (ADR-021).",
+      text: "Todos los controles de esta pantalla se aplican en el servidor. La verificación en dos pasos usa una app autenticadora (TOTP, ADR-026); las sesiones se registran por dispositivo y cerrarlas invalida su token de inmediato (ADR-025).",
     },
     groups: [
       {
@@ -419,7 +419,7 @@ export const SETTINGS_CONTENT = {
     description: "Solicita una copia de tu información y consulta el historial de descargas.",
     notice: {
       tone: "info",
-      text: "Esta función SÍ se aplica en el servidor (ADR-024): el archivo es un ZIP real con los datos de tu cuenta, generado al momento de pedirlo.",
+      text: "Esta función SÍ se aplica en el servidor (ADR-028): el archivo es un ZIP real con los datos de tu cuenta, generado al momento de pedirlo.",
     },
     groups: [
       {
@@ -465,7 +465,7 @@ export const SETTINGS_CONTENT = {
     description: "Bloquear y restringir son dos cosas distintas y se listan por separado.",
     notice: {
       tone: "info",
-      text: "Estos controles SÍ se aplican en el servidor (ADR-025): el bloqueo corta el acceso a tu contenido en cada consulta, no solo en la interfaz. También puedes bloquear o restringir desde el menú de cualquier publicación.",
+      text: "Estos controles SÍ se aplican en el servidor (ADR-029): el bloqueo corta el acceso a tu contenido en cada consulta, no solo en la interfaz. También puedes bloquear o restringir desde el menú de cualquier publicación.",
     },
     groups: [
       {
@@ -521,7 +521,7 @@ export const SETTINGS_CONTENT = {
     description: "Qué ves en tu feed y qué prefieres no ver.",
     notice: {
       tone: "info",
-      text: "Estos filtros SÍ se aplican en el servidor (ADR-020, ADR-026): `GET /api/posts` ya no devuelve lo que ocultaste, no se esconde solo en la interfaz.",
+      text: "Estos filtros SÍ se aplican en el servidor (ADR-024, ADR-030): `GET /api/posts` ya no devuelve lo que ocultaste, no se esconde solo en la interfaz.",
     },
     groups: [
       {

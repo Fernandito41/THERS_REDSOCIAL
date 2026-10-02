@@ -20,7 +20,7 @@ class CommentRepository(ABC):
         feed), con el autor ya resuelto (sin N+1), **filtrados para
         `viewer_id`**.
 
-        Desde ADR-020-content-filters-and-privacy-preferences.md se excluyen
+        Desde ADR-024-content-filters-and-privacy-preferences.md se excluyen
         los comentarios que contienen alguno de los `muted_keywords` del
         espectador, y los que la lista de ofensivos del sistema detecta *si el
         dueño de la publicación activó* `hide_offensive_comments`. Nunca se le
@@ -32,7 +32,7 @@ class CommentRepository(ABC):
         -- evita N+1 en GET /api/posts, mismo patrón que
         LikeRepository.counts_for_posts.
 
-        Aplica **el mismo filtro** que `list_for_post` (ADR-020): el contador
+        Aplica **el mismo filtro** que `list_for_post` (ADR-024): el contador
         de la tarjeta tiene que coincidir con lo que el panel muestra."""
 
     @abstractmethod
@@ -40,8 +40,8 @@ class CommentRepository(ABC):
         """Borra el comentario `comment_id` solo si su autor es `author_id`.
         Devuelve True si borró algo, False si no existía o era de otro autor
         -- la pertenencia se confirma en la misma operación que la
-        existencia (ADR-016-comment-deletion.md, mismo criterio que
-        PostRepository.delete, ADR-015)."""
+        existencia (ADR-020-comment-deletion.md, mismo criterio que
+        PostRepository.delete, ADR-019)."""
 
     @abstractmethod
     def update_content(self, comment_id, author_id, content):
@@ -49,4 +49,4 @@ class CommentRepository(ABC):
         `author_id`, y marca `edited_at`. Devuelve el comentario actualizado
         (con el autor ya resuelto), o None si no existía o era de otro autor
         -- mismo criterio que PostRepository.update_content
-        (ADR-017-content-editing.md)."""
+        (ADR-021-content-editing.md)."""

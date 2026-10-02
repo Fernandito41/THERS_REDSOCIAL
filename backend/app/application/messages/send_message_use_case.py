@@ -4,7 +4,7 @@
 # por la route (domain/messages/validators.py) -- este caso de uso solo
 # orquesta, mismo patrón que application/comments/create_comment_use_case.py.
 #
-# Desde ADR-020-content-filters-and-privacy-preferences.md respeta además la
+# Desde ADR-024-content-filters-and-privacy-preferences.md respeta además la
 # preferencia `who_can_message` del destinatario.
 
 from app.application.messages.message_presenter import to_public_message
@@ -27,7 +27,7 @@ def send_message(
     if recipient is None:
         raise UserNotFoundError()
 
-    # Bloqueos (ADR-025), mismo criterio que follow_user: si el destinatario
+    # Bloqueos (ADR-029), mismo criterio que follow_user: si el destinatario
     # bloqueó al remitente, la cuenta "no existe" para él; si fue el remitente
     # quien bloqueó, se le explica.
     if restriction_repository.get_kind(recipient_id, sender_id) == BLOCK:

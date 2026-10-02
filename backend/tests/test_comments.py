@@ -287,7 +287,7 @@ class TestListPostsWithComments:
 
 
 class TestDeleteComment:
-    # DELETE /api/comments/<comment_id> (ADR-016-comment-deletion.md).
+    # DELETE /api/comments/<comment_id> (ADR-020-comment-deletion.md).
 
     def _post_and_comment(self, client, post_author_token, commenter_token, content="un comentario"):
         post_id = client.post(
@@ -348,7 +348,7 @@ class TestDeleteComment:
 
         response = client.delete(f"/api/comments/{comment_id}", headers=_auth_headers(token_a))
 
-        # Mismo 404 que un comentario inexistente (ADR-016 §Seguridad) --
+        # Mismo 404 que un comentario inexistente (ADR-020 §Seguridad) --
         # incluso siendo A el dueño del post, no puede borrar el de B.
         assert response.status_code == 404
         comments = client.get(
@@ -404,7 +404,7 @@ class TestDeleteComment:
 
 
 class TestUpdateComment:
-    # PATCH /api/comments/<comment_id> (ADR-017-content-editing.md).
+    # PATCH /api/comments/<comment_id> (ADR-021-content-editing.md).
 
     def _post_and_comment(self, client, post_author_token, commenter_token, content="original"):
         post_id = client.post(
@@ -473,7 +473,7 @@ class TestUpdateComment:
         )
 
         # El dueño de la publicación tampoco puede editar comentarios ajenos
-        # en ella -- mismo criterio que el borrado (ADR-016/ADR-017 §Seguridad).
+        # en ella -- mismo criterio que el borrado (ADR-020/ADR-021 §Seguridad).
         assert response.status_code == 404
         thread = client.get(
             f"/api/posts/{post_id}/comments", headers=_auth_headers(token_a)
@@ -558,7 +558,7 @@ class TestUpdateComment:
             headers=_auth_headers(token),
         )
 
-        # `post_id` no está en la whitelist del body (ADR-017 §Seguridad).
+        # `post_id` no está en la whitelist del body (ADR-021 §Seguridad).
         assert response.get_json()["comment"]["post_id"] == post_id
         assert client.get(
             f"/api/posts/{other_post_id}/comments", headers=_auth_headers(token)
@@ -575,12 +575,12 @@ class TestUpdateComment:
         )
         feed = client.get("/api/posts", headers=_auth_headers(token)).get_json()["posts"]
 
-        # Editar no suma ni resta: `comments_count` sigue en 1 (ADR-017).
+        # Editar no suma ni resta: `comments_count` sigue en 1 (ADR-021).
         assert feed[0]["comments_count"] == 1
 
     def test_editing_a_comment_does_not_create_a_new_notification(self, client):
         # La notificación "comentó tu publicación" (ADR-008) se emite al crear
-        # el comentario; editarlo no es un evento social nuevo (ADR-017).
+        # el comentario; editarlo no es un evento social nuevo (ADR-021).
         token_a = _register_and_login(client, username="user_a", email="a@example.com")
         token_b = _register_and_login(client, username="user_b", email="b@example.com")
         _, comment_id = self._post_and_comment(client, token_a, token_b)

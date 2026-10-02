@@ -15,7 +15,7 @@ class FollowRepository(ABC):
         (UNIQUE (follower_id, followed_id)), no falla ni duplica ni le pisa
         el estado -- pedir dos veces no reabre una solicitud ya aceptada, y
         un POST repetido sobre un follow ya hecho no lo degrada a 'pending'
-        (ADR-007 §Decisión, extendido por ADR-018-private-accounts.md).
+        (ADR-007 §Decisión, extendido por ADR-022-private-accounts.md).
         Devuelve True si la fila se creó en esta llamada, False si ya
         existía -- ADR-008-notifications-minimal-model.md lo usa para no
         notificar en una repetición idempotente."""
@@ -28,21 +28,21 @@ class FollowRepository(ABC):
     def is_following(self, follower_id, followed_id):
         """True si `follower_id` sigue a `followed_id` con un follow
         **aceptado**. Una solicitud en 'pending' devuelve False: pedir no es
-        seguir (ADR-018 §Decisión)."""
+        seguir (ADR-022 §Decisión)."""
 
     @abstractmethod
     def get_status(self, follower_id, followed_id):
         """Estado del follow de `follower_id` hacia `followed_id`
         ('accepted'/'pending'), o None si no hay ninguna fila. Permite al
         Frontend distinguir los tres estados del botón (Seguir / Solicitado /
-        Siguiendo) sin inferirlos (ADR-018 §Contrato API)."""
+        Siguiendo) sin inferirlos (ADR-022 §Contrato API)."""
 
     @abstractmethod
     def set_status(self, follower_id, followed_id, status):
         """Cambia el estado de un follow existente. Devuelve True si había una
         fila que actualizar, False si no -- el caso de uso traduce False a 404
         sin distinguir "no existe" de "no es tuya", mismo criterio que el
-        resto de endpoints sobre recursos propios (ADR-018 §Seguridad)."""
+        resto de endpoints sobre recursos propios (ADR-022 §Seguridad)."""
 
     @abstractmethod
     def remove_pending(self, follower_id, followed_id):
@@ -50,7 +50,7 @@ class FollowRepository(ABC):
         `followed_id`. Devuelve True si borró algo, False si no había
         ninguna pendiente. Rechazar borra la fila en vez de marcarla: la
         persona puede volver a pedirlo y no queda registro de un "no"
-        (ADR-018 §Opciones consideradas). A diferencia de `remove()`, nunca
+        (ADR-022 §Opciones consideradas). A diferencia de `remove()`, nunca
         toca un follow ya aceptado -- rechazar no puede desaparecer a un
         seguidor que ya lo era."""
 
@@ -59,7 +59,7 @@ class FollowRepository(ABC):
         """Solicitudes de seguimiento sin responder dirigidas a `followed_id`,
         más recientes primero, con el solicitante ya resuelto (sin N+1).
         Siempre desde la perspectiva del usuario autenticado -- nadie puede
-        listar las solicitudes de otro (ADR-018 §Seguridad)."""
+        listar las solicitudes de otro (ADR-022 §Seguridad)."""
 
     @abstractmethod
     def pending_requests_count(self, followed_id):
@@ -70,7 +70,7 @@ class FollowRepository(ABC):
     def followers_count(self, user_id):
         """Cantidad de usuarios que siguen a `user_id` con un follow
         **aceptado** -- las solicitudes pendientes no cuentan como seguidores
-        (ADR-018 §Decisión)."""
+        (ADR-022 §Decisión)."""
 
     @abstractmethod
     def following_count(self, user_id):
@@ -89,4 +89,4 @@ class FollowRepository(ABC):
         sí/no: con cuentas privadas el Frontend necesita distinguir tres
         estados del botón -- Seguir, Solicitado, Siguiendo -- y resolverlos
         con dos consultas (una por estado) sería un N+1 evitable
-        (ADR-018 §Contrato API)."""
+        (ADR-022 §Contrato API)."""

@@ -1,4 +1,4 @@
-# Arma el ZIP de la exportación (ADR-024-data-export.md). Solo biblioteca
+# Arma el ZIP de la exportación (ADR-028-data-export.md). Solo biblioteca
 # estándar: recibe el dict que produce `DataExportRepository.collect_user_data`
 # y devuelve bytes. Cada sección es un `.json` legible por una persona, más un
 # LEEME.txt que explica qué hay y qué se dejó fuera a propósito.

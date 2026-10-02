@@ -1,5 +1,5 @@
 # Pruebas de integración de las preferencias de contenido y feed (REF-SET-12,
-# ADR-026-content-preferences.md) contra PostgreSQL real (thers_test).
+# ADR-030-content-preferences.md) contra PostgreSQL real (thers_test).
 #
 # Lo que importa es que cada preferencia CAMBIE lo que devuelve el feed en el
 # servidor, no solo que el endpoint guarde un valor.
@@ -255,7 +255,7 @@ class TestMutedTopics:
         assert _feed(client, tb) == ["mi viaje #viajes"]
 
     def test_muted_keywords_still_work_alongside_topics(self, client):
-        # Las palabras ocultas (ADR-020) no se tocan: siguen filtrando por
+        # Las palabras ocultas (ADR-024) no se tocan: siguen filtrando por
         # subcadena, y conviven con los temas.
         ta, _ = _register_and_login(client, "ada")
         tb, _ = _register_and_login(client, "bob")
@@ -347,7 +347,7 @@ class TestSuggestions:
         for i in range(8):
             if i == 3:
                 # Registrar nueve cuentas supera el límite de registros por
-                # hora (ADR-023). Se reinicia el contador en vez de subir el
+                # hora (ADR-027). Se reinicia el contador en vez de subir el
                 # límite: ese número protege producción.
                 with app.app_context():
                     reset_rate_limits()

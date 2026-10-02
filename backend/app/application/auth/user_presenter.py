@@ -38,7 +38,7 @@ def to_public_user(user, followers_count=0, following_count=0):
         "followers_count": followers_count,
         "following_count": following_count,
         "email_verified": user.email_verified,
-        # ADR-018-private-accounts.md. Viaja en el objeto `user` (y no solo en
+        # ADR-022-private-accounts.md. Viaja en el objeto `user` (y no solo en
         # GET /api/users/me/privacy) porque el Frontend lo necesita en cada
         # arranque de sesión para saber si tiene que mostrar la bandeja de
         # solicitudes -- el resto de las preferencias de privacidad no se

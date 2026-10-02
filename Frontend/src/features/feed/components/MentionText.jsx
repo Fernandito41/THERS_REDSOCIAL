@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 // Renderiza un texto convirtiendo en enlace solo las menciones REALES
-// (ADR-019-mentions.md).
+// (ADR-023-mentions.md).
 //
 // Por qué no basta con buscar /@\w+/ en el texto y enlazarlo todo: el servidor
 // ya decidió qué @algo es una mención y qué no. Un @username que no existe, o
@@ -24,7 +24,7 @@ export default function MentionText({ content, mentions, className = "" }) {
   }
 
   // Un solo patrón con todos los usernames autorizados, insensible a
-  // mayúsculas porque "@Ada" menciona a `ada` (ADR-019). Los más largos
+  // mayúsculas porque "@Ada" menciona a `ada` (ADR-023). Los más largos
   // primero: si existen `ana` y `ana_b`, buscar `ana` antes partiría `@ana_b`
   // en un enlace a `ana` seguido de "_b".
   const byLength = [...mentions].sort((a, b) => b.username.length - a.username.length);

@@ -16,5 +16,5 @@ class FollowRequestNotFoundError(Exception):
     hacia quien intenta responderla -- porque nunca existió, porque ya se
     respondió, o porque está dirigida a otra persona. Los tres casos se
     tratan igual (404, sin distinguir cuál ocurrió): un 403 confirmaría que
-    esa solicitud existe y de quién es (ADR-018-private-accounts.md
+    esa solicitud existe y de quién es (ADR-022-private-accounts.md
     §Seguridad, mismo criterio que NotificationNotFoundError)."""

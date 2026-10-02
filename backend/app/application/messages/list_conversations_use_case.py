@@ -10,7 +10,7 @@ def list_conversations(user_id, message_repository, restriction_repository):
     conversations = message_repository.list_conversations(user_id)
 
     # Las conversaciones con una cuenta bloqueada (en cualquier sentido) no se
-    # listan, y por consiguiente no suman al badge de no leídos (ADR-025).
+    # listan, y por consiguiente no suman al badge de no leídos (ADR-029).
     # Se filtra acá y no en SQL: la lista ya está reducida a una fila por
     # conversación, y el conjunto de bloqueados es chico.
     blocked_ids = restriction_repository.blocked_ids_either_way(user_id)

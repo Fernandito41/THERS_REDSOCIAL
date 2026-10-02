@@ -11,9 +11,9 @@
 # preguntar "¿cuántos likes/comentarios tiene?"/"¿lo likeé?"/"¿sigo a este
 # autor?" post por post.
 #
-# Desde ADR-018-private-accounts.md `viewer_id` decide además QUÉ posts entran
+# Desde ADR-022-private-accounts.md `viewer_id` decide además QUÉ posts entran
 # (los de cuentas privadas que no sigue quedan fuera, en SQL), y desde
-# ADR-020-content-filters-and-privacy-preferences.md se descartan también los
+# ADR-024-content-filters-and-privacy-preferences.md se descartan también los
 # que contienen alguno de sus términos filtrados.
 
 from app.application.posts.post_presenter import to_public_post
@@ -35,10 +35,10 @@ def list_posts(
     counts = like_repository.counts_for_posts(post_ids)
     liked_ids = like_repository.liked_post_ids(viewer_id, post_ids)
     # `comments_count` cuenta solo los comentarios que esta persona va a ver
-    # (ADR-020): el número de la tarjeta coincide con lo que abre el panel.
+    # (ADR-024): el número de la tarjeta coincide con lo que abre el panel.
     comment_counts = comment_repository.counts_for_posts(post_ids, viewer_id, muted_keywords)
     # {author_id: 'accepted'|'pending'}; los autores ausentes no tienen
-    # ninguna relación de follow con el espectador (ADR-018).
+    # ninguna relación de follow con el espectador (ADR-022).
     author_follow_statuses = follow_repository.follow_statuses(viewer_id, author_ids)
     mentions_by_post = mention_repository.list_for_posts(post_ids)
 

@@ -42,7 +42,7 @@ export default function Register() {
     try {
       const googleResult = await loginWithGoogle(credential);
       if (googleResult.twoFactorRequired) {
-        // ADR-022: la cuenta tiene 2FA, falta el segundo factor.
+        // ADR-026: la cuenta tiene 2FA, falta el segundo factor.
         navigate("/two-factor", { state: { twoFactorToken: googleResult.twoFactorToken } });
         return;
       }

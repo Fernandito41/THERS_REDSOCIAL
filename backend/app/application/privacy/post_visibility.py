@@ -1,5 +1,5 @@
 # Guard compartido de visibilidad de un post concreto
-# (ADR-018-private-accounts.md). Lo usan los cuatro casos de uso que operan
+# (ADR-022-private-accounts.md). Lo usan los cuatro casos de uso que operan
 # sobre un post ya recuperado por id -- listar/crear comentarios y dar/quitar
 # like -- para no reimplementar la regla cuatro veces con cuatro criterios.
 #
@@ -19,14 +19,14 @@ from app.domain.privacy.visibility import can_view_content_of
 def assert_post_visible(post, viewer_id, follow_repository, restriction_repository):
     """Lanza `PostNotFoundError` si `viewer_id` no puede ver `post`.
 
-    Además de la privacidad de la cuenta (ADR-018), un bloqueo en CUALQUIERA de
-    los dos sentidos oculta el post (ADR-025): quien bloqueó no quiere ver ni
+    Además de la privacidad de la cuenta (ADR-022), un bloqueo en CUALQUIERA de
+    los dos sentidos oculta el post (ADR-029): quien bloqueó no quiere ver ni
     ser visto, y quien fue bloqueado no puede ver ni interactuar.
 
     **404, no 403**, y con el mismo mensaje que un post inexistente: un 403
     confirmaría que ese post existe y de quién es, que es justo lo que una
     cuenta privada no quiere revelar. Mismo criterio que el 404 indistinguible
-    de borrar/editar contenido ajeno (ADR-015/ADR-016/ADR-017 §Seguridad).
+    de borrar/editar contenido ajeno (ADR-019/ADR-020/ADR-021 §Seguridad).
     """
     author = post.author
 

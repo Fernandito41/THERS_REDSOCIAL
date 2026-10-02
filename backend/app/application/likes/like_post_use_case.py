@@ -15,7 +15,7 @@ def like_post(
         raise PostNotFoundError(post_id)
 
     # No se le puede dar like a lo que no se puede ver: una cuenta privada no
-    # recibe likes de quien no la sigue (ADR-018). Mismo 404 que un post
+    # recibe likes de quien no la sigue (ADR-022). Mismo 404 que un post
     # inexistente, sin revelar que existe.
     assert_post_visible(post, user_id, follow_repository, restriction_repository)
 

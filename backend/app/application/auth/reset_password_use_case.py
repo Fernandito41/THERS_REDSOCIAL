@@ -37,7 +37,7 @@ def reset_password(
     password_reset_token_repository.mark_used(request_row.id)
 
     # Cambiar la contraseña cierra TODAS las sesiones
-    # (ADR-021-session-registry.md §Decisión). Antes del registro de sesiones
+    # (ADR-025-session-registry.md §Decisión). Antes del registro de sesiones
     # esto era imposible -- un token firmado valía hasta expirar -- y era un
     # agujero concreto: quien restablecía su contraseña justamente porque
     # sospechaba un acceso ajeno no echaba a ese acceso. `session_repository` es

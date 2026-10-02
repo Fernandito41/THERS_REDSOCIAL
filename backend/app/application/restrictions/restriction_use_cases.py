@@ -1,6 +1,6 @@
 # Casos de uso de bloqueo y restricción de cuentas
 # (/api/users/me/blocks y /api/users/me/restrictions --
-# ADR-025-blocked-and-restricted-accounts.md).
+# ADR-029-blocked-and-restricted-accounts.md).
 #
 # `owner_id` sale exclusivamente del JWT en la route: nadie bloquea ni
 # restringe en nombre de otra persona.
@@ -45,7 +45,7 @@ def block_user(
 
     # Bloquear corta el vínculo en los dos sentidos: ninguno sigue al otro y
     # las solicitudes pendientes se cancelan. `remove` borra la fila sea cual
-    # sea su estado (ADR-018), así que cubre seguidores aceptados y pendientes.
+    # sea su estado (ADR-022), así que cubre seguidores aceptados y pendientes.
     follow_repository.remove(owner_id, target.id)
     follow_repository.remove(target.id, owner_id)
 

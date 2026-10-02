@@ -1,6 +1,6 @@
 # Casos de uso: listar, agregar y quitar términos filtrados
 # (GET/POST/DELETE /api/users/me/muted-keywords --
-# ADR-020-content-filters-and-privacy-preferences.md).
+# ADR-024-content-filters-and-privacy-preferences.md).
 #
 # Los tres en el mismo módulo: son el CRUD completo de una colección pequeña
 # que siempre pertenece al usuario autenticado, y separarlos en tres archivos
@@ -35,7 +35,7 @@ def add_muted_keyword(user_id, keyword, muted_keyword_repository):
     # Devuelve la lista completa, no solo el término agregado: la pantalla de
     # Configuración siempre muestra la lista entera, así que ahorra una
     # segunda petición (mismo criterio que PATCH /api/posts/<id>, que devuelve
-    # el post completo -- ADR-017).
+    # el post completo -- ADR-021).
     return {"muted_keywords": list(muted_keyword_repository.list_for_user(user_id))}
 
 

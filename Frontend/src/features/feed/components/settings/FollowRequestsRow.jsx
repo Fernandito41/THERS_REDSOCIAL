@@ -10,7 +10,7 @@ import { formatRelativeTime } from "../../lib/formatRelativeTime";
 
 // Bandeja de solicitudes de seguimiento
 // (GET /api/follow-requests, POST /api/follow-requests/<id>/accept,
-// DELETE /api/follow-requests/<id> -- ADR-018-private-accounts.md).
+// DELETE /api/follow-requests/<id> -- ADR-022-private-accounts.md).
 //
 // Vive dentro de Configuración › Privacidad, junto al interruptor que las
 // produce: una cuenta pública nunca genera solicitudes, así que no tenía
@@ -19,7 +19,7 @@ import { formatRelativeTime } from "../../lib/formatRelativeTime";
 // autónomo.
 //
 // Se monta aunque la cuenta sea pública: volver a pública NO borra lo que
-// quedó pendiente (ADR-018 §Decisión), así que esconder la bandeja dejaría
+// quedó pendiente (ADR-022 §Decisión), así que esconder la bandeja dejaría
 // solicitudes irrespondibles.
 
 function authHeaders() {

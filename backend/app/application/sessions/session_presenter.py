@@ -1,5 +1,5 @@
 # Forma pública de una sesión activa, devuelta por GET /api/sessions
-# (ADR-021-session-registry.md §Contrato API).
+# (ADR-025-session-registry.md §Contrato API).
 #
 # El `jti` **nunca** cruza la frontera HTTP: es el identificador que
 # `token_in_blocklist_loader` usa para validar cada petición, así que exponerlo

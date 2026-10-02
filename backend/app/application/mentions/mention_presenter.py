@@ -1,5 +1,5 @@
 # Forma pública de una mención, embebida en `post` y en `comment`
-# (ADR-019-mentions.md §Contrato API) -- centralizada acá para que las dos la
+# (ADR-023-mentions.md §Contrato API) -- centralizada acá para que las dos la
 # expongan idéntica, mismo patrón que application/auth/user_presenter.py.
 #
 # Se expone la misma forma reducida de usuario que `post.author` y
@@ -9,7 +9,7 @@
 # Para qué la necesita el Frontend: el texto guarda el @username tal como se
 # escribió, pero para convertirlo en un enlace hace falta el `id`. Sin esta
 # lista, el Frontend tendría que adivinar qué @algo del texto corresponde a una
-# cuenta real -- y se equivocaría justamente en los casos que ADR-019 filtra
+# cuenta real -- y se equivocaría justamente en los casos que ADR-023 filtra
 # (un @username inexistente, o uno que no autorizó la mención, NO son
 # menciones y no deben enlazarse).
 

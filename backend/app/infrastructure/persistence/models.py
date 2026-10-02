@@ -101,7 +101,7 @@ class User(db.Model):
     # era `NULL`.
     password_hash = db.Column(db.Text, nullable=True)
 
-    # Cuenta privada (ADR-018-private-accounts.md). `false` = comportamiento
+    # Cuenta privada (ADR-022-private-accounts.md). `false` = comportamiento
     # histórico: cualquiera ve tus publicaciones. `true` = solo te ven quienes
     # tienen un follow en estado 'accepted' (Follow.status), más vos mismo.
     # NOT NULL con DEFAULT false -- ninguna cuenta existente se vuelve privada
@@ -109,15 +109,15 @@ class User(db.Model):
     is_private = db.Column(db.Boolean, nullable=False, server_default=text("false"))
 
     # Resto de preferencias de privacidad
-    # (ADR-019-mentions.md, ADR-020-content-filters-and-privacy-preferences.md).
+    # (ADR-023-mentions.md, ADR-024-content-filters-and-privacy-preferences.md).
     # Todas con DEFAULT que preserva el comportamiento previo, salvo
-    # `show_activity_status`: nace en true porque hasta ADR-020 no existía
+    # `show_activity_status`: nace en true porque hasta ADR-024 no existía
     # ningún dato de presencia, así que no expone nada retroactivo
     # (`last_seen_at` arranca en NULL para todo el mundo).
     #
     # Los tres VARCHAR(20) son discriminadores validados en la aplicación
     # (domain/privacy/audience.py), no ENUM de PostgreSQL -- mismo criterio que
-    # Notification.type (ADR-008) y Follow.status (ADR-018).
+    # Notification.type (ADR-008) y Follow.status (ADR-022).
     who_can_mention = db.Column(
         db.String(20), nullable=False, server_default=text("'everyone'")
     )
@@ -127,7 +127,7 @@ class User(db.Model):
     # El interruptor es del dueño de la publicación y filtra los comentarios de
     # SUS cápsulas contra la lista del sistema (domain/moderation/
     # offensive_words.py) -- no contra términos propios, que son
-    # `muted_keywords` y se aplican a lo que uno lee (ADR-020 §Decisión).
+    # `muted_keywords` y se aplican a lo que uno lee (ADR-024 §Decisión).
     hide_offensive_comments = db.Column(
         db.Boolean, nullable=False, server_default=text("false")
     )
@@ -135,10 +135,10 @@ class User(db.Model):
         db.Boolean, nullable=False, server_default=text("true")
     )
     # NULL = nunca se registró actividad, o está oculta. Nunca cruza la
-    # frontera HTTP si `show_activity_status` es false (ADR-020 §Seguridad).
+    # frontera HTTP si `show_activity_status` es false (ADR-024 §Seguridad).
     last_seen_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    # Preferencias de contenido y feed (ADR-026-content-preferences.md). Si es
+    # Preferencias de contenido y feed (ADR-030-content-preferences.md). Si es
     # true, el feed de esta persona omite las publicaciones marcadas como
     # sensibles por su autor (`Post.is_sensitive`). Nace en false: ocultar por
     # defecto cambiaría lo que ve todo el mundo sin que nadie lo pida.
@@ -146,7 +146,7 @@ class User(db.Model):
         db.Boolean, nullable=False, server_default=text("false")
     )
 
-    # Alertas de inicio de sesión (ADR-021-session-registry.md). Nace en `true`
+    # Alertas de inicio de sesión (ADR-025-session-registry.md). Nace en `true`
     # -- una alerta de seguridad que hay que descubrir y encender no protege a
     # nadie. Sin RESEND_API_KEY el envío es un no-op registrado por log, igual
     # que el resto de correos del proyecto.
@@ -154,14 +154,14 @@ class User(db.Model):
         db.Boolean, nullable=False, server_default=text("true")
     )
 
-    # Autenticación en dos pasos con TOTP (ADR-022-two-factor-authentication.md).
+    # Autenticación en dos pasos con TOTP (ADR-026-two-factor-authentication.md).
     #
     # `totp_secret` se guarda **recuperable, no hasheado**, y es inevitable:
     # verificar un código TOTP exige recalcularlo a partir del secreto. Es la
     # diferencia estructural con los OTP de ADR-010/ADR-011, que sí se hashean
     # porque el código viaja una vez y solo hay que compararlo. La consecuencia
     # (una fuga de esta columna permite generar códigos válidos) está en
-    # ADR-022 §Riesgos.
+    # ADR-026 §Riesgos.
     #
     # `two_factor_enabled` está separada del secreto a propósito: durante el
     # alta existe un secreto todavía NO confirmado (la persona escaneó el QR
@@ -221,14 +221,14 @@ class Post(db.Model):
         db.DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
-    # NULL = nunca editado (ADR-017-content-editing.md). Se expone como el
+    # NULL = nunca editado (ADR-021-content-editing.md). Se expone como el
     # booleano `edited`, nunca como timestamp crudo -- mismo criterio que
     # Message.read_at/Notification.read_at. No se infiere de `updated_at`:
-    # ese nace igual a `created_at` por su server_default (ADR-017
+    # ese nace igual a `created_at` por su server_default (ADR-021
     # §Opciones consideradas).
     edited_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    # Marcada como sensible por SU AUTOR al publicar (ADR-026). No es una
+    # Marcada como sensible por SU AUTOR al publicar (ADR-030). No es una
     # clasificación automática ni una decisión de moderación: es lo que quien
     # escribe declara. NOT NULL con DEFAULT false -- ninguna publicación
     # existente pasa a ser sensible por efecto de la migración.
@@ -325,7 +325,7 @@ class Comment(db.Model):
         db.DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
-    # NULL = nunca editado (ADR-017-content-editing.md), mismo criterio que
+    # NULL = nunca editado (ADR-021-content-editing.md), mismo criterio que
     # Post.edited_at.
     edited_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -363,9 +363,9 @@ class Follow(db.Model):
         nullable=False,
     )
 
-    # Estado del follow (ADR-018-private-accounts.md). 'accepted' = relación
+    # Estado del follow (ADR-022-private-accounts.md). 'accepted' = relación
     # efectiva; 'pending' = solicitud sin responder, solo alcanzable hacia una
-    # cuenta con `is_private = true`. Antes de ADR-018 un follow era binario
+    # cuenta con `is_private = true`. Antes de ADR-022 un follow era binario
     # (la fila existía o no), así que el DEFAULT 'accepted' hace de backfill:
     # todo follow previo se hizo hacia una cuenta pública.
     #
@@ -521,8 +521,8 @@ class Message(db.Model):
         db.DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
-    # NULL = nunca editado (ADR-017-content-editing.md). Un mensaje sí se
-    # edita in place desde ADR-017 -- lo que sigue sin tener, a diferencia de
+    # NULL = nunca editado (ADR-021-content-editing.md). Un mensaje sí se
+    # edita in place desde ADR-021 -- lo que sigue sin tener, a diferencia de
     # Post/Comment, es `updated_at`: no hace falta un timestamp de "última
     # escritura" genérico cuando las dos escrituras posibles (marcar leído,
     # editar) ya tienen su propia columna. Se expone como el booleano
@@ -770,13 +770,13 @@ class Mention(db.Model):
     __tablename__ = "mentions"
 
     # Undécima entidad del alcance objetivo del producto en pasar a ratificada
-    # (ADR-019-mentions.md) -- resuelve la candidata "Menciones"
+    # (ADR-023-mentions.md) -- resuelve la candidata "Menciones"
     # (DATABASE_ARCHITECTURE.md §4.B › Notificaciones).
     #
     # Una fila = "esta persona fue mencionada en este post O en este
     # comentario". No hay dos tablas (`post_mentions`/`comment_mentions`):
     # es el mismo hecho con dos targets posibles, resuelto con dos FKs
-    # nullable y una CHECK que obliga a exactamente una (ADR-019 §Opciones
+    # nullable y una CHECK que obliga a exactamente una (ADR-023 §Opciones
     # consideradas).
 
     id = db.Column(
@@ -793,7 +793,7 @@ class Mention(db.Model):
 
     # Quién escribió la mención. Redundante con posts.author_id/
     # comments.author_id, pero guardarlo evita un JOIN en cada lectura y deja
-    # la fila auto-explicativa (ADR-019 §Modelo de datos).
+    # la fila auto-explicativa (ADR-023 §Modelo de datos).
     author_id = db.Column(
         PG_UUID(as_uuid=True),
         db.ForeignKey("users.id", ondelete="CASCADE"),
@@ -818,7 +818,7 @@ class Mention(db.Model):
 
     # Sin `updated_at` ni `edited_at`: una mención no se edita. Si se edita el
     # texto que la contenía, las menciones de esa fila se recalculan --
-    # se borran las que ya no están y se crean las nuevas (ADR-019 §Decisión).
+    # se borran las que ya no están y se crean las nuevas (ADR-023 §Decisión).
 
     # lazy="joined": renderizar un post/comentario siempre necesita el
     # username de cada mención para enlazarla -- evita el N+1 (mismo motivo
@@ -845,12 +845,12 @@ class MutedKeyword(db.Model):
     __tablename__ = "muted_keywords"
 
     # Duodécima entidad del alcance objetivo del producto en pasar a ratificada
-    # (ADR-020-content-filters-and-privacy-preferences.md) -- resuelve
+    # (ADR-024-content-filters-and-privacy-preferences.md) -- resuelve
     # "Filtros de palabras clave personalizadas" de REF-SET-02.
     #
     # Tabla y no un array/JSON en `users`: hay que poder preguntar "¿algún
     # keyword de este usuario aparece en este texto?" desde el mismo WHERE que
-    # lista posts/comentarios (ADR-020 §Opciones consideradas).
+    # lista posts/comentarios (ADR-024 §Opciones consideradas).
 
     id = db.Column(
         PG_UUID(as_uuid=True),
@@ -886,7 +886,7 @@ class MutedKeyword(db.Model):
 class MutedTopic(db.Model):
     __tablename__ = "muted_topics"
 
-    # Temas silenciados (ADR-026-content-preferences.md). Un «tema» es un
+    # Temas silenciados (ADR-030-content-preferences.md). Un «tema» es un
     # hashtag (`#viajes`): el producto no tiene entidad de temas ni etiquetas
     # guardadas, así que el tema se reconoce DENTRO del texto de la publicación.
     # Tabla propia y no reutilizar `muted_keywords`: una palabra se busca como
@@ -924,7 +924,7 @@ class Session(db.Model):
     __tablename__ = "sessions"
 
     # Decimotercera entidad del alcance objetivo del producto en pasar a
-    # ratificada (ADR-021-session-registry.md) -- resuelve "Sesiones activas"
+    # ratificada (ADR-025-session-registry.md) -- resuelve "Sesiones activas"
     # y habilita "Alertas de inicio de sesión" (REF-SET-03).
     #
     # Es la entidad que convierte el JWT de puramente *stateless* a verificado
@@ -963,7 +963,7 @@ class Session(db.Model):
         db.DateTime(timezone=True), nullable=False, server_default=text("now()")
     )
 
-    # Con throttle, igual que User.last_seen_at (ADR-020) y por el mismo
+    # Con throttle, igual que User.last_seen_at (ADR-024) y por el mismo
     # motivo: sin él, el polling del chat escribiría en cada petición.
     last_used_at = db.Column(
         db.DateTime(timezone=True), nullable=False, server_default=text("now()")
@@ -971,7 +971,7 @@ class Session(db.Model):
 
     # NULL = sesión viva. Revocar no borra la fila: "cerré sesión en ese
     # dispositivo" queda registrado, y la lista puede distinguir una sesión que
-    # terminó de una que nunca existió (ADR-021 §Decisión).
+    # terminó de una que nunca existió (ADR-025 §Decisión).
     revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
@@ -990,7 +990,7 @@ class TwoFactorRecoveryCode(db.Model):
     __tablename__ = "two_factor_recovery_codes"
 
     # Decimocuarta entidad del alcance objetivo del producto en pasar a
-    # ratificada (ADR-022-two-factor-authentication.md). Códigos de un solo uso
+    # ratificada (ADR-026-two-factor-authentication.md). Códigos de un solo uso
     # para entrar cuando se pierde el dispositivo con la app autenticadora --
     # sin ellos, perder el teléfono significaría perder la cuenta.
 
@@ -1032,7 +1032,7 @@ class RateLimitBucket(db.Model):
     __tablename__ = "rate_limit_buckets"
 
     # Decimoquinta entidad del alcance objetivo del producto en pasar a
-    # ratificada (ADR-023-rate-limiting.md). Contador de ventana fija: una fila
+    # ratificada (ADR-027-rate-limiting.md). Contador de ventana fija: una fila
     # por (scope, identidad), con los intentos de la ventana en curso.
     #
     # Es la única entidad del esquema que no modela un hecho del producto sino
@@ -1048,7 +1048,7 @@ class RateLimitBucket(db.Model):
     # Qué se limita: 'login', '2fa_verify', 'register'... Los valores viven en
     # domain/rate_limiting/policy.py, no en el esquema -- agregar un scope nuevo
     # no debe exigir una migración (mismo criterio que Notification.type,
-    # ADR-008, y Follow.status, ADR-018).
+    # ADR-008, y Follow.status, ADR-022).
     scope = db.Column(db.String(40), nullable=False)
 
     # SHA-256 de la identidad (una IP, un email, un user_id), en hexadecimal:
@@ -1057,7 +1057,7 @@ class RateLimitBucket(db.Model):
     # Se hashea a propósito: esta tabla solo necesita **contar**, nunca saber de
     # quién. Guardar emails o IPs en claro acumularía datos personales en una
     # tabla puramente operativa cuando un hash cumple la misma función
-    # (ADR-023 §Seguridad) -- mismo criterio que PasswordResetToken.code_hash:
+    # (ADR-027 §Seguridad) -- mismo criterio que PasswordResetToken.code_hash:
     # si no hace falta el valor original, no se guarda.
     identity_hash = db.Column(db.CHAR(64), nullable=False)
 
@@ -1089,14 +1089,14 @@ class RateLimitBucket(db.Model):
 class DataExport(db.Model):
     __tablename__ = "data_exports"
 
-    # Exportación de datos personales (ADR-024-data-export.md). Una fila por
+    # Exportación de datos personales (ADR-028-data-export.md). Una fila por
     # archivo generado: el ZIP vive en `content` mientras no caduque, y es lo
     # único de esta tabla que no es metadato.
     #
     # El archivo se guarda en la base y no en disco a propósito: el proyecto no
     # tiene almacenamiento de archivos (ni DevOps documentado), y un volumen
     # local se perdería o desincronizaría con varios workers -- mismo
-    # razonamiento que rate_limit_buckets (ADR-023).
+    # razonamiento que rate_limit_buckets (ADR-027).
 
     id = db.Column(
         PG_UUID(as_uuid=True),
@@ -1138,11 +1138,11 @@ class DataExport(db.Model):
 class UserRestriction(db.Model):
     __tablename__ = "user_restrictions"
 
-    # Bloqueo y restricción de cuentas (ADR-025-blocked-and-restricted-accounts.md).
+    # Bloqueo y restricción de cuentas (ADR-029-blocked-and-restricted-accounts.md).
     # UNA fila por par (dueño, destino) con un `kind`: una cuenta está bloqueada
     # O restringida, nunca las dos a la vez (bloquear reemplaza a restringir).
     # Una sola tabla con discriminador y no dos tablas gemelas -- mismo criterio
-    # que Notification.type (ADR-008) y Follow.status (ADR-018).
+    # que Notification.type (ADR-008) y Follow.status (ADR-022).
 
     id = db.Column(
         PG_UUID(as_uuid=True),

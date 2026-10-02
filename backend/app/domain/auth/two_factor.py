@@ -1,5 +1,5 @@
 # Puerto (interfaz) del proveedor de TOTP y reglas puras del 2FA
-# (ADR-022-two-factor-authentication.md).
+# (ADR-026-two-factor-authentication.md).
 #
 # El puerto vive en domain/ y su implementación en infrastructure/auth/, igual
 # que `GoogleIdTokenVerifier` (ADR-012): el algoritmo TOTP lo resuelve una
@@ -38,7 +38,7 @@ class TotpProvider(ABC):
 
         **Contiene el secreto en claro**, así que solo puede viajar a quien ya
         está autenticado y nunca debe registrarse en un log
-        (ADR-022 §Seguridad)."""
+        (ADR-026 §Seguridad)."""
 
     @abstractmethod
     def verify(self, secret, code):

@@ -33,7 +33,7 @@ from app.infrastructure.persistence.repositories.restriction_repository import (
 notifications_bp = Blueprint("notifications", __name__)
 
 _notification_repository = SQLAlchemyNotificationRepository()
-# ADR-025-blocked-and-restricted-accounts.md: se ocultan las notificaciones de
+# ADR-029-blocked-and-restricted-accounts.md: se ocultan las notificaciones de
 # cuentas bloqueadas.
 _restriction_repository = SQLAlchemyRestrictionRepository()
 

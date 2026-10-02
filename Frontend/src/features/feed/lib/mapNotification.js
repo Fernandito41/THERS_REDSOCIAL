@@ -13,10 +13,10 @@ const DETAIL_BY_TYPE = {
   like: "reaccionó a tu Cápsula",
   comment: "comentó tu Cápsula",
   follow: "comenzó a seguirte",
-  // ADR-018-private-accounts.md
+  // ADR-022-private-accounts.md
   follow_request: "quiere seguirte",
   follow_accepted: "aceptó tu solicitud",
-  // ADR-019-mentions.md
+  // ADR-023-mentions.md
   mention: "te mencionó",
 };
 

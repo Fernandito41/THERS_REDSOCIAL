@@ -14,7 +14,7 @@ import SuggestedPeopleCard from "./SuggestedPeopleCard";
  * PROCEDENCIA DE LOS DATOS — mezclada a propósito, y señalada en pantalla:
  *  · Perfil y métricas: REALES. `followers_count` viene de GET /api/users/me
  *    (ADR-007) y las publicaciones se cuentan sobre los posts ya cargados.
- *  · Personas que resuenan: REALES desde ADR-026 (GET /api/users/suggestions),
+ *  · Personas que resuenan: REALES desde ADR-030 (GET /api/users/suggestions),
  *    con su propio componente. Se puede ocultar desde Configuración.
  *  · Temas en tendencia: FIXTURE (`data/mockData`). No hay endpoint de
  *    tendencias; se rotula como ejemplo en vez de pasar por dato real
@@ -59,7 +59,7 @@ export default function DiscoveryRail({ currentUser, capsules }) {
       </div>
 
       {/* 2. Personas que resuenan — cuentas REALES (GET /api/users/suggestions,
-          ADR-026). Se oculta con la preferencia «Mostrar cuentas sugeridas». */}
+          ADR-030). Se oculta con la preferencia «Mostrar cuentas sugeridas». */}
       {showSuggestions && <SuggestedPeopleCard />}
 
       {/* 3. Temas en tendencia — fixture rotulado */}

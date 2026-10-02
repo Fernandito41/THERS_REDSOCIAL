@@ -1,5 +1,5 @@
 # Pruebas de integración de bloqueo y restricción de cuentas (REF-SET-10,
-# ADR-025-blocked-and-restricted-accounts.md) contra PostgreSQL real
+# ADR-029-blocked-and-restricted-accounts.md) contra PostgreSQL real
 # (thers_test) -- no mocks.
 #
 # Lo importante no es que los endpoints respondan, sino que el bloqueo

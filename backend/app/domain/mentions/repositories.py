@@ -12,10 +12,10 @@ class MentionRepository(ABC):
         """Deja las menciones de `post_id` siendo exactamente
         `mentioned_user_ids`: borra las que ya no están y crea las que faltan.
         Devuelve los ids **recién agregados** -- solo a esos hay que
-        notificarles (ADR-019 §Decisión: editar un texto no re-notifica a
+        notificarles (ADR-023 §Decisión: editar un texto no re-notifica a
         quien ya estaba mencionado).
 
-        Es "replace" y no "add" porque editar el texto (ADR-017) tiene que
+        Es "replace" y no "add" porque editar el texto (ADR-021) tiene que
         poder quitar una mención, no solo sumar."""
 
     @abstractmethod

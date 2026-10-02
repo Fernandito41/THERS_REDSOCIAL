@@ -9,12 +9,12 @@ import { useLanguage } from "@shared/i18n";
 
 // Verificación en dos pasos con TOTP
 // (GET /api/2fa, POST /api/2fa/setup, /confirm, /disable, /recovery-codes --
-// ADR-022-two-factor-authentication.md).
+// ADR-026-two-factor-authentication.md).
 //
 // El alta tiene DOS pasos, igual que en el backend: pedir el QR no activa
 // nada, y recién un código válido de la app autenticadora lo confirma. Es lo
 // que evita que alguien escanee, cierre la pantalla y quede con la cuenta
-// exigiendo un código que su app no puede generar (ADR-022 §Decisión).
+// exigiendo un código que su app no puede generar (ADR-026 §Decisión).
 //
 // El QR se genera **en el navegador** a partir del `otpauth://` que devuelve el
 // servidor: el secreto no tiene por qué pasar por un servicio de imágenes
@@ -121,7 +121,7 @@ export default function TwoFactorRow() {
     try {
       if (isDisable) {
         await api.post("/2fa/disable", { password }, { headers: authHeaders() });
-        // Desactivar cierra TODAS las sesiones, incluida esta (ADR-022
+        // Desactivar cierra TODAS las sesiones, incluida esta (ADR-026
         // §Decisión): el token actual ya no sirve, así que hay que volver a
         // entrar. Se avisa antes de que el próximo fetch falle con un 401.
         toast.info(

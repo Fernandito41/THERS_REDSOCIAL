@@ -2,9 +2,9 @@
 # PostgreSQL 16 real (thers_test, ver conftest.py) -- no mocks.
 #
 # Cubre los tres ADR que la implementan:
-#   · ADR-018-private-accounts.md -- cuenta privada y solicitudes de seguimiento
-#   · ADR-019-mentions.md -- menciones con @username
-#   · ADR-020-content-filters-and-privacy-preferences.md -- filtros de
+#   · ADR-022-private-accounts.md -- cuenta privada y solicitudes de seguimiento
+#   · ADR-023-mentions.md -- menciones con @username
+#   · ADR-024-content-filters-and-privacy-preferences.md -- filtros de
 #     contenido, privacidad de mensajes directos y estado de actividad
 
 from tests.conftest import mark_email_verified, reset_rate_limits
@@ -62,7 +62,7 @@ def _create_post(client, token, content="contenido"):
 
 
 # ===========================================================================
-# ADR-018 — Preferencias: lectura y escritura
+# ADR-022 — Preferencias: lectura y escritura
 # ===========================================================================
 class TestPrivacySettingsEndpoint:
     def test_defaults_preserve_previous_behaviour(self, client):
@@ -135,12 +135,12 @@ class TestPrivacySettingsEndpoint:
         user = client.get("/api/users/me", headers=_auth_headers(token)).get_json()["user"]
 
         # El Frontend lo necesita en cada arranque de sesión para saber si
-        # mostrar la bandeja de solicitudes (ADR-018 §Contrato API).
+        # mostrar la bandeja de solicitudes (ADR-022 §Contrato API).
         assert user["is_private"] is True
 
 
 # ===========================================================================
-# ADR-018 — Solicitudes de seguimiento
+# ADR-022 — Solicitudes de seguimiento
 # ===========================================================================
 class TestFollowRequests:
     def test_following_a_private_account_creates_a_pending_request(self, client):
@@ -150,7 +150,7 @@ class TestFollowRequests:
         response = client.post(f"/api/users/{id_b}/follow", headers=_auth_headers(token_a))
 
         assert response.status_code == 200
-        # Pedir no es seguir: `following` sigue en false (ADR-018 §Decisión).
+        # Pedir no es seguir: `following` sigue en false (ADR-022 §Decisión).
         assert response.get_json() == {"following": False, "follow_status": "pending"}
 
     def test_following_a_public_account_is_immediate(self, client):
@@ -168,7 +168,7 @@ class TestFollowRequests:
         user_b = client.get("/api/users/me", headers=_auth_headers(token_b)).get_json()["user"]
 
         # Contar pendientes como seguidores anunciaría gente que todavía no
-        # tiene acceso a nada (ADR-018 §Decisión).
+        # tiene acceso a nada (ADR-022 §Decisión).
         assert user_b["followers_count"] == 0
 
     def test_owner_sees_the_pending_request(self, client):
@@ -203,7 +203,7 @@ class TestFollowRequests:
         client.post(f"/api/users/{id_b}/follow", headers=_auth_headers(token_a))
 
         # A no tiene solicitudes dirigidas a él -- la lista es siempre la del
-        # usuario autenticado (ADR-018 §Seguridad).
+        # usuario autenticado (ADR-022 §Seguridad).
         requests = client.get(
             "/api/follow-requests", headers=_auth_headers(token_a)
         ).get_json()["follow_requests"]
@@ -239,7 +239,7 @@ class TestFollowRequests:
         ).get_json()["notifications"]
 
         # Sin esto, el solicitante no tendría forma de saber que ya puede ver
-        # el contenido (ADR-018 §Decisión).
+        # el contenido (ADR-022 §Decisión).
         assert [n["type"] for n in notifications] == ["follow_accepted"]
 
     def test_rejecting_removes_the_request_without_notifying(self, client):
@@ -256,7 +256,7 @@ class TestFollowRequests:
         assert client.get(
             "/api/follow-requests", headers=_auth_headers(token_b)
         ).get_json()["follow_requests"] == []
-        # Rechazar NO se notifica (ADR-018 §Decisión).
+        # Rechazar NO se notifica (ADR-022 §Decisión).
         assert client.get(
             "/api/notifications", headers=_auth_headers(token_a)
         ).get_json()["notifications"] == []
@@ -270,7 +270,7 @@ class TestFollowRequests:
         response = client.post(f"/api/users/{id_b}/follow", headers=_auth_headers(token_a))
 
         # Rechazar borra la fila en vez de marcarla, justamente para que se
-        # pueda volver a pedir (ADR-018 §Opciones consideradas).
+        # pueda volver a pedir (ADR-022 §Opciones consideradas).
         assert response.get_json()["follow_status"] == "pending"
 
     def test_cannot_accept_a_request_directed_at_someone_else(self, client):
@@ -283,7 +283,7 @@ class TestFollowRequests:
         )
 
         # Mismo 404 que una solicitud inexistente -- no revela que existe ni de
-        # quién es (ADR-018 §Seguridad).
+        # quién es (ADR-022 §Seguridad).
         assert response.status_code == 404
 
     def test_accepting_twice_returns_404_the_second_time(self, client):
@@ -322,7 +322,7 @@ class TestFollowRequests:
         response = client.delete(f"/api/users/{id_b}/follow", headers=_auth_headers(token_a))
 
         # El mismo DELETE sirve para dejar de seguir y para cancelar una
-        # solicitud (ADR-018 §Decisión).
+        # solicitud (ADR-022 §Decisión).
         assert response.get_json() == {"following": False, "follow_status": None}
         assert client.get(
             "/api/follow-requests", headers=_auth_headers(token_b)
@@ -341,7 +341,7 @@ class TestFollowRequests:
         _set_privacy(client, token_b, is_private=True)
 
         # Volverse privado no degrada a los seguidores actuales a pendientes:
-        # quien ya tenía acceso lo conserva (ADR-018 §Decisión).
+        # quien ya tenía acceso lo conserva (ADR-022 §Decisión).
         user_b = client.get("/api/users/me", headers=_auth_headers(token_b)).get_json()["user"]
         assert user_b["followers_count"] == 1
         privacy = client.get(
@@ -351,7 +351,7 @@ class TestFollowRequests:
 
 
 # ===========================================================================
-# ADR-018 — Visibilidad del contenido de una cuenta privada
+# ADR-022 — Visibilidad del contenido de una cuenta privada
 # ===========================================================================
 class TestPrivateAccountVisibility:
     def test_private_posts_are_hidden_from_the_feed_of_non_followers(self, client):
@@ -371,7 +371,7 @@ class TestPrivateAccountVisibility:
         feed = client.get("/api/posts", headers=_auth_headers(token_b)).get_json()["posts"]
 
         # Nadie se sigue a sí mismo, así que sin el caso explícito del autor
-        # una cuenta privada no vería ni su propio contenido (ADR-018).
+        # una cuenta privada no vería ni su propio contenido (ADR-022).
         assert [p["content"] for p in feed] == ["mi propio post"]
 
     def test_accepted_follower_sees_private_posts(self, client):
@@ -454,7 +454,7 @@ class TestPrivateAccountVisibility:
         feed = client.get("/api/posts", headers=_auth_headers(token_a)).get_json()["posts"]
 
         # El Frontend lo necesita para saber que el botón manda una solicitud
-        # y no un follow directo (ADR-018 §Contrato API).
+        # y no un follow directo (ADR-022 §Contrato API).
         assert feed[0]["author"]["is_private"] is True
         assert feed[0]["author"]["follow_status"] == "accepted"
         assert feed[0]["author"]["is_followed_by_me"] is True
@@ -473,7 +473,7 @@ class TestPrivateAccountVisibility:
 
 
 # ===========================================================================
-# ADR-019 — Menciones con @username
+# ADR-023 — Menciones con @username
 # ===========================================================================
 class TestMentions:
     def test_mentioning_an_existing_user_records_the_mention(self, client):
@@ -503,7 +503,7 @@ class TestMentions:
         post = _create_post(client, token_a, content="hola @no_existe_nadie")
 
         # Se publica igual y el @texto queda como texto plano: nadie pierde lo
-        # que escribió por etiquetar a quien no existe (ADR-019 §Decisión).
+        # que escribió por etiquetar a quien no existe (ADR-023 §Decisión).
         assert post["mentions"] == []
         assert post["content"] == "hola @no_existe_nadie"
 
@@ -521,7 +521,7 @@ class TestMentions:
         post = _create_post(client, token_a, content="hola @USER_B")
 
         # Escribir "@USER_B" tiene que mencionar a `user_b` -- es lo que
-        # cualquiera espera al teclear (ADR-019).
+        # cualquiera espera al teclear (ADR-023).
         assert [m["id"] for m in post["mentions"]] == [id_b]
 
     def test_repeated_mention_counts_once(self, client):
@@ -568,7 +568,7 @@ class TestMentions:
 
         post = _create_post(client, token_a, content="nota para mí: @user_a")
 
-        # La preferencia protege de los demás, no de uno mismo (ADR-019).
+        # La preferencia protege de los demás, no de uno mismo (ADR-023).
         assert [m["id"] for m in post["mentions"]] == [id_a]
         # Pero nadie se notifica a sí mismo.
         assert client.get(
@@ -611,7 +611,7 @@ class TestMentions:
             headers=_auth_headers(token_a),
         ).get_json()["post"]
 
-        # Editar recalcula: quitar el @username quita la mención (ADR-019).
+        # Editar recalcula: quitar el @username quita la mención (ADR-023).
         assert edited["mentions"] == []
 
     def test_editing_without_touching_mentions_does_not_renotify(self, client):
@@ -625,7 +625,7 @@ class TestMentions:
         )
 
         # Una sola notificación, la de la creación -- editar no re-notifica a
-        # quien ya estaba mencionado (ADR-019 §Decisión).
+        # quien ya estaba mencionado (ADR-023 §Decisión).
         notifications = client.get(
             "/api/notifications", headers=_auth_headers(token_b)
         ).get_json()["notifications"]
@@ -647,7 +647,7 @@ class TestMentions:
         ).get_json()["notifications"]
         assert [n["type"] for n in notifications] == ["mention"]
         # La notificación apunta al post que contiene el comentario, porque
-        # `notifications` no guarda comment_id (ADR-008/ADR-019).
+        # `notifications` no guarda comment_id (ADR-008/ADR-023).
         assert notifications[0]["post_id"] == post["id"]
 
     def test_mentions_travel_in_the_comment_thread(self, client):
@@ -687,7 +687,7 @@ class TestMentions:
         # las de más se ignoran en silencio, el post se publica igual.
         #
         # Este test registra doce cuentas, bastante más de las cinco por hora
-        # que permite `policy.REGISTER` (ADR-023-rate-limiting.md): se reinician
+        # que permite `policy.REGISTER` (ADR-027-rate-limiting.md): se reinician
         # los contadores en vez de relajar el límite, porque un límite ajustado
         # para que los tests pasen deja de ser el que protege producción.
         tags = [f"m{i}" for i in range(11)]
@@ -708,7 +708,7 @@ class TestMentions:
 
 
 # ===========================================================================
-# ADR-020 — Filtros de palabras clave propias
+# ADR-024 — Filtros de palabras clave propias
 # ===========================================================================
 class TestMutedKeywords:
     def test_add_list_and_remove(self, client):
@@ -831,7 +831,7 @@ class TestMutedKeywords:
 
         assert [c["content"] for c in thread] == ["comentario normal"]
         # El contador tiene que coincidir con lo que el panel muestra: un
-        # contador en 2 con una lista de 1 es un bug visible (ADR-020).
+        # contador en 2 con una lista de 1 es un bug visible (ADR-024).
         assert feed[0]["comments_count"] == 1
 
     def test_other_viewers_still_see_the_filtered_comment(self, client):
@@ -853,7 +853,7 @@ class TestMutedKeywords:
         ).get_json()["comments"]
 
         # Los términos son del espectador: filtran lo que ÉL ve, no lo que ven
-        # los demás (ADR-020).
+        # los demás (ADR-024).
         assert len(thread) == 1
 
     def test_muted_keywords_endpoints_require_auth(self, client):
@@ -864,7 +864,7 @@ class TestMutedKeywords:
 
 
 # ===========================================================================
-# ADR-020 — Ocultar comentarios ofensivos (lista del sistema)
+# ADR-024 — Ocultar comentarios ofensivos (lista del sistema)
 # ===========================================================================
 class TestHideOffensiveComments:
     def test_offensive_comment_is_hidden_when_the_post_owner_enabled_it(self, client):
@@ -937,7 +937,7 @@ class TestHideOffensiveComments:
         ).get_json()["comments"]
 
         # Si no, escribiría, lo vería desaparecer y lo reescribiría pensando
-        # que falló (ADR-020 §Decisión).
+        # que falló (ADR-024 §Decisión).
         assert len(thread) == 1
 
     def test_the_filter_only_applies_to_the_owners_posts(self, client):
@@ -960,7 +960,7 @@ class TestHideOffensiveComments:
 
 
 # ===========================================================================
-# ADR-020 — Privacidad de mensajes directos
+# ADR-024 — Privacidad de mensajes directos
 # ===========================================================================
 class TestWhoCanMessage:
     def test_nobody_blocks_every_sender(self, client):
@@ -1012,7 +1012,7 @@ class TestWhoCanMessage:
             headers=_auth_headers(token_a),
         )
 
-        # Pedir no es seguir, tampoco para esto (ADR-018/ADR-020).
+        # Pedir no es seguir, tampoco para esto (ADR-022/ADR-024).
         assert response.status_code == 403
 
     def test_everyone_is_the_default_and_keeps_working(self, client):
@@ -1028,7 +1028,7 @@ class TestWhoCanMessage:
 
 
 # ===========================================================================
-# ADR-020 — Estado de actividad
+# ADR-024 — Estado de actividad
 # ===========================================================================
 class TestActivityStatus:
     def test_last_seen_is_recorded_for_the_authenticated_user(self, client):
@@ -1083,5 +1083,5 @@ class TestActivityStatus:
             "/api/users/me/privacy", headers=_auth_headers(token)
         ).get_json()["privacy"]
 
-        # Lo que oculta la preferencia es que lo vean LOS DEMÁS (ADR-020).
+        # Lo que oculta la preferencia es que lo vean LOS DEMÁS (ADR-024).
         assert privacy["last_seen_at"] is not None

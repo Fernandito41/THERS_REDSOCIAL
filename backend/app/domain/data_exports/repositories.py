@@ -1,4 +1,4 @@
-# Puerto del repositorio de exportaciones (ADR-024-data-export.md). Sin
+# Puerto del repositorio de exportaciones (ADR-028-data-export.md). Sin
 # SQLAlchemy ni Flask: application/ lo consume, infraestructura lo implementa.
 
 from abc import ABC, abstractmethod

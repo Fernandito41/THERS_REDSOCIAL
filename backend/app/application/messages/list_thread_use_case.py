@@ -19,7 +19,7 @@ def list_thread(
         raise UserNotFoundError()
 
     # Con un bloqueo en cualquier sentido el hilo deja de ser accesible
-    # (ADR-025). Los mensajes no se borran: reaparecen si se desbloquea.
+    # (ADR-029). Los mensajes no se borran: reaparecen si se desbloquea.
     if restriction_repository.is_blocked_between(user_id, other_user_id):
         raise UserNotFoundError()
 

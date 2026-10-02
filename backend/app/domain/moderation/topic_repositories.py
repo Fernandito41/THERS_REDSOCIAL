@@ -1,4 +1,4 @@
-# Puerto del repositorio de temas silenciados (ADR-026-content-preferences.md).
+# Puerto del repositorio de temas silenciados (ADR-030-content-preferences.md).
 # Sin SQLAlchemy ni Flask.
 
 from abc import ABC, abstractmethod

@@ -49,10 +49,10 @@ messages_bp = Blueprint("messages", __name__)
 _user_repository = SQLAlchemyUserRepository()
 _message_repository = SQLAlchemyMessageRepository()
 _typing_repository = InMemoryTypingIndicatorRepository()
-# ADR-020-content-filters-and-privacy-preferences.md: `who_can_message` en
+# ADR-024-content-filters-and-privacy-preferences.md: `who_can_message` en
 # 'followers' obliga a resolver la relación de seguimiento.
 _follow_repository = SQLAlchemyFollowRepository()
-# ADR-025-blocked-and-restricted-accounts.md: un bloqueo corta la mensajería.
+# ADR-029-blocked-and-restricted-accounts.md: un bloqueo corta la mensajería.
 _restriction_repository = SQLAlchemyRestrictionRepository()
 
 
@@ -90,7 +90,7 @@ def create(user_id):
     except MessagesNotAllowedError:
         # 403 y no 404: quien escribe ya sabía que esa cuenta existe, así que
         # ocultárselo no protegería nada y solo lo haría reintentar
-        # (ADR-020 §Seguridad, a diferencia del 404 de una cuenta privada).
+        # (ADR-024 §Seguridad, a diferencia del 404 de una cuenta privada).
         return jsonify({"msg": "Esta persona no acepta mensajes tuyos"}), 403
 
     return jsonify({"message": message}), 201
@@ -128,7 +128,7 @@ def conversations():
 @jwt_required()
 def update(message_id):
     # Ruta plana, igual que DELETE: editar depende de quién mandó el mensaje,
-    # no de con quién es la conversación (ADR-017-content-editing.md). Solo
+    # no de con quién es la conversación (ADR-021-content-editing.md). Solo
     # quien lo mandó puede editarlo -- nunca quien lo recibió.
     sender_id = get_jwt_identity()
 

@@ -5,7 +5,7 @@ import { useToast } from "@shared/components/Toast";
 import { useLanguage } from "@shared/i18n";
 
 // Preferencias de seguridad REALES, contra el servidor
-// (GET/PATCH /api/users/me/security -- ADR-021-session-registry.md).
+// (GET/PATCH /api/users/me/security -- ADR-025-session-registry.md).
 //
 // Endpoint separado del de privacidad a propósito, igual que en el backend:
 // privacidad es "quién ve qué", seguridad es "quién puede entrar". Comparten

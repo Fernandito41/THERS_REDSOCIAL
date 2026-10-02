@@ -59,7 +59,7 @@ class SQLAlchemyMentionRepository(MentionRepository):
         db.session.commit()
 
         # Solo los nuevos: editar un texto sin tocar a quién menciona no debe
-        # volver a notificar a nadie (ADR-019 §Decisión).
+        # volver a notificar a nadie (ADR-023 §Decisión).
         return to_add
 
     def list_for_posts(self, post_ids):

@@ -4,7 +4,7 @@ Revision ID: a3c9f5b1e648
 Revises: f1a4c8e2d573
 Create Date: 2026-10-01 00:00:00.000000
 
-Autenticación en dos pasos con TOTP (ADR-022-two-factor-authentication.md).
+Autenticación en dos pasos con TOTP (ADR-026-two-factor-authentication.md).
 Resuelve "Activar 2FA" de la pantalla de Seguridad (REF-SET-03), que estaba
 `pending` con el motivo "No está implementado. Mostrarlo como activo sería
 afirmar una protección inexistente".
@@ -15,7 +15,7 @@ afirmar una protección inexistente".
    inservible (a diferencia de los OTP de ADR-010/ADR-011, que se comparan
    contra un `code_hash` scrypt porque el código viaja y se descarta). La
    consecuencia -- una fuga de esta columna permite generar códigos válidos --
-   queda registrada en ADR-022 §Riesgos.
+   queda registrada en ADR-026 §Riesgos.
 
 2. `users.two_factor_enabled` — `BOOLEAN NOT NULL DEFAULT false`. Separada de
    `totp_secret` a propósito: durante el alta existe un secreto **todavía no

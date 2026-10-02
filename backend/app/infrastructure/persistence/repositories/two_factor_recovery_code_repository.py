@@ -14,7 +14,7 @@ class SQLAlchemyTwoFactorRecoveryCodeRepository(TwoFactorRecoveryCodeRepository)
     def replace_all(self, user_id, code_hashes):
         # Regenerar los códigos invalida los anteriores en la misma operación:
         # si no, quedarían dos juegos válidos a la vez y la persona no sabría
-        # cuál tiene en el papel (ADR-022 §Decisión).
+        # cuál tiene en el papel (ADR-026 §Decisión).
         db.session.execute(
             delete(TwoFactorRecoveryCode).where(TwoFactorRecoveryCode.user_id == user_id)
         )
@@ -54,7 +54,7 @@ class SQLAlchemyTwoFactorRecoveryCodeRepository(TwoFactorRecoveryCodeRepository)
         # `used_at IS NULL` en el propio WHERE: dos peticiones simultáneas con
         # el mismo código no pueden consumirlo las dos -- la segunda no
         # matchea y devuelve False. Es lo que hace que "un solo uso" sea cierto
-        # también bajo concurrencia (ADR-022 §Seguridad).
+        # también bajo concurrencia (ADR-026 §Seguridad).
         result = db.session.execute(
             update(TwoFactorRecoveryCode)
             .where(

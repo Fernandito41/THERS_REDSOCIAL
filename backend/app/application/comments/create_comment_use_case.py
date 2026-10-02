@@ -19,7 +19,7 @@ def create_comment(
     if post is None:
         raise PostNotFoundError(post_id)
 
-    # No se comenta lo que no se puede ver (ADR-018).
+    # No se comenta lo que no se puede ver (ADR-022).
     assert_post_visible(post, author_id, follow_repository, restriction_repository)
 
     comment = comment_repository.create(post_id, author_id, content)
@@ -33,7 +33,7 @@ def create_comment(
             recipient_id=post.author_id, actor_id=author_id, notification_type="comment", post_id=post_id
         )
 
-    # Menciones del comentario (ADR-019). Se resuelven después de crear la fila
+    # Menciones del comentario (ADR-023). Se resuelven después de crear la fila
     # porque la mención apunta al `comment_id`. La notificación de mención es
     # independiente de la de "comentó tu publicación": a quien mencionan le
     # llega una propia, y al dueño del post la suya -- si son la misma persona,

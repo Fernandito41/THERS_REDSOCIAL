@@ -1,4 +1,4 @@
-# Casos de uso del 2FA con TOTP (ADR-022-two-factor-authentication.md).
+# Casos de uso del 2FA con TOTP (ADR-026-two-factor-authentication.md).
 #
 # El alta tiene DOS pasos a propósito:
 #   1. `start_two_factor_setup` genera un secreto y lo guarda **sin activar**.
@@ -66,7 +66,7 @@ def start_two_factor_setup(user_id, user_repository, totp_provider):
     user_repository.update(user_id, {"totp_secret": secret})
 
     # El `otpauth://` lleva el secreto en claro: solo puede viajar a quien ya
-    # está autenticado, y nunca debe registrarse en un log (ADR-022 §Seguridad).
+    # está autenticado, y nunca debe registrarse en un log (ADR-026 §Seguridad).
     return {
         "secret": secret,
         "provisioning_uri": totp_provider.provisioning_uri(
@@ -131,7 +131,7 @@ def disable_two_factor(
 
     # Y se cierran TODAS las sesiones, incluida la actual: bajar el nivel de
     # protección de la cuenta es exactamente el momento en que conviene forzar
-    # un login nuevo (ADR-021/ADR-022 §Decisión).
+    # un login nuevo (ADR-025/ADR-026 §Decisión).
     session_repository.revoke_all_for_user(user_id)
 
     return {"enabled": False}

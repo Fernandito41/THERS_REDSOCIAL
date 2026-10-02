@@ -19,9 +19,9 @@ def to_public_comment(comment, mentions=None):
         },
         "content": comment.content,
         "created_at": comment.created_at.isoformat(),
-        # Mismo criterio y misma forma que `post.mentions` (ADR-019).
+        # Mismo criterio y misma forma que `post.mentions` (ADR-023).
         "mentions": to_public_mentions(mentions),
         # Booleano, nunca el timestamp `edited_at` crudo -- mismo criterio
-        # que `read` en messages/notifications (ADR-017-content-editing.md).
+        # que `read` en messages/notifications (ADR-021-content-editing.md).
         "edited": comment.edited_at is not None,
     }

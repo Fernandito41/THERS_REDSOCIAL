@@ -1,4 +1,4 @@
-# Guard de rate limiting (ADR-023-rate-limiting.md).
+# Guard de rate limiting (ADR-027-rate-limiting.md).
 #
 # Es el único punto que decide "este intento se pasa del límite". Lo usan todos
 # los endpoints limitados, para que la regla no se reimplemente endpoint por
@@ -6,7 +6,7 @@
 #
 # Se aplica como una llamada explícita al principio de cada route y NO como un
 # hook global `before_request`, a diferencia del registro de actividad
-# (ADR-020/ADR-021, que sí es un hook). El motivo: un hook global tendría que
+# (ADR-024/ADR-025, que sí es un hook). El motivo: un hook global tendría que
 # saber qué scope y qué identidad corresponden a cada ruta, y esa correspondencia
 # es justamente la decisión de producto de cada endpoint (¿se limita por IP o por
 # cuenta? ¿cuenta los aciertos o solo los fallos?). Un mapa de rutas a reglas

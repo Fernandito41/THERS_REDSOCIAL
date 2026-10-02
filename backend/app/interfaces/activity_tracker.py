@@ -1,4 +1,4 @@
-# Registro de "última vez activo" (ADR-020-content-filters-and-privacy-preferences.md).
+# Registro de "última vez activo" (ADR-024-content-filters-and-privacy-preferences.md).
 #
 # Vive en interfaces/ y no en application/ porque es un hook del ciclo de vida
 # de la petición HTTP, no una regla de negocio: se engancha a `after_request`
@@ -28,7 +28,7 @@ from app.infrastructure.persistence.repositories.user_repository import (
 TOUCH_INTERVAL_SECONDS = 300
 
 _user_repository = SQLAlchemyUserRepository()
-# ADR-021-session-registry.md: la misma petición que actualiza la presencia de
+# ADR-025-session-registry.md: la misma petición que actualiza la presencia de
 # la persona actualiza el "último uso" de ESTA sesión -- es lo que hace que la
 # lista de sesiones pueda decir "activa hace 3 horas" por dispositivo, no solo
 # por cuenta.

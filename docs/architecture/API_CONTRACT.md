@@ -44,13 +44,13 @@
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
 >
-> **v0.28 — preferencias de contenido y feed (`ADR-026-content-preferences.md`):** se agrega §4.15 con `GET`/`POST`/`DELETE /api/users/me/muted-topics` y `GET /api/users/suggestions`, más dos **campos nuevos en endpoints existentes**: `is_sensitive` (entrada opcional de `POST /api/posts` y salida de todo post) y `hide_sensitive_content` (en `/api/users/me/privacy`). Ninguna respuesta existente pierde ni cambia un campo. Una migración (`e1b5c9d3a7f4`): `posts.is_sensitive`, `users.hide_sensitive_content` y la tabla `muted_topics`. **Las palabras ocultas (`ADR-020`) ya funcionaban y no se tocaron.** `GET /api/posts` ahora también omite los posts sensibles (si la persona lo activó) y los de temas silenciados.
+> **v0.28 — preferencias de contenido y feed (`ADR-030-content-preferences.md`):** se agrega §4.15 con `GET`/`POST`/`DELETE /api/users/me/muted-topics` y `GET /api/users/suggestions`, más dos **campos nuevos en endpoints existentes**: `is_sensitive` (entrada opcional de `POST /api/posts` y salida de todo post) y `hide_sensitive_content` (en `/api/users/me/privacy`). Ninguna respuesta existente pierde ni cambia un campo. Una migración (`e1b5c9d3a7f4`): `posts.is_sensitive`, `users.hide_sensitive_content` y la tabla `muted_topics`. **Las palabras ocultas (`ADR-024`) ya funcionaban y no se tocaron.** `GET /api/posts` ahora también omite los posts sensibles (si la persona lo activó) y los de temas silenciados.
 >
-> **v0.27 — bloqueo y restricción de cuentas (`ADR-025-blocked-and-restricted-accounts.md`):** se agrega §4.14 con `GET`/`POST`/`DELETE /api/users/me/blocks` y `/api/users/me/restrictions`. Resuelve los dos controles `pending` de REF-SET-10. **Es el único cambio hasta ahora que modifica el comportamiento de endpoints existentes:** feed, comentarios, likes, follows, mensajes, notificaciones y menciones respetan el bloqueo (§4.14), con dos respuestas nuevas — `409` en `POST /users/<id>/follow` y `POST /users/<id>/messages` cuando quien pregunta bloqueó al destino. Una migración (`d9a3b7f1c5e2`): tabla `user_restrictions`. La forma de ningún endpoint existente cambia en su camino de éxito.
+> **v0.27 — bloqueo y restricción de cuentas (`ADR-029-blocked-and-restricted-accounts.md`):** se agrega §4.14 con `GET`/`POST`/`DELETE /api/users/me/blocks` y `/api/users/me/restrictions`. Resuelve los dos controles `pending` de REF-SET-10. **Es el único cambio hasta ahora que modifica el comportamiento de endpoints existentes:** feed, comentarios, likes, follows, mensajes, notificaciones y menciones respetan el bloqueo (§4.14), con dos respuestas nuevas — `409` en `POST /users/<id>/follow` y `POST /users/<id>/messages` cuando quien pregunta bloqueó al destino. Una migración (`d9a3b7f1c5e2`): tabla `user_restrictions`. La forma de ningún endpoint existente cambia en su camino de éxito.
 >
-> **v0.26 — exportación de datos (`ADR-024-data-export.md`):** se agrega §4.13 con `POST /api/data-exports`, `GET /api/data-exports` y `GET /api/data-exports/<id>/download`. Resuelve los tres controles `pending` de «Descarga de datos y archivo» (REF-SET-09). Una migración (`c4d8e2a6f913`): tabla `data_exports`. El ZIP no está cifrado y caduca a los 7 días; máximo una solicitud por hora y por cuenta. Ningún endpoint existente cambia.
+> **v0.26 — exportación de datos (`ADR-028-data-export.md`):** se agrega §4.13 con `POST /api/data-exports`, `GET /api/data-exports` y `GET /api/data-exports/<id>/download`. Resuelve los tres controles `pending` de «Descarga de datos y archivo» (REF-SET-09). Una migración (`c4d8e2a6f913`): tabla `data_exports`. El ZIP no está cifrado y caduca a los 7 días; máximo una solicitud por hora y por cuenta. Ningún endpoint existente cambia.
 >
-> **v0.25 — rate limiting de los endpoints de autenticación (`ADR-023-rate-limiting.md`):** **resuelve el ítem 8 de §9**, que v0.24 había registrado como pendiente explícito tras descubrir que en `POST /api/2fa/verify` esa ausencia era explotable (un código TOTP son 10⁶ combinaciones en una ventana de 30 s).
+> **v0.25 — rate limiting de los endpoints de autenticación (`ADR-027-rate-limiting.md`):** **resuelve el ítem 8 de §9**, que v0.24 había registrado como pendiente explícito tras descubrir que en `POST /api/2fa/verify` esa ausencia era explotable (un código TOTP son 10⁶ combinaciones en una ventana de 30 s).
 >
 > **Primer uso de `429` en la API** (§3). Nueve endpoints pueden devolverlo ahora: `POST /api/login`, `/register`, `/forgot-password`, `/resend-registration-code`, `/verify-reset-code`, `/verify-registration-code`, `/2fa/verify`, `/2fa/confirm`, `/2fa/disable` y `/2fa/recovery-codes`. **Ninguno cambia de forma en su camino de éxito** — el `429` es una respuesta nueva, no una modificación de las existentes. Siempre lleva el header `Retry-After` y, además, `retry_after_seconds` en el body: decir "demasiados intentos" sin decir cuánto esperar deja al cliente reintentando a ciegas.
 >
@@ -58,9 +58,9 @@
 >
 > Complementa, sin reemplazarlos, los límites que ya existían: los 5 intentos **por código** de `ADR-010`/`ADR-011` y sus cooldowns de 60 s **por cuenta**. El hueco que cerraban a medias era que pedir un código nuevo daba 5 intentos más indefinidamente, y que el cooldown no frenaba a una IP bombardeando muchas direcciones distintas.
 >
-> Una migración (`b6e3a9d4f270`): tabla `rate_limit_buckets`, con la identidad **hasheada** (SHA-256) porque la tabla solo necesita contar, nunca saber de quién. Sin dependencias nuevas — se descartó Flask-Limiter porque su almacenamiento recomendado es Redis, que no está en el stack, y su backend en memoria no sirve con varios workers (mismo criterio por el que `ADR-021` descartó una lista negra en memoria). Verificado con 20 pruebas nuevas + la suite completa (476/476, ejecutada contra PostgreSQL 16 real, incluido un ciclo `upgrade`/`downgrade`/`upgrade`). **Lo que sigue pendiente, acotado y dicho:** los endpoints de producto (feed, posts, comentarios, mensajes) **no** tienen límite, y donde solo se limita por IP el header sigue siendo falsificable (`ADR-023` §Riesgos).
+> Una migración (`b6e3a9d4f270`): tabla `rate_limit_buckets`, con la identidad **hasheada** (SHA-256) porque la tabla solo necesita contar, nunca saber de quién. Sin dependencias nuevas — se descartó Flask-Limiter porque su almacenamiento recomendado es Redis, que no está en el stack, y su backend en memoria no sirve con varios workers (mismo criterio por el que `ADR-025` descartó una lista negra en memoria). Verificado con 20 pruebas nuevas + la suite completa (476/476, ejecutada contra PostgreSQL 16 real, incluido un ciclo `upgrade`/`downgrade`/`upgrade`). **Lo que sigue pendiente, acotado y dicho:** los endpoints de producto (feed, posts, comentarios, mensajes) **no** tienen límite, y donde solo se limita por IP el header sigue siendo falsificable (`ADR-027` §Riesgos).
 >
-> **v0.24 — pantalla de Seguridad: registro de sesiones, alertas de acceso y 2FA (`ADR-021-session-registry.md`, `ADR-022-two-factor-authentication.md`):** de los cinco controles de REF-SET-03, dos ya funcionaban (el correo de cambio de contraseña, `ADR-010`, y la verificación de email, `ADR-011`) y **no se tocaron**; los tres restantes pasan a funcionar.
+> **v0.24 — pantalla de Seguridad: registro de sesiones, alertas de acceso y 2FA (`ADR-025-session-registry.md`, `ADR-026-two-factor-authentication.md`):** de los cinco controles de REF-SET-03, dos ya funcionaban (el correo de cambio de contraseña, `ADR-010`, y la verificación de email, `ADR-011`) y **no se tocaron**; los tres restantes pasan a funcionar.
 >
 > **Cambio transversal más importante de todas las versiones de este contrato: el JWT deja de ser puramente *stateless*.** Ningún endpoint cambia de forma, pero **todos los protegidos cambian de condición de validez**: un token solo autentica si su `jti` tiene una sesión viva en `sessions`. Cerrar una sesión invalida su token de inmediato (antes era imposible: un token firmado valía hasta expirar). Consecuencias asumidas: una consulta a la base por petición protegida, y los tokens emitidos antes de la migración dejan de valer (todo el mundo se desloguea una vez). El `401` de un token revocado lleva un mensaje propio, distinto del de expirado.
 >
@@ -72,13 +72,13 @@
 >
 > **Dos migraciones** (`f1a4c8e2d573`, `a3c9f5b1e648`): tablas `sessions` y `two_factor_recovery_codes`, más `users.login_alerts_enabled`/`totp_secret`/`two_factor_enabled`. Una dependencia nueva de backend (`pyotp`, confinada a `infrastructure/auth/`) y una de frontend (`qrcode`: el QR se genera en el navegador para que el secreto no pase por un servicio externo). **El *rate limiting* se registra por fin como pendiente explícito en §9 (ítem 8)** — varios ADR anteriores lo citaban como si ya estuviera ahí y no lo estaba; v0.24 lo corrige, y señala que en `POST /api/2fa/verify` esa ausencia sí es explotable. Verificado con 42 pruebas nuevas + la suite completa (456/456, ejecutada contra PostgreSQL 16 real, incluido un ciclo `upgrade`/`downgrade`/`upgrade` sobre `thers_dev` y `thers_test`).
 >
-> **v0.23 — pantalla de Privacidad: cuentas privadas, menciones y filtros de contenido (`ADR-018-private-accounts.md`, `ADR-019-mentions.md`, `ADR-020-content-filters-and-privacy-preferences.md`):** los seis controles de REF-SET-02 estaban marcados como "sin soporte"; cinco pasan a aplicarse de verdad en el servidor. **Es la primera versión en que endpoints de lectura ya existentes dejan de devolver lo mismo a todo el mundo:** `GET /api/posts` excluye las publicaciones de cuentas privadas que quien pregunta no sigue, y `GET /api/posts/<id>/comments` + `POST`/`DELETE /api/posts/<id>/like` responden `404` sobre contenido de una cuenta privada ajena (`404` y no `403`: un `403` confirmaría que ese post existe y de quién es). Ninguno de los tres **cambia de forma**. Endpoints nuevos (§4.11): `GET`/`PATCH /api/users/me/privacy` (las siete preferencias; endpoint propio y no parte de `PATCH /api/users/me`, que es el contrato del perfil y tiene reglas que no aplican acá), `GET /api/follow-requests`, `POST /api/follow-requests/<user_id>/accept`, `DELETE /api/follow-requests/<user_id>` y `GET`/`POST`/`DELETE /api/users/me/muted-keywords`. `POST`/`DELETE /api/users/<id>/follow` ganan el campo aditivo `follow_status` (`null`/`'pending'`/`'accepted'`): seguir a una cuenta privada crea una **solicitud**, no una relación, y `following` conserva su significado exacto (relación efectiva, `false` en una pendiente). `POST /api/users/<id>/messages` gana un `403` cuando el destinatario no acepta mensajes de quien escribe — excepción deliberada al `404` de cuentas privadas: quien escribe ya sabía que esa cuenta existe. `post`/`comment` ganan `mentions` (aditivo, solo las menciones que el servidor autorizó — un `@username` inexistente o no autorizado **no** es mención y no debe enlazarse); `post.author` gana `follow_status` e `is_private`; `user` gana `is_private`; `notification.type` suma `follow_request`, `follow_accepted` y `mention`; `conversation.user` gana `last_seen_at` (`null` tanto si está oculto como si nunca hubo actividad, indistinguibles a propósito). **`comments_count` y el listado de comentarios pasan a depender de quién pregunta** y usan el mismo predicado, para que el contador nunca contradiga la lista. **Tres migraciones** (`c3e7b1d9a482`, `d5f9c3e1b764`, `e7b2d4f8c916`): `users.is_private`/`who_can_mention`/`who_can_message`/`hide_offensive_comments`/`show_activity_status`/`last_seen_at`, `follows.status`, y las tablas `mentions` y `muted_keywords`. El sexto control (canales de audio) **sigue sin soporte**, con el motivo corregido: no falta un endpoint, falta la función de producto. Verificado con 76 pruebas nuevas + la suite completa (414/414, ejecutada contra PostgreSQL 16 real, incluido un ciclo completo de `flask db upgrade`/`downgrade`/`upgrade` sobre `thers_dev` y `thers_test`).
+> **v0.23 — pantalla de Privacidad: cuentas privadas, menciones y filtros de contenido (`ADR-022-private-accounts.md`, `ADR-023-mentions.md`, `ADR-024-content-filters-and-privacy-preferences.md`):** los seis controles de REF-SET-02 estaban marcados como "sin soporte"; cinco pasan a aplicarse de verdad en el servidor. **Es la primera versión en que endpoints de lectura ya existentes dejan de devolver lo mismo a todo el mundo:** `GET /api/posts` excluye las publicaciones de cuentas privadas que quien pregunta no sigue, y `GET /api/posts/<id>/comments` + `POST`/`DELETE /api/posts/<id>/like` responden `404` sobre contenido de una cuenta privada ajena (`404` y no `403`: un `403` confirmaría que ese post existe y de quién es). Ninguno de los tres **cambia de forma**. Endpoints nuevos (§4.11): `GET`/`PATCH /api/users/me/privacy` (las siete preferencias; endpoint propio y no parte de `PATCH /api/users/me`, que es el contrato del perfil y tiene reglas que no aplican acá), `GET /api/follow-requests`, `POST /api/follow-requests/<user_id>/accept`, `DELETE /api/follow-requests/<user_id>` y `GET`/`POST`/`DELETE /api/users/me/muted-keywords`. `POST`/`DELETE /api/users/<id>/follow` ganan el campo aditivo `follow_status` (`null`/`'pending'`/`'accepted'`): seguir a una cuenta privada crea una **solicitud**, no una relación, y `following` conserva su significado exacto (relación efectiva, `false` en una pendiente). `POST /api/users/<id>/messages` gana un `403` cuando el destinatario no acepta mensajes de quien escribe — excepción deliberada al `404` de cuentas privadas: quien escribe ya sabía que esa cuenta existe. `post`/`comment` ganan `mentions` (aditivo, solo las menciones que el servidor autorizó — un `@username` inexistente o no autorizado **no** es mención y no debe enlazarse); `post.author` gana `follow_status` e `is_private`; `user` gana `is_private`; `notification.type` suma `follow_request`, `follow_accepted` y `mention`; `conversation.user` gana `last_seen_at` (`null` tanto si está oculto como si nunca hubo actividad, indistinguibles a propósito). **`comments_count` y el listado de comentarios pasan a depender de quién pregunta** y usan el mismo predicado, para que el contador nunca contradiga la lista. **Tres migraciones** (`c3e7b1d9a482`, `d5f9c3e1b764`, `e7b2d4f8c916`): `users.is_private`/`who_can_mention`/`who_can_message`/`hide_offensive_comments`/`show_activity_status`/`last_seen_at`, `follows.status`, y las tablas `mentions` y `muted_keywords`. El sexto control (canales de audio) **sigue sin soporte**, con el motivo corregido: no falta un endpoint, falta la función de producto. Verificado con 76 pruebas nuevas + la suite completa (414/414, ejecutada contra PostgreSQL 16 real, incluido un ciclo completo de `flask db upgrade`/`downgrade`/`upgrade` sobre `thers_dev` y `thers_test`).
 >
-> **v0.22 — edición de contenido propio: publicaciones, comentarios y mensajes (`ADR-017-content-editing.md`, extiende `ADR-004`/`ADR-006`/`ADR-013`):** se agregan `PATCH /api/posts/<post_id>` (§4.3), `PATCH /api/comments/<comment_id>` (§4.5) y `PATCH /api/messages/<message_id>` (§4.10) — las tres superficies de contenido propio se podían crear y borrar, pero no corregir. Los tres comparten la misma forma: body `{"content"}` (único campo editable, **obligatorio**, con el mismo validador y el mismo límite que al crear), respuesta `200` con el recurso completo ya actualizado, y `404` indistinguible si el id no existe **o** existe pero es de otra persona (mismo criterio que los tres `DELETE` equivalentes, v0.19/v0.20/v0.21). Verbo `PATCH` y ruta plana, igual que `PATCH /api/users/me` y `DELETE /api/messages/<id>`. **Esta versión sí trae migración** (`a2c6e9b3f571`), a diferencia de v0.20/v0.21: una columna `edited_at` nullable en `posts`, `comments` y `messages`. `POST`/`GET` de las tres entidades se extienden de forma **aditiva** con el booleano `edited` (§5) — ningún campo existente cambia de nombre, tipo ni semántica. `edited_at` **nunca** cruza la frontera HTTP como timestamp: solo se expone `edited`, así que la UI dice «editado» y no «editado hace 5 min» (mismo criterio que `read_at`→`read`). Editar preserva todo lo que el contenido acumuló: el `id` de la fila no cambia, así que likes y comentarios siguen colgando del mismo post; `created_at` tampoco, así que una publicación editada **no sube** en el feed; `read_at` tampoco, así que editar un mensaje ya leído no lo devuelve a no leído. Sin historial de versiones, sin ventana de tiempo para editar y sin notificación de la edición (`ADR-017` §No objetivos/§Riesgos). El Frontend queda conectado en la misma tarea: edición **en línea** (sin `ConfirmDialog` — una edición se puede volver a editar) en `CapsuleCard.jsx` (publicaciones y comentarios) y `Messages.jsx` (mensajes), con la marca «editado» junto a la hora. Verificado con 46 pruebas nuevas + la suite completa (338/338, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
+> **v0.22 — edición de contenido propio: publicaciones, comentarios y mensajes (`ADR-021-content-editing.md`, extiende `ADR-004`/`ADR-006`/`ADR-013`):** se agregan `PATCH /api/posts/<post_id>` (§4.3), `PATCH /api/comments/<comment_id>` (§4.5) y `PATCH /api/messages/<message_id>` (§4.10) — las tres superficies de contenido propio se podían crear y borrar, pero no corregir. Los tres comparten la misma forma: body `{"content"}` (único campo editable, **obligatorio**, con el mismo validador y el mismo límite que al crear), respuesta `200` con el recurso completo ya actualizado, y `404` indistinguible si el id no existe **o** existe pero es de otra persona (mismo criterio que los tres `DELETE` equivalentes, v0.19/v0.20/v0.21). Verbo `PATCH` y ruta plana, igual que `PATCH /api/users/me` y `DELETE /api/messages/<id>`. **Esta versión sí trae migración** (`a2c6e9b3f571`), a diferencia de v0.20/v0.21: una columna `edited_at` nullable en `posts`, `comments` y `messages`. `POST`/`GET` de las tres entidades se extienden de forma **aditiva** con el booleano `edited` (§5) — ningún campo existente cambia de nombre, tipo ni semántica. `edited_at` **nunca** cruza la frontera HTTP como timestamp: solo se expone `edited`, así que la UI dice «editado» y no «editado hace 5 min» (mismo criterio que `read_at`→`read`). Editar preserva todo lo que el contenido acumuló: el `id` de la fila no cambia, así que likes y comentarios siguen colgando del mismo post; `created_at` tampoco, así que una publicación editada **no sube** en el feed; `read_at` tampoco, así que editar un mensaje ya leído no lo devuelve a no leído. Sin historial de versiones, sin ventana de tiempo para editar y sin notificación de la edición (`ADR-021` §No objetivos/§Riesgos). El Frontend queda conectado en la misma tarea: edición **en línea** (sin `ConfirmDialog` — una edición se puede volver a editar) en `CapsuleCard.jsx` (publicaciones y comentarios) y `Messages.jsx` (mensajes), con la marca «editado» junto a la hora. Verificado con 46 pruebas nuevas + la suite completa (338/338, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
-> **v0.21 — borrado de comentarios propios (`ADR-016-comment-deletion.md`, extiende `ADR-006`):** se agrega `DELETE /api/comments/<comment_id>` (§4.5) — hasta ahora `comments` solo se podía crear y listar. Solo el autor del comentario puede borrarlo; si no existe **o** existe pero es de otra persona responde el mismo `404`, sin distinguir cuál ocurrió — incluido el dueño de la publicación, que **no** puede borrar comentarios ajenos en ella (decisión de producto separada, `ADR-016` §Decisiones pendientes). *Hard delete*, no idempotente (`200` y luego `404`), ruta plana bajo `/comments/<id>` (mismo razonamiento que `DELETE /api/messages/<id>`, v0.19). Ningún endpoint existente cambia de contrato y no hay migración: `comments` no tiene tablas dependientes. `comments_count` de `GET`/`POST /api/posts` baja en consecuencia. Limitación conocida: la notificación "comentó tu publicación" ya generada **no se retira**, porque `notifications` no guarda a qué comentario corresponde (`ADR-016` §Riesgos). El Frontend queda conectado en la misma tarea: `CapsuleCard.jsx` gana una papelera sobre los comentarios propios, con confirmación en un diálogo propio de THERS.
+> **v0.21 — borrado de comentarios propios (`ADR-020-comment-deletion.md`, extiende `ADR-006`):** se agrega `DELETE /api/comments/<comment_id>` (§4.5) — hasta ahora `comments` solo se podía crear y listar. Solo el autor del comentario puede borrarlo; si no existe **o** existe pero es de otra persona responde el mismo `404`, sin distinguir cuál ocurrió — incluido el dueño de la publicación, que **no** puede borrar comentarios ajenos en ella (decisión de producto separada, `ADR-020` §Decisiones pendientes). *Hard delete*, no idempotente (`200` y luego `404`), ruta plana bajo `/comments/<id>` (mismo razonamiento que `DELETE /api/messages/<id>`, v0.19). Ningún endpoint existente cambia de contrato y no hay migración: `comments` no tiene tablas dependientes. `comments_count` de `GET`/`POST /api/posts` baja en consecuencia. Limitación conocida: la notificación "comentó tu publicación" ya generada **no se retira**, porque `notifications` no guarda a qué comentario corresponde (`ADR-020` §Riesgos). El Frontend queda conectado en la misma tarea: `CapsuleCard.jsx` gana una papelera sobre los comentarios propios, con confirmación en un diálogo propio de THERS.
 >
-> **v0.20 — borrado de publicaciones propias (`ADR-015-post-deletion.md`, extiende `ADR-004`):** se agrega `DELETE /api/posts/<post_id>` (§4.3) — hasta ahora `posts` solo se podía crear y listar, sin ninguna operación de borrado. Solo el autor puede borrar su propia publicación; si el post no existe **o** existe pero es de otra persona, responde el mismo `404`, sin distinguir cuál de los dos ocurrió (mismo criterio que `DELETE /api/messages/<message_id>`, v0.19). *Hard delete*, sin placeholder "publicación eliminada". **No es idempotente**, a diferencia de `DELETE .../like` y `DELETE .../follow` (`ADR-005`/`ADR-007`): borrar dos veces devuelve `200` y después `404`. Ningún endpoint existente cambia de contrato y no hay migración nueva — los `ON DELETE CASCADE` de `likes`/`comments`/`notifications` sobre `posts.id` (`ADR-005`/`ADR-006`/`ADR-008`) ya estaban declarados y pasan a ejercerse por primera vez: borrar un post borra sus likes, comentarios y notificaciones en la misma transacción. El Frontend queda conectado en la misma tarea: `CapsuleCard.jsx` gana una acción "Eliminar" visible solo sobre una publicación propia (con confirmación previa) y `AppShell.jsx` la resuelve con actualización optimista y rollback, más una recarga de `GET /api/notifications` porque las de ese post desaparecen en cascada.
+> **v0.20 — borrado de publicaciones propias (`ADR-019-post-deletion.md`, extiende `ADR-004`):** se agrega `DELETE /api/posts/<post_id>` (§4.3) — hasta ahora `posts` solo se podía crear y listar, sin ninguna operación de borrado. Solo el autor puede borrar su propia publicación; si el post no existe **o** existe pero es de otra persona, responde el mismo `404`, sin distinguir cuál de los dos ocurrió (mismo criterio que `DELETE /api/messages/<message_id>`, v0.19). *Hard delete*, sin placeholder "publicación eliminada". **No es idempotente**, a diferencia de `DELETE .../like` y `DELETE .../follow` (`ADR-005`/`ADR-007`): borrar dos veces devuelve `200` y después `404`. Ningún endpoint existente cambia de contrato y no hay migración nueva — los `ON DELETE CASCADE` de `likes`/`comments`/`notifications` sobre `posts.id` (`ADR-005`/`ADR-006`/`ADR-008`) ya estaban declarados y pasan a ejercerse por primera vez: borrar un post borra sus likes, comentarios y notificaciones en la misma transacción. El Frontend queda conectado en la misma tarea: `CapsuleCard.jsx` gana una acción "Eliminar" visible solo sobre una publicación propia (con confirmación previa) y `AppShell.jsx` la resuelve con actualización optimista y rollback, más una recarga de `GET /api/notifications` porque las de ese post desaparecen en cascada.
 >
 > **v0.19 — borrado de mensajes, corte de no-leídos y "escribiendo..." (`ADR-014-messages-ux-improvements.md`, extiende `ADR-013`):** se agregan `DELETE /api/messages/<message_id>` (borra un mensaje propio, sin placeholder) y `POST`/`GET /api/users/<user_id>/typing` (§4.10) — a partir de feedback real probando el chat entre el equipo. `GET /api/users/<user_id>/messages` **no cambia de forma**, pero corrige cuándo se evalúa `read`: ahora refleja el estado antes de que esa misma llamada marque como leído (antes, por cómo Flask-SQLAlchemy expira sus objetos tras un `commit()`, ya aparecía en `true` para los mensajes recién marcados) — permite que el Frontend ubique un separador de "mensajes no leídos". El indicador de "escribiendo" vive en memoria del proceso del backend, no en PostgreSQL — es información efímera, sin migración ni tabla nueva; no sobrevive un reinicio ni se comparte entre varios workers (`ADR-014` §Riesgos). El Frontend (`Messages.jsx`) hace *polling* de `GET .../typing` cada 2 segundos mientras un hilo está abierto (más rápido que el *polling* general del chat, 4s) y manda `POST .../typing` con *debounce* mientras el usuario escribe. Verificado con 13 pruebas nuevas + la suite completa (276/276, ejecutada contra PostgreSQL 16 real).
 >
@@ -120,7 +120,7 @@
 
 ## 3. Formato de error
 
-> **v0.25 (`ADR-023-rate-limiting.md`): `429 Too Many Requests`.** Primer código
+> **v0.25 (`ADR-027-rate-limiting.md`): `429 Too Many Requests`.** Primer código
 > nuevo que se suma al formato desde v0.6. Respeta el mismo cuerpo que el resto
 > (`{"msg": "..."}`) y añade dos cosas:
 >
@@ -411,7 +411,7 @@ Ejemplo mínimo válido — cambiar solo el nombre:
   }
 }
 ```
-`edited` agregado en v0.22 (`ADR-017-content-editing.md`) — siempre `false` en una publicación recién creada. `likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`, §4.4); `comments_count` agregado en v0.11 (`ADR-006-comments-minimal-model.md`, §4.5) — un post recién creado siempre los devuelve en `0`/`false`, nadie pudo haberle dado like ni comentado todavía. `author.is_followed_by_me` agregado en v0.12 (`ADR-007-follows-minimal-model.md`, §4.6) — en `false` para un post recién creado, porque el autor es siempre uno mismo y nadie se sigue a sí mismo (`ck_follows_no_self_follow`).
+`edited` agregado en v0.22 (`ADR-021-content-editing.md`) — siempre `false` en una publicación recién creada. `likes_count`/`liked_by_me` agregados en v0.10 (`ADR-005-likes-minimal-model.md`, §4.4); `comments_count` agregado en v0.11 (`ADR-006-comments-minimal-model.md`, §4.5) — un post recién creado siempre los devuelve en `0`/`false`, nadie pudo haberle dado like ni comentado todavía. `author.is_followed_by_me` agregado en v0.12 (`ADR-007-follows-minimal-model.md`, §4.6) — en `false` para un post recién creado, porque el autor es siempre uno mismo y nadie se sigue a sí mismo (`ck_follows_no_self_follow`).
 
 **Response — error**
 
@@ -434,7 +434,7 @@ Ejemplo mínimo válido — cambiar solo el nombre:
 
 **Semántica.** Feed **global**: devuelve los posts de **todos** los autores, no solo de quienes el usuario sigue. `follows` ya existe (`ADR-007-follows-minimal-model.md`), pero este endpoint **sigue sin filtrar por seguidos** — personalizar el feed es una decisión de producto separada, deliberadamente fuera de alcance de `ADR-007` (§No objetivos). Sin paginación real: límite fijo de **50** posts más recientes.
 
-**v0.23 — el feed ya no es el mismo para todo el mundo** (`ADR-018-private-accounts.md`, `ADR-020-content-filters-and-privacy-preferences.md`). Se excluyen, **en SQL** (no descartando después del `LIMIT`, que devolvería páginas cortas):
+**v0.23 — el feed ya no es el mismo para todo el mundo** (`ADR-022-private-accounts.md`, `ADR-024-content-filters-and-privacy-preferences.md`). Se excluyen, **en SQL** (no descartando después del `LIMIT`, que devolvería páginas cortas):
 - los posts de cuentas con `is_private = true` que quien pregunta no sigue con un follow **aceptado** — una solicitud pendiente no alcanza;
 - los posts cuyo texto contiene alguno de los términos de `GET /api/users/me/muted-keywords` de quien pregunta.
 
@@ -446,7 +446,7 @@ En los dos casos, **el propio post nunca se le oculta a su autor**. La forma de 
 ```json
 { "posts": [ { "id", "author": { "id", "username", "name", "is_followed_by_me" }, "content", "created_at", "edited", "likes_count", "liked_by_me", "comments_count" }, ... ] }
 ```
-Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts. `likes_count`/`liked_by_me` (v0.10), `comments_count` (v0.11), `author.is_followed_by_me` (v0.12) y `edited` (v0.22) son extensiones aditivas — no rompen el contrato existente. **Editar una publicación no la mueve de lugar**: el orden depende de `created_at`, que la edición no toca (`ADR-017` §Opciones consideradas).
+Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si no hay posts. `likes_count`/`liked_by_me` (v0.10), `comments_count` (v0.11), `author.is_followed_by_me` (v0.12) y `edited` (v0.22) son extensiones aditivas — no rompen el contrato existente. **Editar una publicación no la mueve de lugar**: el orden depende de `created_at`, que la edición no toca (`ADR-021` §Opciones consideradas).
 
 **Response — error**
 
@@ -458,11 +458,11 @@ Orden: `created_at` descendente (más reciente primero). Lista vacía (`[]`) si 
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-017-content-editing.md`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-021-content-editing.md`) |
 | Blueprint | `posts_bp`, mismo blueprint que `POST`/`GET`/`DELETE /api/posts` |
 | Auth requerida | **Sí**. Solo se puede editar una publicación propia (`author_id == get_jwt_identity()`) |
 
-**Semántica.** Reemplaza el texto de la publicación `post_id`. No hay historial de versiones: la fila se sobrescribe y lo único que queda registrado es **que** hubo una edición (`edited`), nunca cuándo ni qué decía antes (`ADR-017` §No objetivos).
+**Semántica.** Reemplaza el texto de la publicación `post_id`. No hay historial de versiones: la fila se sobrescribe y lo único que queda registrado es **que** hubo una edición (`edited`), nunca cuándo ni qué decía antes (`ADR-021` §No objetivos).
 
 Editar preserva todo lo que la publicación acumuló — el `id` de la fila no cambia, así que sus likes y comentarios siguen colgando de ella, y `created_at` tampoco, así que **no sube** en el feed.
 
@@ -490,19 +490,19 @@ Devuelve la publicación **completa**, con los contadores **reales** de likes y 
 
 **Notas de implementación:**
 - Whitelist explícita de **un solo campo**: solo `content` se lee del body. `id`, `author_id`, `created_at` y `edited_at` se ignoran si vienen — mismo principio anti *mass-assignment* que `POST /api/posts` y `PATCH /api/users/me` (verificado por prueba).
-- La pertenencia se verifica en el propio `WHERE` del `UPDATE`, no leyendo la fila y comparando después — sin ventana entre comprobar y actuar (`ADR-017` §Seguridad).
+- La pertenencia se verifica en el propio `WHERE` del `UPDATE`, no leyendo la fila y comparando después — sin ventana entre comprobar y actuar (`ADR-021` §Seguridad).
 
 #### `DELETE /api/posts/<post_id>`
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-015-post-deletion.md`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-019-post-deletion.md`) |
 | Blueprint | `posts_bp`, mismo blueprint que `POST`/`GET /api/posts` |
 | Auth requerida | **Sí**. Solo se puede borrar una publicación propia (`author_id == get_jwt_identity()`) |
 
 **Semántica.** Borra la publicación `post_id` — *hard delete*, sin placeholder ("publicación eliminada" no existe en esta versión). Deja de existir para todos. Sus likes, comentarios y notificaciones asociadas se borran con ella, por los `ON DELETE CASCADE` ya declarados sobre `posts.id` (`ADR-005`/`ADR-006`/`ADR-008`).
 
-**No es idempotente**, a diferencia de `DELETE /api/posts/<post_id>/like` y `DELETE /api/users/<user_id>/follow`: repetir la llamada sobre una publicación ya borrada devuelve `404` (`ADR-015` §Decisión).
+**No es idempotente**, a diferencia de `DELETE /api/posts/<post_id>/like` y `DELETE /api/users/<user_id>/follow`: repetir la llamada sobre una publicación ya borrada devuelve `404` (`ADR-019` §Decisión).
 
 **Request:** sin body. `post_id` va en la URL, como UUID (conversor `uuid` de Flask/Werkzeug).
 
@@ -602,7 +602,7 @@ Devuelve la publicación **completa**, con los contadores **reales** de likes y 
   }
 }
 ```
-`edited` agregado en v0.22 (`ADR-017-content-editing.md`) — siempre `false` en un comentario recién creado.
+`edited` agregado en v0.22 (`ADR-021-content-editing.md`) — siempre `false` en un comentario recién creado.
 
 **Response — error**
 
@@ -640,11 +640,11 @@ Lista vacía (`[]`) si el post no tiene comentarios. `edited` (v0.22) es una ext
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-017-content-editing.md`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-021-content-editing.md`) |
 | Blueprint | `comments_bp`, mismo blueprint que `POST`/`GET /api/posts/<post_id>/comments` y `DELETE /api/comments/<comment_id>` |
 | Auth requerida | **Sí**. Solo se puede editar un comentario propio (`author_id == get_jwt_identity()`) |
 
-**Semántica.** Reemplaza el texto del comentario `comment_id`. Sin historial de versiones. El autor de la publicación **no** puede editar comentarios ajenos en ella — mismo criterio que el borrado (`ADR-016`). `comments_count` de la publicación **no** cambia: editar no suma ni resta. No se genera ninguna notificación nueva — la de "comentó tu publicación" (`ADR-008`) se emitió al crear el comentario, y editarlo no es un evento social nuevo.
+**Semántica.** Reemplaza el texto del comentario `comment_id`. Sin historial de versiones. El autor de la publicación **no** puede editar comentarios ajenos en ella — mismo criterio que el borrado (`ADR-020`). `comments_count` de la publicación **no** cambia: editar no suma ni resta. No se genera ninguna notificación nueva — la de "comentó tu publicación" (`ADR-008`) se emitió al crear el comentario, y editarlo no es un evento social nuevo.
 
 **Request body**
 ```json
@@ -671,7 +671,7 @@ Obligatorio, con el mismo validador y el mismo límite (1000, menor que el de po
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-016-comment-deletion.md`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-020-comment-deletion.md`) |
 | Blueprint | `comments_bp`, mismo blueprint que `POST`/`GET /api/posts/<post_id>/comments` |
 | Auth requerida | **Sí**. Solo se puede borrar un comentario propio (`author_id == get_jwt_identity()`) |
 
@@ -695,7 +695,7 @@ Obligatorio, con el mismo validador y el mismo límite (1000, menor que el de po
 
 ### 4.6 Follows
 
-> **v0.23 (`ADR-018-private-accounts.md`).** Un follow deja de ser binario: ahora tiene estado (`follows.status`). Seguir a una cuenta privada crea una **solicitud** (`'pending'`), que su dueño aprueba o rechaza desde §4.11. Los dos endpoints de abajo ganan el campo **aditivo** `follow_status` (`null` | `'pending'` | `'accepted'`); `following` **no cambia de significado** — sigue siendo "relación efectiva", así que una solicitud pendiente es `false` ahí. Un `POST` repetido **no le pisa el estado** a una relación existente: repetir la llamada sobre un follow ya aceptado no lo degrada a pendiente porque la cuenta se haya vuelto privada después. El `DELETE` borra la fila **sea cual sea su estado**, así que el mismo endpoint sirve para dejar de seguir y para cancelar una solicitud sin responder. `followers_count`/`following_count` cuentan **solo** los aceptados: un pendiente no es un seguidor.
+> **v0.23 (`ADR-022-private-accounts.md`).** Un follow deja de ser binario: ahora tiene estado (`follows.status`). Seguir a una cuenta privada crea una **solicitud** (`'pending'`), que su dueño aprueba o rechaza desde §4.11. Los dos endpoints de abajo ganan el campo **aditivo** `follow_status` (`null` | `'pending'` | `'accepted'`); `following` **no cambia de significado** — sigue siendo "relación efectiva", así que una solicitud pendiente es `false` ahí. Un `POST` repetido **no le pisa el estado** a una relación existente: repetir la llamada sobre un follow ya aceptado no lo degrada a pendiente porque la cuenta se haya vuelto privada después. El `DELETE` borra la fila **sea cual sea su estado**, así que el mismo endpoint sirve para dejar de seguir y para cancelar una solicitud sin responder. `followers_count`/`following_count` cuentan **solo** los aceptados: un pendiente no es un seguidor.
 
 #### `POST /api/users/<user_id>/follow`
 
@@ -1050,7 +1050,7 @@ Obligatorio, con el mismo validador y el mismo límite (1000, menor que el de po
   }
 }
 ```
-`edited` agregado en v0.22 (`ADR-017-content-editing.md`) — siempre `false` en un mensaje recién mandado.
+`edited` agregado en v0.22 (`ADR-021-content-editing.md`) — siempre `false` en un mensaje recién mandado.
 
 **Response — error**
 
@@ -1115,7 +1115,7 @@ Lista vacía (`[]`) si nunca hubo mensajes con esa persona.
 ```
 Lista vacía (`[]`) si nunca mandó ni recibió ningún mensaje.
 
-`last_message` **no** lleva `edited`: es una vista derivada, no el mensaje. Muestra el texto vigente (ya editado, si lo fue), pero la marca «editado» solo viaja en `GET .../messages`, donde el mensaje va completo (`ADR-017` §Riesgos).
+`last_message` **no** lleva `edited`: es una vista derivada, no el mensaje. Muestra el texto vigente (ya editado, si lo fue), pero la marca «editado» solo viaja en `GET .../messages`, donde el mensaje va completo (`ADR-021` §Riesgos).
 
 **Response — error**
 
@@ -1133,11 +1133,11 @@ Lista vacía (`[]`) si nunca mandó ni recibió ningún mensaje.
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-017-content-editing.md`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-021-content-editing.md`) |
 | Blueprint | `messages_bp`, mismo blueprint que `POST`/`GET .../messages` y `DELETE /api/messages/<message_id>` |
 | Auth requerida | **Sí**. Solo se puede editar un mensaje propio (`sender_id == get_jwt_identity()`) — quien lo **recibió** no puede editarlo |
 
-**Semántica.** Reemplaza el texto del mensaje `message_id`, para ambas partes. Sin historial de versiones: quien ya lo había leído verá el texto nuevo con la marca «editado», sin forma de saber qué decía antes (`ADR-017` §Riesgos).
+**Semántica.** Reemplaza el texto del mensaje `message_id`, para ambas partes. Sin historial de versiones: quien ya lo había leído verá el texto nuevo con la marca «editado», sin forma de saber qué decía antes (`ADR-021` §Riesgos).
 
 **`read` no cambia:** editar un mensaje que la otra persona ya leyó **no** lo devuelve a no leído, así que el separador de "mensajes no leídos" (v0.19) no se reordena porque alguien corrigió una palabra.
 
@@ -1239,8 +1239,8 @@ Obligatorio, con el mismo validador y el mismo límite que `POST .../messages`.
 ### 4.11 Privacidad y solicitudes de seguimiento
 
 > Los cinco endpoints de esta sección implementan la pantalla de Privacidad
-> (REF-SET-02): `ADR-018-private-accounts.md`, `ADR-019-mentions.md` y
-> `ADR-020-content-filters-and-privacy-preferences.md`. Todos operan **siempre
+> (REF-SET-02): `ADR-022-private-accounts.md`, `ADR-023-mentions.md` y
+> `ADR-024-content-filters-and-privacy-preferences.md`. Todos operan **siempre
 > sobre el usuario autenticado** — ninguno acepta un id de usuario para
 > "actuar en nombre de" nadie.
 
@@ -1248,7 +1248,7 @@ Obligatorio, con el mismo validador y el mismo límite que `POST .../messages`.
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-018`/`ADR-019`/`ADR-020`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-022`/`ADR-023`/`ADR-024`) |
 | Blueprint | `privacy_bp` (`backend/app/interfaces/routes/privacy_routes.py`) |
 | Auth requerida | **Sí**. Nadie puede leer la privacidad de otra persona |
 
@@ -1295,7 +1295,7 @@ Obligatorio, con el mismo validador y el mismo límite que `POST .../messages`.
 ```
 `pending_follow_requests_count` y `last_seen_at` son **derivados, no editables** — no están en la whitelist.
 
-**Volverse privado NO degrada a los seguidores actuales** a solicitudes pendientes: quien ya tenía acceso lo conserva, y el interruptor solo cambia qué pasa con los follows **futuros** (`ADR-018` §Opciones consideradas).
+**Volverse privado NO degrada a los seguidores actuales** a solicitudes pendientes: quien ya tenía acceso lo conserva, y el interruptor solo cambia qué pasa con los follows **futuros** (`ADR-022` §Opciones consideradas).
 
 **Response — error**
 
@@ -1312,7 +1312,7 @@ Obligatorio, con el mismo validador y el mismo límite que `POST .../messages`.
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-018`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-022`) |
 | Blueprint | `follows_bp`, mismo que `POST`/`DELETE /api/users/<id>/follow` |
 | Auth requerida | **Sí** |
 
@@ -1337,7 +1337,7 @@ Lista vacía (`[]`) si no hay ninguna. Que alguien te haya pedido seguirte **no*
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-018`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-022`) |
 | Auth requerida | **Sí**. Solo se puede responder una solicitud **dirigida a uno mismo** |
 
 **Semántica.** Aprueba la solicitud de `<user_id>` (que es **quien pidió seguir**; quien acepta sale del JWT). La fila de `follows` pasa a `'accepted'` y esa persona empieza a ver el contenido. Notifica `'follow_accepted'` al solicitante — sin eso no tendría forma de saber que ya puede verlo.
@@ -1360,7 +1360,7 @@ Lista vacía (`[]`) si no hay ninguna. Que alguien te haya pedido seguirte **no*
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-018`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-022`) |
 | Auth requerida | **Sí**, mismas reglas que el `accept` |
 
 **Semántica.** Rechaza la solicitud: **borra** la fila en vez de marcarla como rechazada. Así la persona puede volver a pedirlo más adelante y no queda un registro permanente de un "no" — el efecto es idéntico a que nunca hubiera pedido. **No se notifica el rechazo**: avisarle a alguien que lo rechazaste es información que no aporta y que invita a insistir.
@@ -1380,7 +1380,7 @@ Es `DELETE` y no `POST /reject` porque lo que pasa es que la solicitud deja de e
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-020`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-024`) |
 | Blueprint | `privacy_bp` |
 | Auth requerida | **Sí**. Los términos son siempre los del usuario autenticado |
 
@@ -1415,7 +1415,7 @@ Es el **único `DELETE` del contrato con body**, y es deliberado: un término pu
 
 ### 4.12 Seguridad: sesiones y verificación en dos pasos
 
-> `ADR-021-session-registry.md` y `ADR-022-two-factor-authentication.md`.
+> `ADR-025-session-registry.md` y `ADR-026-two-factor-authentication.md`.
 > Todos operan **siempre sobre el usuario autenticado** salvo
 > `POST /api/2fa/verify`, que es el único público de la sección (en ese punto
 > todavía no hay sesión).
@@ -1431,7 +1431,7 @@ Es el **único `DELETE` del contrato con body**, y es deliberado: un término pu
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-021`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-025`) |
 | Blueprint | `security_bp` (`backend/app/interfaces/routes/security_routes.py`) |
 | Auth requerida | **Sí**. Nadie lee ni cambia las preferencias de otra persona |
 
@@ -1451,7 +1451,7 @@ Es el **único `DELETE` del contrato con body**, y es deliberado: un término pu
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-021`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-025`) |
 | Auth requerida | **Sí** |
 
 **Semántica.** Sesiones **vivas** del usuario autenticado, más reciente primero, límite fijo de **50**. Las cerradas no se listan (la fila se conserva en el servidor, pero mostrarlas solo acumularía ruido). No lleva `user_id` en la URL — mismo criterio que `GET /api/notifications` y `GET /api/sessions` no puede listar las de otro.
@@ -1509,7 +1509,7 @@ Es el **único `DELETE` del contrato con body**, y es deliberado: un término pu
 
 | Campo | Valor |
 |---|---|
-| Estado | **IMPLEMENTADO** — nuevo (`ADR-022`) |
+| Estado | **IMPLEMENTADO** — nuevo (`ADR-026`) |
 | Auth requerida | **Sí** |
 
 ```json
@@ -1604,7 +1604,7 @@ Es `POST` y no `DELETE` aunque "apague" algo: además de desactivar, borra y rev
 
 ---
 
-### 4.13 Exportación de datos (`ADR-024-data-export.md`)
+### 4.13 Exportación de datos (`ADR-028-data-export.md`)
 
 Tres endpoints, todos protegidos (`Authorization: Bearer <token>`). La identidad sale solo del JWT.
 
@@ -1617,7 +1617,7 @@ Genera un ZIP con los datos de la cuenta, en el momento (síncrono). **Request:*
 | Código | Causa |
 |---|---|
 | `401` | Sin token o token inválido |
-| `429` | Ya pidió un archivo hace menos de una hora. Lleva `Retry-After` y `retry_after_seconds` (mismo formato que `ADR-023`) |
+| `429` | Ya pidió un archivo hace menos de una hora. Lleva `Retry-After` y `retry_after_seconds` (mismo formato que `ADR-027`) |
 
 #### `GET /api/data-exports`
 
@@ -1639,7 +1639,7 @@ Descarga el ZIP (`Content-Type: application/zip`, `Content-Disposition: attachme
 
 ---
 
-### 4.14 Bloqueo y restricción de cuentas (`ADR-025-blocked-and-restricted-accounts.md`)
+### 4.14 Bloqueo y restricción de cuentas (`ADR-029-blocked-and-restricted-accounts.md`)
 
 Colección propia del usuario autenticado, bajo `/users/me/...` (igual que privacidad y seguridad). Todos protegidos; `owner` sale solo del JWT.
 
@@ -1680,7 +1680,7 @@ Colección propia del usuario autenticado, bajo `/users/me/...` (igual que priva
 
 ---
 
-### 4.15 Preferencias de contenido y feed (`ADR-026-content-preferences.md`)
+### 4.15 Preferencias de contenido y feed (`ADR-030-content-preferences.md`)
 
 Las **palabras ocultas** (`/api/users/me/muted-keywords`, §4.11) ya existían y no cambian.
 
@@ -1724,16 +1724,16 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | Objeto | Campos expuestos hoy | Fuente |
 |---|---|---|
 | `user` (en response de register, login, `POST /api/auth/google`, `GET /api/users/me` y `PATCH /api/users/me`) | `id`, `username`, `email`, `name`, `phone` (nullable desde v0.17), `country_code` (nullable desde v0.17), `birth_date` (nullable desde v0.17), `followers_count`, `following_count`, `email_verified`, `profile_completed` (v0.17), `has_password` (v0.17), `is_private` (v0.23) | `ADR-002-user-profile-fields.md` + `ADR-007-follows-minimal-model.md` (`followers_count`/`following_count`, v0.12) + `ADR-009-password-reset-and-email-verification.md` (`email_verified`, v0.14) + `ADR-012-google-sign-in.md` (`profile_completed`/`has_password`, `phone`/`country_code`/`birth_date` nullable, v0.17); coincide con `users` en `DATABASE_ARCHITECTURE.md` §5, sin exponer `password_hash` (correcto — `has_password` es un booleano derivado, nunca el hash en sí). `username_changed_at` (`ADR-003-profile-update-contract.md`) existe en `users` pero **nunca** cruza la frontera HTTP — es un dato interno de soporte para el cooldown de `username`, no un campo del contrato |
-| `post` (en response de `POST`/`GET`/`PATCH /api/posts`) | `id`, `author` (`id`/`username`/`name`/`is_followed_by_me`/`follow_status`/`is_private`, forma reducida de `user`), `content`, `created_at`, `edited`, `mentions`, `likes_count`, `liked_by_me`, `comments_count` | `ADR-004-posts-minimal-model.md` + `ADR-005-likes-minimal-model.md` (`likes_count`/`liked_by_me`, v0.10) + `ADR-006-comments-minimal-model.md` (`comments_count`, v0.11) + `ADR-007-follows-minimal-model.md` (`author.is_followed_by_me`, v0.12) + `ADR-017-content-editing.md` (`edited`, v0.22); coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. `edited` se deriva de `edited_at` (internamente un timestamp nullable, NULL = nunca editado) — se expone como booleano, nunca como el timestamp crudo, mismo criterio que `notification.read`/`message.read`. `updated_at` sigue **sin** exponerse: existe en `posts` pero no es la señal de edición (`ADR-017` §Opciones consideradas, opción B descartada). **v0.23:** `mentions` (`ADR-019-mentions.md`) lista solo las menciones que el servidor autorizó — un `@username` inexistente o cuyo dueño no las acepta **no** aparece acá y no debe enlazarse; `author.follow_status` (`ADR-018`) expone el tercer estado que `is_followed_by_me` no puede (`'pending'`), y `author.is_private` le dice al Frontend que seguir a esa persona manda una solicitud |
+| `post` (en response de `POST`/`GET`/`PATCH /api/posts`) | `id`, `author` (`id`/`username`/`name`/`is_followed_by_me`/`follow_status`/`is_private`, forma reducida de `user`), `content`, `created_at`, `edited`, `mentions`, `likes_count`, `liked_by_me`, `comments_count` | `ADR-004-posts-minimal-model.md` + `ADR-005-likes-minimal-model.md` (`likes_count`/`liked_by_me`, v0.10) + `ADR-006-comments-minimal-model.md` (`comments_count`, v0.11) + `ADR-007-follows-minimal-model.md` (`author.is_followed_by_me`, v0.12) + `ADR-021-content-editing.md` (`edited`, v0.22); coincide con `posts` en `DATABASE_ARCHITECTURE.md` §5. `edited` se deriva de `edited_at` (internamente un timestamp nullable, NULL = nunca editado) — se expone como booleano, nunca como el timestamp crudo, mismo criterio que `notification.read`/`message.read`. `updated_at` sigue **sin** exponerse: existe en `posts` pero no es la señal de edición (`ADR-021` §Opciones consideradas, opción B descartada). **v0.23:** `mentions` (`ADR-023-mentions.md`) lista solo las menciones que el servidor autorizó — un `@username` inexistente o cuyo dueño no las acepta **no** aparece acá y no debe enlazarse; `author.follow_status` (`ADR-022`) expone el tercer estado que `is_followed_by_me` no puede (`'pending'`), y `author.is_private` le dice al Frontend que seguir a esa persona manda una solicitud |
 | `like` — no se expone como objeto propio; solo el resumen agregado (`likes_count`/`liked_by_me`) embebido en `post` | — | `ADR-005-likes-minimal-model.md` §No objetivos: no se lista quién dio like a un post |
-| `comment` (en response de `POST`/`GET /api/posts/<id>/comments` y `PATCH /api/comments/<id>`) | `id`, `post_id`, `author` (misma forma reducida que en `post`), `content`, `created_at`, `edited`, `mentions` | `ADR-006-comments-minimal-model.md` + `ADR-017-content-editing.md` (`edited`, v0.22); coincide con `comments` en `DATABASE_ARCHITECTURE.md` §5. `edited` se deriva de `edited_at` — mismo criterio que en `post`. `updated_at` sigue sin exponerse, mismo motivo |
+| `comment` (en response de `POST`/`GET /api/posts/<id>/comments` y `PATCH /api/comments/<id>`) | `id`, `post_id`, `author` (misma forma reducida que en `post`), `content`, `created_at`, `edited`, `mentions` | `ADR-006-comments-minimal-model.md` + `ADR-021-content-editing.md` (`edited`, v0.22); coincide con `comments` en `DATABASE_ARCHITECTURE.md` §5. `edited` se deriva de `edited_at` — mismo criterio que en `post`. `updated_at` sigue sin exponerse, mismo motivo |
 | `follow` — no se expone como objeto propio; solo `{"following": bool}` en `POST`/`DELETE .../follow`, y el resumen agregado (`followers_count`/`following_count` en `user`, `is_followed_by_me` en `post.author`) | — | `ADR-007-follows-minimal-model.md` §No objetivos: no se lista quién sigue a quién |
-| `notification` (en response de `GET /api/notifications`) | `id`, `type` (`like`/`comment`/`follow`/`follow_request`/`follow_accepted`/`mention` — los tres últimos desde v0.23, `ADR-018`/`ADR-019`), `actor` (misma forma reducida que en `post`/`comment`), `post_id` (nullable), `read` | `ADR-008-notifications-minimal-model.md`; coincide con `notifications` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` (internamente un timestamp) — se expone como booleano, nunca como el timestamp crudo, mismo criterio que `username_changed_at` nunca cruza la frontera HTTP |
+| `notification` (en response de `GET /api/notifications`) | `id`, `type` (`like`/`comment`/`follow`/`follow_request`/`follow_accepted`/`mention` — los tres últimos desde v0.23, `ADR-022`/`ADR-023`), `actor` (misma forma reducida que en `post`/`comment`), `post_id` (nullable), `read` | `ADR-008-notifications-minimal-model.md`; coincide con `notifications` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` (internamente un timestamp) — se expone como booleano, nunca como el timestamp crudo, mismo criterio que `username_changed_at` nunca cruza la frontera HTTP |
 | `password_reset_token` (OTP) — no se expone como objeto propio; el código viaja una única vez por correo, la autorización temporal viaja una única vez en `reset_authorization` (respuesta de `verify-reset-code`) | — | `ADR-010-password-reset-otp-flow.md` §Seguridad: solo se persisten `code_hash` (scrypt) y `reset_authorization_hash` (SHA-256), ninguno de los dos valores crudos vuelve a aparecer en ningún response |
 | `email_verification_token` (OTP de registro) — no se expone como objeto propio; el código viaja una única vez por correo, nunca en un response JSON | — | `ADR-011-mandatory-email-verification.md` §Seguridad (reemplaza el token de enlace de `ADR-009`): solo se persiste `code_hash` (scrypt), el valor crudo nunca cruza la frontera HTTP; estructuralmente separado de `password_reset_token` (tabla y repositorio propios) — un código nunca verifica el propósito del otro |
 | `user_identity` — no se expone como objeto propio; el `credential` (ID Token) que la origina viaja una única vez, en el body de `POST /api/auth/google` (nunca en la respuesta) | — | `ADR-012-google-sign-in.md`: solo se persisten `provider`/`provider_subject` (el claim `sub`, nunca el email como identificador); ningún endpoint lista las identidades vinculadas de un usuario todavía |
-| `message` (en response de `POST`/`GET /api/users/<id>/messages` y `PATCH /api/messages/<id>`) | `id`, `sender_id`, `recipient_id`, `content`, `read`, `created_at`, `edited` | `ADR-013-messages-minimal-model.md` + `ADR-017-content-editing.md` (`edited`, v0.22); coincide con `messages` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` y `edited` de `edited_at` (ambos timestamps internos) — ninguno de los dos cruza la frontera HTTP como timestamp, mismo criterio que `notification.read`. `messages` sigue sin `updated_at`: sus dos escrituras posibles (marcar leído, editar) ya tienen cada una su columna |
-| `conversation` (en response de `GET /api/conversations`) — no es una entidad propia, es una vista derivada de `messages` agrupada por "la otra persona" | `user` (misma forma reducida que `actor`/`author`, más `last_seen_at` desde v0.23), `last_message` (`content`/`sender_id`/`created_at`), `unread_count` | `ADR-013-messages-minimal-model.md` §Opciones consideradas: sin tabla `conversations`/`conversation_participants` en esta versión. `last_message` **no** lleva `edited` (v0.22): muestra el texto vigente pero la marca solo viaja en el mensaje completo (`ADR-017` §Riesgos) |
+| `message` (en response de `POST`/`GET /api/users/<id>/messages` y `PATCH /api/messages/<id>`) | `id`, `sender_id`, `recipient_id`, `content`, `read`, `created_at`, `edited` | `ADR-013-messages-minimal-model.md` + `ADR-021-content-editing.md` (`edited`, v0.22); coincide con `messages` en `DATABASE_ARCHITECTURE.md` §5. `read` se deriva de `read_at` y `edited` de `edited_at` (ambos timestamps internos) — ninguno de los dos cruza la frontera HTTP como timestamp, mismo criterio que `notification.read`. `messages` sigue sin `updated_at`: sus dos escrituras posibles (marcar leído, editar) ya tienen cada una su columna |
+| `conversation` (en response de `GET /api/conversations`) — no es una entidad propia, es una vista derivada de `messages` agrupada por "la otra persona" | `user` (misma forma reducida que `actor`/`author`, más `last_seen_at` desde v0.23), `last_message` (`content`/`sender_id`/`created_at`), `unread_count` | `ADR-013-messages-minimal-model.md` §Opciones consideradas: sin tabla `conversations`/`conversation_participants` en esta versión. `last_message` **no** lleva `edited` (v0.22): muestra el texto vigente pero la marca solo viaja en el mensaje completo (`ADR-021` §Riesgos) |
 
 `avatar_url`/`bio` (`DATABASE_ARCHITECTURE.md` §4.B) siguen sin ratificar — no forman parte de este catálogo todavía. Cuando se ratifiquen por su propio ADR, este catálogo deberá actualizarse el mismo día en que el endpoint correspondiente las exponga (`HB-001` §15.1) — no antes, no por anticipación.
 
@@ -1769,13 +1769,13 @@ Decisiones que este documento **no toma** porque no están respaldadas por códi
 
 1. ~~Formato estándar de error para toda la API~~ — **avanzado en v0.6** (heredado de `BACKEND_ARCHITECTURE.md` §20, ítem 5): `{"msg": "..."}` ya es el formato aplicado uniformemente, incluidos los casos antes no cubiertos (`404`/`405`/`500` genéricos, §3). Sigue pendiente únicamente si el equipo quiere agregar un código de error machine-readable — no decidido, no necesario hoy.
 2. ~~Contrato de `POST /api/register`~~ — **resuelto e implementado**, incluidos los campos de perfil (§4.1, `ADR-002`). ~~Longitud mínima de contraseña y validación de formato de email~~ — **resuelto en v0.7** (§4.1: `is_valid_email`/`is_valid_password`, `domain/auth/validators.py`) — la unicidad de email/username ya estaba resuelta, la impone el esquema vía `CITEXT UNIQUE`/`uq_users_username`.
-3. **Convención de verbos HTTP** para operaciones futuras (colecciones, borrado). Parcialmente resuelto: `PATCH` es ya el verbo real usado para actualización parcial (`PATCH /api/users/me`, §4.2, `ADR-003`; y para editar contenido propio en `PATCH /api/posts/<id>`/`/api/comments/<id>`/`/api/messages/<id>`, v0.22, `ADR-017`) y `DELETE` sobre el recurso plano lo es para borrar una entidad propia (`DELETE /api/messages/<id>` §4.10 v0.19, `DELETE /api/posts/<id>` §4.3 v0.20, `DELETE /api/comments/<id>` §4.5 v0.21). El par **`PATCH` + ruta plana + `404` indistinguible** para "editar/borrar lo propio" ya se repite en seis endpoints, pero sigue sin estar ratificado formalmente como convención del proyecto.
+3. **Convención de verbos HTTP** para operaciones futuras (colecciones, borrado). Parcialmente resuelto: `PATCH` es ya el verbo real usado para actualización parcial (`PATCH /api/users/me`, §4.2, `ADR-003`; y para editar contenido propio en `PATCH /api/posts/<id>`/`/api/comments/<id>`/`/api/messages/<id>`, v0.22, `ADR-021`) y `DELETE` sobre el recurso plano lo es para borrar una entidad propia (`DELETE /api/messages/<id>` §4.10 v0.19, `DELETE /api/posts/<id>` §4.3 v0.20, `DELETE /api/comments/<id>` §4.5 v0.21). El par **`PATCH` + ruta plana + `404` indistinguible** para "editar/borrar lo propio" ya se repite en seis endpoints, pero sigue sin estar ratificado formalmente como convención del proyecto.
 4. **Versionado de API** (`/api/v1` u otro mecanismo) — o la decisión explícita de no versionar todavía.
 5. **Paginación** — formato (offset/limit, cursor) para cuando exista el primer endpoint de colección (p. ej. feed).
 6. ~~Convención de endpoints protegidos~~ — **resuelto: primer caso real implementado** (`GET /api/users/me`, §4.2, `ADR-002`), incluida la homogenización de errores JWT a `401` (`app/extensions.py`).
 7. **Especificación formal (OpenAPI/Swagger)** y su ubicación — evaluar cuando el catálogo de endpoints crezca lo suficiente para justificar el costo de mantenerla (`HB-001` §15.1 menciona esta opción sin decidirla, igual que `BACKEND_ARCHITECTURE.md` §14).
-8. ~~***Rate limiting*** de los endpoints de autenticación~~ — **RESUELTO en v0.25** (`ADR-023-rate-limiting.md`). Los diez endpoints que verifican una credencial, mandan un correo o crean una cuenta limitan intentos y devuelven `429` con `Retry-After` (§3). El caso que lo volvió urgente era `POST /api/2fa/verify` (10⁶ combinaciones en 30 s); queda en 5 intentos por 15 minutos.
-   **Nota de proceso, registrada a propósito:** entre `ADR-015` y `ADR-022`, seis ADR afirmaron que este pendiente "ya estaba registrado en §9 de este documento" **cuando no lo estaba** — la afirmación se propagó de ADR en ADR sin verificarse contra el documento. v0.24 la corrigió añadiendo el ítem; v0.25 lo resuelve. Se deja escrito para que el patrón (citar un documento sin abrirlo) quede visible.
+8. ~~***Rate limiting*** de los endpoints de autenticación~~ — **RESUELTO en v0.25** (`ADR-027-rate-limiting.md`). Los diez endpoints que verifican una credencial, mandan un correo o crean una cuenta limitan intentos y devuelven `429` con `Retry-After` (§3). El caso que lo volvió urgente era `POST /api/2fa/verify` (10⁶ combinaciones en 30 s); queda en 5 intentos por 15 minutos.
+   **Nota de proceso, registrada a propósito:** entre `ADR-019` y `ADR-026`, seis ADR afirmaron que este pendiente "ya estaba registrado en §9 de este documento" **cuando no lo estaba** — la afirmación se propagó de ADR en ADR sin verificarse contra el documento. v0.24 la corrigió añadiendo el ítem; v0.25 lo resuelve. Se deja escrito para que el patrón (citar un documento sin abrirlo) quede visible.
    **Sigue pendiente**, como ADR propio: (a) los endpoints de **producto** (feed, posts, comentarios, mensajes, likes) no tienen límite — ahí el riesgo es abuso/DoS, no adivinar una credencial, y una escritura en base por petición del feed sería un coste desproporcionado; (b) un *rate limit* en la capa anterior (proxy/WAF/CDN) y confiar en `X-Forwarded-For` solo cuando lo inyecta un proxy conocido — las dos cosas son DevOps, sin documentación oficial (`CLAUDE.md` §15).
 
 ---

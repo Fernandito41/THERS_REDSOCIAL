@@ -1,7 +1,7 @@
 # Adaptador SQLAlchemy del puerto `DataExportRepository`
 # (domain/data_exports/repositories.py). Único punto que traduce entre las
 # tablas del usuario y el dict que serializa el archivo
-# (ADR-024-data-export.md).
+# (ADR-028-data-export.md).
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import aliased, defer
@@ -183,7 +183,7 @@ class SQLAlchemyDataExportRepository(DataExportRepository):
             )
         ]
 
-        # Solo las que la persona puso (ADR-025): saber QUIÉN te bloqueó a ti no
+        # Solo las que la persona puso (ADR-029): saber QUIÉN te bloqueó a ti no
         # es un dato tuyo, y entregarlo desharía el propósito del bloqueo.
         target = aliased(User)
         restrictions = [

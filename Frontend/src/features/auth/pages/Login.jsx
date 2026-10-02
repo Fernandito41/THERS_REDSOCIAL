@@ -36,7 +36,7 @@ export default function Login() {
       const result = await loginWithGoogle(credential);
       if (result.twoFactorRequired) {
         // La cuenta tiene 2FA: Google autenticó la identidad pero falta el
-        // segundo factor (ADR-022 §Seguridad).
+        // segundo factor (ADR-026 §Seguridad).
         navigate("/two-factor", { state: { twoFactorToken: result.twoFactorToken } });
         return;
       }
@@ -69,7 +69,7 @@ export default function Login() {
       const result = await login({ email: email.trim(), password });
       if (result.twoFactorRequired) {
         // 200 con `two_factor_required`: nada falló, falta el segundo paso
-        // (ADR-022 §Contrato API). Todavía no hay sesión guardada.
+        // (ADR-026 §Contrato API). Todavía no hay sesión guardada.
         navigate("/two-factor", { state: { twoFactorToken: result.twoFactorToken } });
         return;
       }

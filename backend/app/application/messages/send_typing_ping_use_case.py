@@ -14,7 +14,7 @@ def send_typing_ping(
         raise UserNotFoundError()
 
     # Con un bloqueo en cualquier sentido el aviso se descarta en silencio
-    # (ADR-025): la otra persona no debe ver "escribiendo..." de alguien que
+    # (ADR-029): la otra persona no debe ver "escribiendo..." de alguien que
     # bloqueó o que la bloqueó.
     if restriction_repository.is_blocked_between(sender_id, recipient_id):
         return

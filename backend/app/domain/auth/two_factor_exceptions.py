@@ -1,4 +1,4 @@
-# Excepciones de dominio del 2FA (ADR-022-two-factor-authentication.md).
+# Excepciones de dominio del 2FA (ADR-026-two-factor-authentication.md).
 # En un módulo propio y no en domain/auth/exceptions.py para no engordar el de
 # autenticación básica, que ya tiene siete -- mismo criterio que separa
 # domain/follows/exceptions.py de domain/auth/exceptions.py.
@@ -39,4 +39,4 @@ class TwoFactorRequiredError(Exception):
     """Credenciales correctas, pero la cuenta tiene 2FA activo: falta el segundo
     factor. No es un fallo -- es el estado intermedio esperado del login. La
     route lo traduce a un 200 con `two_factor_required: true` y un token de
-    desafío, nunca a un 4xx: nada salió mal (ADR-022 §Contrato API)."""
+    desafío, nunca a un 4xx: nada salió mal (ADR-026 §Contrato API)."""

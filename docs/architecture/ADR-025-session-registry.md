@@ -1,8 +1,8 @@
-# ADR-021 — Registro de sesiones y alertas de inicio de sesión
+# ADR-025 — Registro de sesiones y alertas de inicio de sesión
 
 | Campo | Valor |
 |---|---|
-| Documento | `docs/architecture/ADR-021-session-registry.md` |
+| Documento | `docs/architecture/ADR-025-session-registry.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 01/10/2026 |
 | Estado | **Aceptada** — implementada en esta tarea (ver §Decisión) |
@@ -21,7 +21,7 @@ La pantalla de Seguridad (REF-SET-03, `Frontend/src/features/feed/data/settingsS
 |---|---|
 | Ver y cerrar sesiones | "El JWT no se registra por dispositivo, así que no hay nada que listar ni revocar de verdad" |
 | Alertas de inicio de sesión | "Requiere registro de sesiones, que no existe" |
-| Activar 2FA | "No está implementado" → lo resuelve `ADR-022` |
+| Activar 2FA | "No está implementado" → lo resuelve `ADR-026` |
 
 Los dos primeros motivos eran exactos y el segundo señalaba la dependencia correcta: **sin registro de sesiones, las alertas no se pueden construir**, porque no hay forma de saber si un dispositivo es nuevo. Este ADR resuelve el primero y, con él, habilita el segundo.
 
@@ -45,7 +45,7 @@ El punto de partida: `create_access_token(identity=user["id"])` emitía un JWT f
 - **No** limita cuántas sesiones puede tener una cuenta a la vez.
 - **No** purga las filas revocadas. Crecen indefinidamente; ver §Riesgos.
 - **No** avisa de un acceso desde una **IP** nueva, solo desde un dispositivo nuevo. Una IP cambia cada vez que alguien se mueve de red: alertar por eso sería ruido constante.
-- **No** implementa 2FA — es `ADR-022`, que depende de este.
+- **No** implementa 2FA — es `ADR-026`, que depende de este.
 
 ## Opciones consideradas — cómo se revoca un token
 
@@ -91,7 +91,7 @@ Revocar hace `UPDATE revoked_at`, no `DELETE`. La fila se conserva para que `has
 
 Se usa el hook que `flask_jwt_extended` ya ofrece, en vez de un decorador propio que habría que recordar poner en cada endpoint (y que se olvidaría en el endpoint número veinte). Deniega si:
 - el `jti` no tiene fila viva en `sessions`, **o**
-- el token lleva el claim `purpose: "2fa_challenge"` (`ADR-022`).
+- el token lleva el claim `purpose: "2fa_challenge"` (`ADR-026`).
 
 Responde `401` con un mensaje propio, distinto de "token expirado": criptográficamente el token sigue siendo válido, lo que pasó es que esa sesión se cerró.
 
@@ -111,7 +111,7 @@ Las sesiones vivas, más reciente primero, límite 50. **El `jti` nunca cruza la
 
 ### `last_used_at` con throttle
 
-Lo actualiza el mismo hook `after_request` que ya marcaba `users.last_seen_at` (`ADR-020`), con el mismo throttle de 5 minutos **impuesto en el propio `WHERE`** y no en memoria del proceso — así funciona igual con varios *workers*. Sin throttle, el *polling* del chat (cada 4 s, `ADR-014`) escribiría en cada petición.
+Lo actualiza el mismo hook `after_request` que ya marcaba `users.last_seen_at` (`ADR-024`), con el mismo throttle de 5 minutos **impuesto en el propio `WHERE`** y no en memoria del proceso — así funciona igual con varios *workers*. Sin throttle, el *polling* del chat (cada 4 s, `ADR-014`) escribiría en cada petición.
 
 ### Alertas de inicio de sesión
 
@@ -125,7 +125,7 @@ Un fallo de envío **nunca** impide el login: la alerta es un aviso, no un requi
 
 ### `GET`/`PATCH /api/users/me/security`
 
-Endpoint propio, separado de `/users/me/privacy` (`ADR-020`): privacidad es "quién ve qué", seguridad es "quién puede entrar". Comparten pantalla pero no dominio. Hoy transporta una sola preferencia, y es su lugar correcto — meterla en el de privacidad obligaría a la próxima persona a buscarla donde no está.
+Endpoint propio, separado de `/users/me/privacy` (`ADR-024`): privacidad es "quién ve qué", seguridad es "quién puede entrar". Comparten pantalla pero no dominio. Hoy transporta una sola preferencia, y es su lugar correcto — meterla en el de privacidad obligaría a la próxima persona a buscarla donde no está.
 
 ### Cambiar la contraseña cierra todas las sesiones
 
@@ -154,7 +154,7 @@ Endpoint propio, separado de `/users/me/privacy` (`ADR-020`): privacidad es "qui
 - `application/sessions/`: `issue_session_use_case.py`, `manage_sessions_use_case.py`, `session_presenter.py` (nuevos).
 - `application/email/templates.py`: `login_alert_email` + `_escape`; `email_service.py`: `send_login_alert_email`.
 - `interfaces/activity_tracker.py`: también toca `sessions.last_used_at`.
-- `interfaces/routes/security_routes.py` (nuevo, compartido con `ADR-022`); `auth_routes.py`: emisión centralizada.
+- `interfaces/routes/security_routes.py` (nuevo, compartido con `ADR-026`); `auth_routes.py`: emisión centralizada.
 - `application/auth/reset_password_use_case.py`: revoca todas las sesiones.
 - Tests en `tests/test_security.py`; una aserción de `tests/test_users_me.py` actualizada (ver §Consecuencias).
 
@@ -174,21 +174,21 @@ Endpoint propio, separado de `/users/me/privacy` (`ADR-020`): privacidad es "qui
 - Geolocalización aproximada de la IP.
 - Alertas por IP nueva, además de por dispositivo nuevo.
 - Límite de sesiones simultáneas.
-- Bloquear a una persona — heredada de `ADR-018`, sigue abierta.
+- Bloquear a una persona — heredada de `ADR-022`, sigue abierta.
 
 ## Consecuencias
 
 - **`DATABASE_ARCHITECTURE.md` cambia** (tabla `sessions`, `users.login_alerts_enabled`) → v0.20.
 - `API_CONTRACT.md` → v0.24. **Ningún endpoint cambia de forma, pero TODOS los protegidos cambian de condición de validez**: un token sin sesión viva ya no autentica.
 - **La rama `404` de `GET /api/users/me` quedó inalcanzable en la práctica.** `sessions.user_id` es una FK con `ON DELETE CASCADE`, así que si la cuenta se borra su sesión se borra con ella y el token cae en el `401` del *blocklist loader* antes de llegar al handler. La rama se conserva en el código como defensa, no porque haya un camino que la produzca; la prueba que la cubría se actualizó a `401` con esa explicación.
-- `ADR-022` depende de este: el token de desafío de 2FA se rechaza en endpoints protegidos **precisamente porque** no tiene fila en `sessions`.
+- `ADR-026` depende de este: el token de desafío de 2FA se rechaza en endpoints protegidos **precisamente porque** no tiene fila en `sessions`.
 
 ## Referencias
 
-- `docs/architecture/ADR-022-two-factor-authentication.md` — el otro ADR de esta pantalla; depende de este.
+- `docs/architecture/ADR-026-two-factor-authentication.md` — el otro ADR de esta pantalla; depende de este.
 - `docs/architecture/ADR-010-password-reset-otp-flow.md` — el flujo de contraseña que ya funcionaba y que este ADR solo extiende (revocar sesiones).
 - `docs/architecture/ADR-014-messages-ux-improvements.md` — el caso en que una lista en memoria **sí** era aceptable, y por qué acá no.
-- `docs/architecture/ADR-020-content-filters-and-privacy-preferences.md` — origen del hook `after_request` y del throttle en el `WHERE`.
+- `docs/architecture/ADR-024-content-filters-and-privacy-preferences.md` — origen del hook `after_request` y del throttle en el `WHERE`.
 - `CLAUDE.md` — jerarquía de fuentes (§4), regla de alcance (§14).
 
 ---

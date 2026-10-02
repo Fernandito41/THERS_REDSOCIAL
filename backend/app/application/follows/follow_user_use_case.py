@@ -1,6 +1,6 @@
 # Caso de uso: seguir a un usuario (POST /api/users/<user_id>/follow,
 # ADR-007-follows-minimal-model.md, extendido por
-# ADR-018-private-accounts.md). Idempotente: si ya lo seguía -- o si ya le
+# ADR-022-private-accounts.md). Idempotente: si ya lo seguía -- o si ya le
 # había mandado una solicitud -- no falla ni cambia el estado.
 
 from app.domain.auth.exceptions import UserNotFoundError
@@ -21,7 +21,7 @@ def follow_user(
     if target is None:
         raise UserNotFoundError()
 
-    # Bloqueos (ADR-025). Si el destino bloqueó a quien intenta seguir, se
+    # Bloqueos (ADR-029). Si el destino bloqueó a quien intenta seguir, se
     # responde como si la cuenta no existiera: decirle "te bloqueó" sería
     # justo lo que el bloqueo quiere evitar. Si fue quien intenta seguir
     # quien bloqueó, sí se le dice (409) para que sepa por qué no funciona.
@@ -30,7 +30,7 @@ def follow_user(
     if restriction_repository.get_kind(follower_id, followed_id) == BLOCK:
         raise AccountBlockedError()
 
-    # Seguir a una cuenta privada no es seguirla: es pedirlo (ADR-018
+    # Seguir a una cuenta privada no es seguirla: es pedirlo (ADR-022
     # §Decisión). El estado lo decide la cuenta destino, nunca el cliente --
     # no hay ningún campo del body que pueda influir en esto.
     status = PENDING if target.is_private else ACCEPTED
@@ -41,7 +41,7 @@ def follow_user(
         # Ya existía una fila: se devuelve SU estado, no el que acabamos de
         # calcular. Si no, un POST repetido sobre un follow ya aceptado
         # reportaría 'pending' solo porque la cuenta se volvió privada
-        # después (ADR-018 §Decisión).
+        # después (ADR-022 §Decisión).
         status = follow_repository.get_status(follower_id, followed_id)
     else:
         # Solo notifica en la transición real (ADR-008 §No objetivos). El tipo

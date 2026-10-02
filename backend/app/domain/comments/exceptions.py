@@ -1,4 +1,4 @@
-# Excepciones de dominio para `comments` (ADR-016-comment-deletion.md). El
+# Excepciones de dominio para `comments` (ADR-020-comment-deletion.md). El
 # caso "post inexistente" sigue siendo PostNotFoundError (domain/posts/
 # exceptions.py), ya usado por crear/listar comentarios.
 

@@ -1,6 +1,6 @@
 # Audiencias de una preferencia de privacidad: quién puede hacerte algo
-# (ADR-019-mentions.md para `who_can_mention`,
-# ADR-020-content-filters-and-privacy-preferences.md para `who_can_message`).
+# (ADR-023-mentions.md para `who_can_mention`,
+# ADR-024-content-filters-and-privacy-preferences.md para `who_can_message`).
 #
 # Un único vocabulario compartido por las dos preferencias en vez de uno por
 # cada una: significan lo mismo ("qué conjunto de personas está autorizado"),
@@ -13,7 +13,7 @@
 #: las dos columnas.
 EVERYONE = "everyone"
 
-#: Solo quienes te siguen con un follow **aceptado** (ADR-018). Ojo con la
+#: Solo quienes te siguen con un follow **aceptado** (ADR-022). Ojo con la
 #: dirección: "me sigue a mí", no "yo lo sigo".
 FOLLOWERS = "followers"
 

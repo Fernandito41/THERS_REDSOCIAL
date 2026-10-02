@@ -1,5 +1,5 @@
 # Emisión de una sesión: el paso que convierte un JWT recién creado en una
-# sesión revocable (ADR-021-session-registry.md).
+# sesión revocable (ADR-025-session-registry.md).
 #
 # Lo llaman los tres caminos que emiten un token de sesión: `POST /api/login`,
 # `POST /api/auth/google` y `POST /api/2fa/verify`. Está centralizado acá
@@ -33,7 +33,7 @@ def issue_session(
     if is_new_device and user.login_alerts_enabled and email_service is not None:
         # Un fallo de correo NO puede impedir el login: la alerta es un aviso,
         # no un requisito de autenticación. Mismo criterio que el hook de
-        # presencia (ADR-020), que tampoco tumba la respuesta.
+        # presencia (ADR-024), que tampoco tumba la respuesta.
         try:
             email_service.send_login_alert_email(
                 user.email, user.name, user_agent, ip_address, session.created_at

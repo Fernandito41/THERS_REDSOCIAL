@@ -48,28 +48,28 @@ import {
  *
  * Filas de privacidad, que se aplican en el SERVIDOR (no en este navegador):
  *  · `privacySwitch` / `privacyChoice` -> PATCH /api/users/me/privacy
- *                           (ADR-018-private-accounts.md, ADR-019-mentions.md,
- *                           ADR-020-content-filters-and-privacy-preferences.md)
- *  · `followRequests`    -> GET/POST/DELETE /api/follow-requests (ADR-018)
- *  · `mutedKeywords`     -> GET/POST/DELETE /api/users/me/muted-keywords (ADR-020)
+ *                           (ADR-022-private-accounts.md, ADR-023-mentions.md,
+ *                           ADR-024-content-filters-and-privacy-preferences.md)
+ *  · `followRequests`    -> GET/POST/DELETE /api/follow-requests (ADR-022)
+ *  · `mutedKeywords`     -> GET/POST/DELETE /api/users/me/muted-keywords (ADR-024)
  *
  * Filas de seguridad, que también se aplican en el SERVIDOR:
- *  · `securitySwitch`    -> PATCH /api/users/me/security (ADR-021-session-registry.md)
- *  · `activeSessions`    -> GET/DELETE /api/sessions (ADR-021)
- *  · `twoFactor`         -> GET/POST /api/2fa/... (ADR-022-two-factor-authentication.md)
+ *  · `securitySwitch`    -> PATCH /api/users/me/security (ADR-025-session-registry.md)
+ *  · `activeSessions`    -> GET/DELETE /api/sessions (ADR-025)
+ *  · `twoFactor`         -> GET/POST /api/2fa/... (ADR-026-two-factor-authentication.md)
  *
- * Preferencias de contenido y feed, también en el SERVIDOR (ADR-026):
+ * Preferencias de contenido y feed, también en el SERVIDOR (ADR-030):
  *  · `privacySwitch hide_sensitive_content` -> PATCH /api/users/me/privacy
- *  · `mutedKeywords` (ya existía, ADR-020) y `mutedTopics` ->
+ *  · `mutedKeywords` (ya existía, ADR-024) y `mutedTopics` ->
  *                           GET/POST/DELETE /api/users/me/muted-topics
  *
  * Bloqueo y restricción de cuentas, también en el SERVIDOR:
  *  · `restrictedAccounts` -> GET/POST/DELETE /api/users/me/blocks y
- *                           /api/users/me/restrictions (ADR-025-blocked-and-restricted-accounts.md)
+ *                           /api/users/me/restrictions (ADR-029-blocked-and-restricted-accounts.md)
  *
  * Exportación de datos, también en el SERVIDOR:
  *  · `dataExportRequest` / `dataExportHistory` -> POST/GET /api/data-exports y
- *                           GET /api/data-exports/<id>/download (ADR-024-data-export.md)
+ *                           GET /api/data-exports/<id>/download (ADR-028-data-export.md)
  *
  * El objeto de privacidad se carga UNA vez por sección (no una por fila) y se
  * pasa a cada control: cuatro interruptores pidiendo lo mismo al montarse
@@ -89,7 +89,7 @@ export default function SettingsSectionPage() {
   // por fila, y el hook se llama siempre (condicionarlo al valor de `section`
   // violaría las reglas de hooks de React).
   const securitySettings = useSecuritySettings();
-  // Solo carga el historial en la sección de descarga de datos (ADR-024).
+  // Solo carga el historial en la sección de descarga de datos (ADR-028).
   const dataExports = useDataExports({ enabled: section === "data" });
 
   useEffect(() => {
@@ -159,22 +159,22 @@ function SettingRowRenderer({
   dataExports,
 }) {
   switch (row.type) {
-    // --- Temas silenciados: se aplica en el servidor (ADR-026) ---
+    // --- Temas silenciados: se aplica en el servidor (ADR-030) ---
     case "mutedTopics":
       return <MutedTopicsRow />;
 
-    // --- Bloqueo y restricción: se aplica en el servidor (ADR-025) ---
+    // --- Bloqueo y restricción: se aplica en el servidor (ADR-029) ---
     case "restrictedAccounts":
       return <RestrictedAccountsRow kind={row.kind} />;
 
-    // --- Exportación de datos: se aplica en el servidor (ADR-024) ---
+    // --- Exportación de datos: se aplica en el servidor (ADR-028) ---
     case "dataExportRequest":
       return <DataExportRequestRow state={dataExports} />;
 
     case "dataExportHistory":
       return <DataExportHistoryRow state={dataExports} />;
 
-    // --- Seguridad: se aplica en el servidor (ADR-021/ADR-022) ---
+    // --- Seguridad: se aplica en el servidor (ADR-025/ADR-026) ---
     case "securitySwitch":
       return (
         <SwitchRow
@@ -193,7 +193,7 @@ function SettingRowRenderer({
     case "twoFactor":
       return <TwoFactorRow />;
 
-    // --- Privacidad: se aplica en el servidor (ADR-018/ADR-019/ADR-020) ---
+    // --- Privacidad: se aplica en el servidor (ADR-022/ADR-023/ADR-024) ---
     case "privacySwitch":
       return (
         <SwitchRow

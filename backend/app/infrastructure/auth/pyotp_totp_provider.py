@@ -1,5 +1,5 @@
 # Implementación del puerto `TotpProvider` (domain/auth/two_factor.py) con
-# `pyotp` (ADR-022-two-factor-authentication.md).
+# `pyotp` (ADR-026-two-factor-authentication.md).
 #
 # Único punto del backend que importa `pyotp` -- mismo principio que confina
 # `google-auth` a google_id_token_verifier.py, `resend` a

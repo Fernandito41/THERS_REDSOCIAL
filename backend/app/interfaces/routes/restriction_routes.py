@@ -1,5 +1,5 @@
 # Endpoints de la pantalla "Cuentas bloqueadas y restringidas" (REF-SET-10,
-# ADR-025-blocked-and-restricted-accounts.md):
+# ADR-029-blocked-and-restricted-accounts.md):
 #   · GET/POST /api/users/me/blocks, DELETE /api/users/me/blocks/<user_id>
 #   · GET/POST /api/users/me/restrictions, DELETE /api/users/me/restrictions/<user_id>
 #

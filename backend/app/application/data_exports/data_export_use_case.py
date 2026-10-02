@@ -1,5 +1,5 @@
 # Casos de uso de la exportación de datos (POST/GET /api/data-exports,
-# GET /api/data-exports/<id>/download -- ADR-024-data-export.md).
+# GET /api/data-exports/<id>/download -- ADR-028-data-export.md).
 #
 # `user_id` sale exclusivamente del JWT en la route: nadie genera ni descarga
 # el archivo de otra persona.
@@ -39,7 +39,7 @@ def to_public_export(export):
 def request_export(user_id, repository):
     """Genera el archivo en el momento. Es síncrono a propósito: el volumen de
     datos de una cuenta es chico y una cola de trabajos sería infraestructura
-    que el proyecto no tiene (ADR-024 §Opciones consideradas)."""
+    que el proyecto no tiene (ADR-028 §Opciones consideradas)."""
     now = _now()
 
     latest = repository.latest_created_at(user_id)

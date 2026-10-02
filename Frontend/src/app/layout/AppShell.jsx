@@ -117,7 +117,7 @@ export default function AppShell() {
   };
 
   // Resincroniza GET /api/notifications. Hace falta tras borrar una
-  // publicación (ADR-015): PostgreSQL borra en cascada las notificaciones
+  // publicación (ADR-019): PostgreSQL borra en cascada las notificaciones
   // que apuntaban a ese post (ADR-008), así que la lista en memoria queda
   // con notificaciones que el backend ya no tiene. Mismo criterio silencioso
   // que reloadConversations -- es una resincronización de fondo, no una
@@ -177,7 +177,7 @@ export default function AppShell() {
   // se propaga a CreateCapsuleFlow, que ya maneja error/loading con el mismo
   // patrón que AuthContext.updateProfile()/Profile.jsx (getErrorMessage +
   // Toast, formulario abierto para reintentar).
-  // `isSensitive` (ADR-026): lo que el autor declara al publicar.
+  // `isSensitive` (ADR-030): lo que el autor declara al publicar.
   const handleCreateCapsule = async (content, isSensitive = false) => {
     const res = await api.post(
       "/posts",
@@ -188,7 +188,7 @@ export default function AppShell() {
     setComposerOpen(false);
   };
 
-  // DELETE /api/posts/<id> (ADR-015-post-deletion.md). Solo el autor puede
+  // DELETE /api/posts/<id> (ADR-019-post-deletion.md). Solo el autor puede
   // borrar su propia publicación -- el backend lo verifica contra el JWT y
   // responde 404 si el post no existe o no es suyo, así que el Frontend no
   // decide permisos, solo evita ofrecer la acción donde no aplica
@@ -214,7 +214,7 @@ export default function AppShell() {
     }
   };
 
-  // PATCH /api/posts/<id> (ADR-017-content-editing.md). Solo el autor puede
+  // PATCH /api/posts/<id> (ADR-021-content-editing.md). Solo el autor puede
   // editar su propia publicación -- el backend lo verifica contra el JWT y
   // responde 404 si no existe o no es suya; CapsuleCard solo ofrece la acción
   // sobre publicaciones propias.
@@ -292,7 +292,7 @@ export default function AppShell() {
     return res.data.comment;
   };
 
-  // DELETE /api/comments/<id> (ADR-016-comment-deletion.md). Solo el autor del
+  // DELETE /api/comments/<id> (ADR-020-comment-deletion.md). Solo el autor del
   // comentario puede borrarlo -- el backend lo verifica contra el JWT y
   // responde 404 si no existe o no es suyo; CapsuleCard solo ofrece la acción
   // sobre comentarios propios. Sin try/catch acá -- CapsuleCard lo maneja
@@ -300,7 +300,7 @@ export default function AppShell() {
   // `comments_count` vive en `capsules` (AppShell), así que se baja acá para
   // que el número de la tarjeta quede sincronizado, espejo de
   // handlePostComment. No hay notificación que retirar: la de "comentó tu
-  // publicación" no guarda a qué comentario corresponde (ADR-016 §Riesgos).
+  // publicación" no guarda a qué comentario corresponde (ADR-020 §Riesgos).
   const handleDeleteComment = async (postId, commentId) => {
     await api.delete(`/comments/${commentId}`, { headers: authHeaders() });
     setCapsules((prev) =>
@@ -310,7 +310,7 @@ export default function AppShell() {
     );
   };
 
-  // PATCH /api/comments/<id> (ADR-017-content-editing.md). Mismo reparto que
+  // PATCH /api/comments/<id> (ADR-021-content-editing.md). Mismo reparto que
   // handleDeleteComment: la petición vive acá, el hilo de comentarios abierto
   // es estado local de CapsuleCard, que recibe el comentario ya editado y lo
   // reemplaza en su lista. No toca `capsules`: editar no mueve
@@ -326,7 +326,7 @@ export default function AppShell() {
   };
 
   // POST/DELETE /api/users/<id>/follow (ADR-007-follows-minimal-model.md,
-  // extendido por ADR-018-private-accounts.md).
+  // extendido por ADR-022-private-accounts.md).
   //
   // No reutiliza followingIds/handleToggleFollow (ese Set en memoria sigue
   // siendo exclusivo del panel de sugerencias mock de Home.jsx -- esas
@@ -336,7 +336,7 @@ export default function AppShell() {
   // que disparó la acción, para que el estado quede consistente en toda la
   // tarjeta del feed.
   //
-  // Tres estados desde ADR-018, no dos: seguir una cuenta privada crea una
+  // Tres estados desde ADR-022, no dos: seguir una cuenta privada crea una
   // solicitud ('pending'), no una relación. El mismo DELETE sirve para dejar
   // de seguir y para cancelar una solicitud, así que el botón es un toggle
   // igual que antes -- lo que cambia es a qué estado va.

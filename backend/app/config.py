@@ -147,6 +147,24 @@ class Config:
     # (nunca hardcodeados en la plantilla, ver application/email/templates.py).
     FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
+    # Orígenes web que pueden llamar a la API desde un navegador (CORS). Variable de entorno
+    # `CORS_ORIGINS`, separados por comas: `https://thersweb.com,https://staging.thersweb.com`. ADR-018 §Riesgos ítem 5.
+    # Vacía = CORS abierto a cualquier origen, que es lo cómodo en desarrollo local y NO debe
+    # quedar así en un entorno desplegado. No afecta a la app móvil (no usa CORS).
+    ALLOWED_WEB_ORIGINS = [
+        origin.strip()
+        for origin in (os.environ.get("CORS_ORIGINS") or "").split(",")
+        if origin.strip()
+    ]
+
+    if not ALLOWED_WEB_ORIGINS:
+        print(
+            "[config] CORS_ORIGINS no está definida; la API acepta peticiones de navegador "
+            "desde CUALQUIER origen. Está bien en desarrollo local; en un entorno desplegado "
+            "definir CORS_ORIGINS con los dominios reales del Frontend.",
+            file=sys.stderr,
+        )
+
     # "Continuar con Google" (ADR-012-google-sign-in.md). El Client ID NO es
     # secreto -- es el mismo valor que el Frontend usa para inicializar
     # Google Identity Services (VITE_GOOGLE_CLIENT_ID, ver

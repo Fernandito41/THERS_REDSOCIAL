@@ -551,6 +551,12 @@ class Message(db.Model):
     # lazy="joined" en ambos extremos: listar conversaciones siempre
     # necesita identificar "la otra persona" -- evita el N+1 de resolverla
     # por separado (mismo motivo que Post.author/Comment.author).
+    # Identificador que elige QUIEN ENVÍA para que reintentar un envío que falló a
+    # medias no cree el mensaje dos veces (ADR-035-chat-sync.md). NULL en los
+    # mensajes de clientes que no lo mandan. Único por remitente, no global: dos
+    # personas pueden elegir el mismo valor sin chocar.
+    client_id = db.Column(db.String(64), nullable=True)
+
     sender = db.relationship("User", foreign_keys=[sender_id], lazy="joined")
     recipient = db.relationship("User", foreign_keys=[recipient_id], lazy="joined")
 
@@ -573,6 +579,14 @@ class Message(db.Model):
         db.Index(
             "ix_messages_recipient_sender_created",
             "recipient_id", "sender_id", "created_at",
+        ),
+        # Idempotencia del envío (ADR-035): a lo sumo un mensaje por
+        # (remitente, client_id). Parcial: los mensajes sin client_id no compiten.
+        db.Index(
+            "uq_messages_sender_client_id",
+            "sender_id", "client_id",
+            unique=True,
+            postgresql_where=text("client_id IS NOT NULL"),
         ),
     )
 

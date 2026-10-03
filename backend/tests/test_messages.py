@@ -135,7 +135,8 @@ class TestListThread:
         response = client.get(f"/api/users/{id_b}/messages", headers=_auth_headers(token_a))
 
         assert response.status_code == 200
-        assert response.get_json() == {"messages": []}
+        # `has_more` se añadió en ADR-035 (aditivo: el campo `messages` no cambia).
+        assert response.get_json() == {"messages": [], "has_more": False}
 
     def test_nonexistent_user_returns_404(self, client):
         token_a, _ = _register_and_login(client, username="user_a", email="a@example.com")

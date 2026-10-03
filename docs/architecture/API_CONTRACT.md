@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.33 (Propuesta) |
+| Versión | 0.34 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -43,6 +43,8 @@
 > **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
+>
+> **v0.34 — sincronización del chat (`ADR-035-chat-sync.md`, **PROPUESTO**):** `POST /api/users/<id>/messages` acepta `client_id` opcional (envío idempotente por remitente: `201` la primera vez, `200` si ya existía); `GET /api/users/<id>/messages` acepta `limit`, `before` y `after` (instantes ISO 8601 con zona horaria) y devuelve `has_more`. El mensaje público gana `client_id`. Cambios aditivos y compatibles (§4.10).
 >
 > **v0.33 — eliminación de cuenta (`ADR-031-account-deletion.md`, aceptado con cambios, implementado sin commit hasta esta rama):** `POST /api/account-deletion/request` y `POST /api/account-deletion/confirm` (§4.19), públicos y sin JWT. Cambio aditivo. Los mensajes de la cuenta eliminada se borran en las dos bandejas.
 >
@@ -1054,8 +1056,9 @@ Obligatorio, con el mismo validador y el mismo límite (1000, menor que el de po
 
 **Request body**
 ```json
-{ "content": "string" }
+{ "content": "string", "client_id": "string (opcional, 1–64: letras, números, - o _)" }
 ```
+`client_id` (v0.34, `ADR-035`) hace el envío **idempotente por remitente**: repetir la petición con el mismo `client_id` devuelve el mensaje ya creado con `200` en vez de duplicarlo (el texto del reintento se ignora). Sin `client_id` se mantiene el comportamiento anterior: cada llamada crea un mensaje (`201`). Las comprobaciones de bloqueo y de quién puede escribir se hacen **siempre**, también en un reintento. El mensaje público incluye `client_id` (`null` si no se envió).
 
 **Response — éxito (201)**
 ```json
@@ -1091,13 +1094,21 @@ Obligatorio, con el mismo validador y el mismo límite (1000, menor que el de po
 
 **Semántica.** Historial de mensajes con `user_id`, ambos sentidos, orden cronológico **ascendente** (mensaje más viejo primero — a diferencia del feed/notificaciones, que van más reciente primero). Sin paginación real: límite fijo de **50** más recientes. **Efecto secundario:** marca como leídos los mensajes que `user_id` le mandó a la persona autenticada (`ADR-013` §Opciones consideradas — no hay un `PATCH .../read` separado).
 
-**Request:** sin body. Header `Authorization: Bearer <token>` obligatorio.
+**Request:** sin body. Header `Authorization: Bearer <token>` obligatorio. Query opcional (`ADR-035-chat-sync.md`, v0.34):
+
+| Parámetro | Efecto |
+|---|---|
+| `limit` | Entero 1–100 (por defecto 50). Otro valor → `400` |
+| `before` | Instante ISO 8601 **con zona horaria** (el `created_at` de un mensaje): los mensajes anteriores o iguales a ese instante (historial hacia atrás) |
+| `after` | Igual, pero posteriores o iguales (recuperación tras perder la conexión) |
+
+`before` y `after` no se combinan (`400`). Los cursores son **instantes, no ids**: el borrado de mensajes es duro y un id borrado no sirve de cursor. Son inclusivos, así que el cliente descarta duplicados por `id`.
 
 **Response — éxito (200)**
 ```json
-{ "messages": [ /* misma forma que el objeto de POST */ ] }
+{ "messages": [ /* misma forma que el objeto de POST */ ], "has_more": false }
 ```
-Lista vacía (`[]`) si nunca hubo mensajes con esa persona.
+`has_more` (v0.34, aditivo): quedan más mensajes en la dirección pedida. Lista vacía (`[]`) si nunca hubo mensajes con esa persona.
 
 **Response — error**
 

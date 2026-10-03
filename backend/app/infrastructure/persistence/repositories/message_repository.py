@@ -5,6 +5,7 @@
 # follow_repository.py/notification_repository.py.
 
 from sqlalchemy import and_, case, delete as sa_delete, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.domain.messages.repositories import MessageRepository
 from app.extensions import db
@@ -17,6 +18,61 @@ class SQLAlchemyMessageRepository(MessageRepository):
         db.session.add(message)
         db.session.commit()
         return message
+
+    def create_idempotent(self, sender_id, recipient_id, content, client_id):
+        existing = self._find_by_client_id(sender_id, client_id)
+        if existing is not None:
+            return existing, False
+
+        message = Message(
+            sender_id=sender_id,
+            recipient_id=recipient_id,
+            content=content,
+            client_id=client_id,
+        )
+        db.session.add(message)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Otro envío con el mismo client_id ganó la carrera entre la comprobación
+            # de arriba y este commit: se devuelve el suyo, no se duplica.
+            db.session.rollback()
+            existing = self._find_by_client_id(sender_id, client_id)
+            if existing is None:
+                raise
+            return existing, False
+        return message, True
+
+    def _find_by_client_id(self, sender_id, client_id):
+        return db.session.execute(
+            select(Message).where(
+                Message.sender_id == sender_id, Message.client_id == client_id
+            )
+        ).scalar_one_or_none()
+
+    def list_thread_page(self, user_a_id, user_b_id, limit, before=None, after=None):
+        in_thread = or_(
+            and_(Message.sender_id == user_a_id, Message.recipient_id == user_b_id),
+            and_(Message.sender_id == user_b_id, Message.recipient_id == user_a_id),
+        )
+        query = select(Message).where(in_thread)
+
+        if after is not None:
+            query = query.where(Message.created_at >= after).order_by(
+                Message.created_at.asc(), Message.id.asc()
+            )
+        else:
+            if before is not None:
+                query = query.where(Message.created_at <= before)
+            query = query.order_by(Message.created_at.desc(), Message.id.desc())
+
+        # Se pide uno de más: si llega, hay más páginas sin una consulta aparte.
+        rows = db.session.execute(query.limit(limit + 1)).scalars().all()
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        if after is None:
+            rows = list(reversed(rows))
+        return rows, has_more
 
     def list_thread(self, user_a_id, user_b_id, limit):
         # DESC + limit trae los `limit` más recientes; se revierte en Python

@@ -209,6 +209,7 @@ Implementada en `feature/moderation-backend` (migración `e5b8c3a7d912`). Contra
 | **Suspender moderadores** | No se puede desde el panel (`400`); primero se retira el rol por línea de comandos | Una cuenta moderadora comprometida podría suspender a todo el equipo (§Riesgos) |
 | **Quién reportó** | Nunca aparece en la cola | La decisión es sobre lo reportado, no sobre quien denunció (§2) |
 | Suspensión | `403` con `suspended: true` en login, Google y 2FA, **solo tras probar la identidad**; sesiones y refresh tokens se revocan al instante | Que no sirva de oráculo de qué cuentas están suspendidas |
+| **Descubrimiento** | `GET /api/users/suggestions` (y con ello «Personas que resuenan» y Buscar) **no incluye** cuentas con `is_moderator` ni suspendidas | **Adición:** las cuentas de moderación se usan solo para moderar; no deben aparecer como gente a quien seguir |
 | Levantar una suspensión | `flask unsuspend-user` | **Adición:** sin apelaciones (decisión 4 del equipo), el equipo necesita al menos poder corregir un error |
 
 **Sigue pendiente:** la interfaz (fase 3, web y móvil), quién modera y con qué plazo (decisión 1 del equipo), exigir la 2FA a las cuentas moderadoras, las apelaciones y la política de privacidad sobre `content_snapshot`.

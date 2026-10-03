@@ -51,7 +51,15 @@ class SQLAlchemySuggestionRepository(SuggestionRepository):
         return (
             db.session.execute(
                 select(User)
-                .where(User.id != viewer_id, ~already_related, ~blocked_either_way)
+                .where(
+                    User.id != viewer_id,
+                    ~already_related,
+                    ~blocked_either_way,
+                    # Las cuentas de moderación no son para seguir ni para descubrir: se usan
+                    # solo para moderar (ADR-032). Una cuenta suspendida tampoco se sugiere.
+                    User.is_moderator.is_(False),
+                    User.suspended_at.is_(None),
+                )
                 .order_by(followers_count.desc(), User.created_at.desc())
                 .limit(limit)
             )

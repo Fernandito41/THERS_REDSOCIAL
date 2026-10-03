@@ -45,8 +45,8 @@
 |---|---|---|
 | Dominio propio con HTTPS | ❌ | Prerrequisito de todo lo demás |
 | Páginas **públicas** indexables: landing, legales y, si se quiere, perfiles públicos | ❌ | Una SPA de React es difícil de indexar; usar **prerenderizado o SSR** solo para esas páginas |
-| `title` y `description` únicos por página, Open Graph, `canonical` | ❌ | — |
-| `sitemap.xml` y `robots.txt` | ❌ | El feed y los perfiles privados **no** deben indexarse |
+| `title` y `description` únicos por página, Open Graph, `canonical` | ⚠️ | `title`/`description`/`robots`/`canonical` por ruta hechos (`ADR-033`, propuesto); falta `og:image` (sin asset de marca) y que se defina `VITE_SITE_URL` |
+| `sitemap.xml` y `robots.txt` | ✅ | Generados en el build (`ADR-033`); sin `VITE_SITE_URL` bloquean todo. El feed y lo privado no se indexan |
 | Rendimiento (Core Web Vitals): imágenes optimizadas, carga diferida | ⚠️ | Medir con Lighthouse sobre staging |
 | Google Search Console con el dominio verificado | ❌ | Tras comprar el dominio |
 | Datos estructurados (`Organization`, `WebSite`) en la landing | ❌ | Opcional, tras lo anterior |

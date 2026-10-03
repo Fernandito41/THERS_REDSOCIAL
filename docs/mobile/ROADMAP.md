@@ -48,6 +48,7 @@ Estado al 2026-10-01:
 | Caso `403` + `email_verified:false` en dispositivo | **VERIFICADO** 2026-10-02 (aviso propio, sin token guardado) |
 | Repetir en el **Samsung A16 5G** | **PENDIENTE** |
 | Caché HTTP de RN guarda el JSON de `/users/me` | **CERRADO** 2026-10-02 — `Cache-Control: no-store`, verificado en el teléfono |
+| Login con 2FA en la app (segundo paso: TOTP o código de recuperación) | **VERIFICADO** 2026-10-02 (`VALIDATION.md` §1.3). Configurar la 2FA sigue siendo solo de la web |
 | Arranque en frío sin red | **CERRADO** 2026-10-02 — pantalla «Sin conexión» con *Reintentar*; la sesión no se cierra |
 | Refresh token (renovación automática, arranque en frío, logout del servidor) | **VERIFICADO** 2026-10-02 (`VALIDATION.md` §1.3) |
 | **APK interna con el bundle incluido** | **PENDIENTE** |

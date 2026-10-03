@@ -46,6 +46,8 @@
 >
 > **v0.31 — reportes de contenido y aceptación de términos (`ADR-032-content-reports-and-moderation.md`, fase 1, **PROPUESTO**, implementado en una rama sin mergear):** se agrega `POST /api/reports` y `POST /api/users/me/terms-acceptance` (§4.18). `POST /api/register` y `POST /api/auth/google` aceptan `terms_accepted` (opcional por defecto; obligatorio cuando el entorno define `TERMS_ACCEPTANCE_REQUIRED`, que arranca **apagado**). El objeto `user` gana `terms_accepted` (§5). Tabla nueva `reports` y columnas `users.terms_accepted_at` / `users.terms_version` (`DATABASE_ARCHITECTURE.md` v0.23). Cambio aditivo: ningún cliente actual se rompe. No incluye las rutas de moderación (cola, resolver, suspender): son de la fase 2. **Pendiente de la ratificación de `ADR-032`.**
 >
+> **v0.30 — corrección retroactiva de `POST /api/2fa/verify` (§4.12):** la respuesta `200` ya devolvía `refresh_token` (el segundo paso del login emite la sesión por el mismo camino que `login` y `auth/google`, `ADR-017`), pero no figuraba en este contrato. Sin ese campo, un cliente que implemente el 2FA no sabe que debe guardarlo. Hallado al implementar el segundo factor en la app móvil. Sin cambio de código.
+>
 > **v0.29 — integración de la sesión con refresh token (`ADR-017`) y el registro de sesiones (`ADR-025`):** las dos ramas de trabajo se unen. `POST /api/login`, `POST /api/auth/google` y `POST /api/2fa/verify` devuelven ahora `token` **y** `refresh_token`. Cada login abre **una** sesión visible en `GET /api/sessions`; `POST /api/refresh` re-vincula esa misma sesión al access token nuevo (no crea una fila por renovación). **Cerrar una sesión (`DELETE /api/sessions/<id>`), cambiar la contraseña o desactivar el 2FA invalida también su refresh token**: la renovación exige una sesión viva en la familia y responde `401` si no la hay. `POST /api/logout` cierra la sesión del registro además de la familia. Los refresh tokens se validan contra `refresh_tokens` y no contra `sessions`. Los ADR de la rama de privacidad y seguridad se renumeraron a `ADR-019`…`ADR-030` para no chocar con `ADR-015`…`ADR-018`; las secciones `refresh` y de imágenes de perfil de la otra rama pasan a ser §4.16 y §4.17.
 >
 > **v0.28 — preferencias de contenido y feed (`ADR-030-content-preferences.md`):** se agrega §4.15 con `GET`/`POST`/`DELETE /api/users/me/muted-topics` y `GET /api/users/suggestions`, más dos **campos nuevos en endpoints existentes**: `is_sensitive` (entrada opcional de `POST /api/posts` y salida de todo post) y `hide_sensitive_content` (en `/api/users/me/privacy`). Ninguna respuesta existente pierde ni cambia un campo. Una migración (`e1b5c9d3a7f4`): `posts.is_sensitive`, `users.hide_sensitive_content` y la tabla `muted_topics`. **Las palabras ocultas (`ADR-024`) ya funcionaban y no se tocaron.** `GET /api/posts` ahora también omite los posts sensibles (si la persona lo activó) y los de temas silenciados.
@@ -1579,11 +1581,13 @@ Diez códigos. **Es la única vez que existen en claro** — solo se persisten s
 ```json
 {
   "token": "string (JWT de sesión)",
+  "refresh_token": "string (JWT de refresh, ver §4.16)",
   "user": { "...": "igual que en POST /api/login" },
   "used_recovery_code": "boolean",
   "recovery_codes_remaining": "integer"
 }
 ```
+Desde v0.30 este documento incluye `refresh_token`, que el código ya devolvía (`_issue_session_token`, el mismo camino que login y Google) pero esta respuesta no listaba.
 `used_recovery_code` permite avisar "usaste un código de recuperación, te quedan N" en vez de dejarlo pasar inadvertido.
 
 **`401`** si el `two_factor_token` es inválido, expiró, **o no es un token de desafío**, y también si el código no es válido. **Un solo mensaje para todos los casos:** distinguir "ese no era un TOTP pero lo probé como recuperación" revelaría qué espera el servidor y en qué estado está la cuenta.

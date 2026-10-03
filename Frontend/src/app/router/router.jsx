@@ -13,6 +13,7 @@ import {
 } from "@features/auth";
 import { Terms, Privacy, Cookies, ChildSafety } from "@features/legal";
 import { DeleteAccount } from "@features/account";
+import { Moderation } from "@features/moderation";
 import {
   Information,
   HowItWorks,
@@ -83,6 +84,9 @@ export default function AppRouter() {
             <Route path="/messages" element={<Messages />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/profile" element={<Profile />} />
+            {/* Moderación (ADR-032 fase 3). Sin enlace en la navegación a propósito: la página
+                se oculta sola a quien no es moderador y el servidor rechaza sus peticiones. */}
+            <Route path="/moderation" element={<Moderation />} />
             {/* Configuración: las 12 secciones son rutas reales, cada una
                 con su URL propia para poder enlazarla y recargarla
                 (archivo maestro §6.3). */}

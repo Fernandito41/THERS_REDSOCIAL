@@ -11,10 +11,9 @@
  *   booleano derivado.
  * - `username_changed_at` -- existe en `users` pero es interno al cooldown de
  *   `username` (`ADR-003`); el contrato lo excluye a propósito.
- * - `avatar_url` / `bio` -- `API_CONTRACT.md` §5 los marca como **sin
- *   ratificar**. `ADR-015-profile-media.md` está en trabajo sin commitear; se
- *   agregarán acá el día que el contrato los publique, no por anticipación
- *   (`HB-001` §15.1).
+ *
+ * `bio`, `location`, `website`, `avatar_url` y `cover_url` ya forman parte del
+ * contrato (`ADR-015-profile-media.md`, implementado y fusionado en `develop`).
  */
 
 export type User = {
@@ -39,6 +38,13 @@ export type User = {
    */
   profile_completed: boolean;
   has_password: boolean;
+  /** Cuenta privada: solo quien la sigue (con solicitud aceptada) ve sus publicaciones. */
+  is_private: boolean;
+  bio: string | null;
+  location: string | null;
+  website: string | null;
+  avatar_url: string | null;
+  cover_url: string | null;
 };
 
 /** Sesión emitida: `POST /api/login`, `POST /api/auth/google` y `POST /api/2fa/verify`. */

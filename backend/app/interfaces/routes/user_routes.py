@@ -25,6 +25,7 @@ from app.domain.auth.exceptions import (
     UsernameChangeNotAllowedError,
 )
 from app.domain.auth.validators import (
+    MIN_AGE_YEARS,
     is_valid_country_code,
     is_valid_phone,
     is_valid_username,
@@ -130,7 +131,10 @@ def update_me():
         if birth_date is None:
             return jsonify({"msg": "La fecha de nacimiento no es válida"}), 400
         if not meets_minimum_age(birth_date):
-            return jsonify({"msg": "Debes tener al menos 13 años"}), 400
+            return jsonify({
+                "msg": f"THERS es solo para personas de {MIN_AGE_YEARS} años o más",
+                "min_age": MIN_AGE_YEARS,
+            }), 400
         fields["birth_date"] = birth_date
 
     for field, limit in _TEXT_LIMITS.items():

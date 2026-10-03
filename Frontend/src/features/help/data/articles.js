@@ -63,7 +63,7 @@ export const HELP_ARTICLES = [
           "Andá a la pantalla de registro desde \"Crear cuenta\".",
           "Completá tu nombre completo y un nombre de usuario (entre 3 y 20 caracteres: letras, números o guion bajo).",
           "Ingresá tu correo electrónico y tu número de teléfono.",
-          "Seleccioná tu fecha de nacimiento. THERS requiere al menos 13 años para crear una cuenta.",
+          "Seleccioná tu fecha de nacimiento. THERS es solo para personas de 18 años o más.",
           "Elegí una contraseña de al menos 8 caracteres y confirmala.",
           "Aceptá los Términos de Servicio y la Política de Privacidad, y seleccioná \"Crear cuenta\".",
         ],

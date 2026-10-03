@@ -139,7 +139,7 @@ class TestRegister:
         assert response.status_code == 400
 
     def test_register_underage_birth_date_returns_400(self, client):
-        response = _register(client, birth_date="2020-01-01")  # menor de 13 años
+        response = _register(client, birth_date="2020-01-01")  # menor de 18 años
 
         assert response.status_code == 400
 

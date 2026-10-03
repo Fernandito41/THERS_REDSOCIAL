@@ -21,6 +21,8 @@
 # usuario no existe -- no es este servicio el que decide ocultar nada.
 
 from app.application.email.templates import (
+    account_deleted_email,
+    account_deletion_code_email,
     login_alert_email,
     password_changed_email,
     password_reset_code_email,
@@ -50,4 +52,12 @@ class EmailService:
         # preferencia activada); este servicio solo arma y envía, igual que con
         # el resto de correos.
         subject, html = login_alert_email(name, user_agent, ip_address, when)
+        self._email_sender.send(to_email, subject, html)
+
+    def send_account_deletion_code_email(self, to_email, name, code, ttl_minutes):
+        subject, html = account_deletion_code_email(name, code, ttl_minutes)
+        self._email_sender.send(to_email, subject, html)
+
+    def send_account_deleted_email(self, to_email, name):
+        subject, html = account_deleted_email(name)
         self._email_sender.send(to_email, subject, html)

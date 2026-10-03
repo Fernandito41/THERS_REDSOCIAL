@@ -25,6 +25,8 @@ def to_public_report(report, already_reported):
         "target_id": str(report.target_id),
         "reason": report.reason,
         "status": report.status,
+        # ADR-038: lo que ve quien reportó de su propio reporte. La decide el servidor.
+        "priority": report.priority,
         "created_at": report.created_at.isoformat(),
         "already_reported": already_reported,
     }
@@ -114,6 +116,8 @@ def create_report(
         reason=reason,
         details=details,
         snapshot=(target.text or "")[: kinds.MAX_SNAPSHOT_LENGTH] or None,
+        # La prioridad sale del motivo, en el servidor: nunca del cuerpo de la petición.
+        priority=kinds.priority_for_reason(reason),
     )
 
     return to_public_report(report, already_reported=not created), created

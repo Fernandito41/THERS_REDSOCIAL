@@ -1313,6 +1313,10 @@ class Report(db.Model):
     # moderación (fase 2); en esta fase todo reporte nace y queda `open`.
     status = db.Column(db.String(10), nullable=False, server_default=text("'open'"))
 
+    # Prioridad de revisión (ADR-038): `normal` o `critical`. La asigna el servidor a partir
+    # del motivo (`domain/reports/kinds.priority_for_reason`); el cliente no la envía.
+    priority = db.Column(db.String(10), nullable=False, server_default=text("'normal'"))
+
     # Copia del texto reportado, para que quien modera vea qué se dijo aunque el
     # contenido se borre o su autor elimine la cuenta (ADR-032 §4). Se vacía al
     # resolver el reporte; no se guardan imágenes ni nombres.
@@ -1342,8 +1346,47 @@ class Report(db.Model):
         ),
         # La cola de moderación: abiertos primero, del más antiguo al más nuevo.
         db.Index("ix_reports_status_created_at", "status", "created_at"),
+        # Cola de revisión futura: lo crítico primero (ADR-038).
+        db.Index("ix_reports_status_priority_created_at", "status", "priority", "created_at"),
+        db.CheckConstraint("priority IN ('normal', 'critical')", name="ck_reports_priority"),
         db.Index("ix_reports_reported_user_id", "reported_user_id"),
     )
 
     def __repr__(self):
         return f"<Report {self.target_type}:{self.target_id} reason={self.reason!r}>"
+
+class AccountDeletionCode(db.Model):
+    """Código de un solo uso para confirmar la eliminación de una cuenta
+    (ADR-031-account-deletion.md). Tabla propia, no `password_reset_tokens`: un
+    código de recuperación nunca debe servir para borrar una cuenta."""
+
+    __tablename__ = "account_deletion_codes"
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # scrypt del código de 6 dígitos (nunca el código en claro).
+    code_hash = db.Column(db.Text, nullable=False)
+    attempts = db.Column(db.Integer, nullable=False, server_default=text("0"))
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    __table_args__ = (
+        # A lo sumo un código activo por cuenta.
+        db.Index(
+            "uq_account_deletion_codes_active_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("used_at IS NULL"),
+        ),
+    )

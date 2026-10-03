@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/DATABASE_ARCHITECTURE.md` |
 | Identificador propuesto | `DB-001` (sigue el patrón `HB-001`/`ARC-001`/`DS-001`/`WF-001`/`PV-001`/`FAS-001`) — **pendiente de ratificación formal** |
-| Versión | 0.23 |
+| Versión | 0.25 |
 | Estado | **Borrador / Contrato técnico — pendiente de aprobación del equipo** |
 | Depende de | `HB-001` (organización, gobernanza, git flow, seguridad), `REPOSITORY_STRUCTURE.md` (ubicación del backend y carpeta futura `database/`) |
 | Motivo | El `CLAUDE.md` maestro (§4, §14) identificó que la arquitectura de Base de Datos no estaba formalmente documentada |
@@ -51,6 +51,10 @@
 > **v0.18 — edición de contenido propio: `edited_at` en `posts`, `comments` y `messages` (`ADR-021-content-editing.md`):** "Editar / Eliminar publicaciones" (§4.B › Contenido) queda **resuelta por completo** — el borrado ya lo había cubierto `ADR-019`/`ADR-020`, y la edición la cubre este ADR. **Primera migración que modifica tres tablas ya implementadas a la vez** (`a2c6e9b3f571`): una columna `edited_at` (`TIMESTAMPTZ`, nullable, `NULL` = nunca editado) en `posts` (§5.2), `comments` (§5.4) y `messages` (§5.10). Se expone en la API como el booleano `edited`, nunca como el timestamp crudo — mismo criterio que `notifications.read_at`/`messages.read_at` (`API_CONTRACT.md` §5, v0.22). **No se reutilizó `updated_at`** para esto, aunque `posts`/`comments` ya la tenían: nace igual a `created_at` por su `server_default`, así que "editado" habría que inferirlo de `updated_at > created_at` — una condición implícita que cualquier escritura futura sobre la fila volvería falsa (`ADR-021` §Opciones consideradas, opción B descartada). `updated_at` sigue siendo solo auditoría y sigue sin exponerse; `messages` sigue **sin** `updated_at`. Ninguna entidad, FK, `UNIQUE`, `CHECK` ni índice cambia — la columna es puramente aditiva y nullable, así que las filas existentes quedan en `NULL` sin *backfill*. Verificado con `flask db upgrade` contra PostgreSQL 16 real sobre `thers_dev` y `thers_test`, más la suite completa de pruebas (`backend/tests/`, 338 pruebas).
 >
 > **(rama `develop`, antes numerada v0.18) — refresh tokens rotativos, `refresh_tokens` (`ADR-017-jwt-session-policy.md`):** nueva entidad implementada (definición formal en §5.16). Una fila por refresh token emitido; cada login abre una familia (`family_id`) y cada renovación consume la fila vigente y crea la siguiente. Se guarda el **SHA-256 del `jti`**, nunca el token. Índice único parcial `uq_refresh_tokens_active_family` (a lo sumo un token activo por familia, mismo patrón que `ADR-010`). Migración `b7d41e9a3c52`, que encadena con `a5c8e2d71f34` (`ADR-015`, aún sin commitear a esta fecha). `ON DELETE CASCADE` desde `users`.
+>
+> **v0.25 — eliminación de cuenta (`ADR-031`):** tabla nueva `account_deletion_codes` (migración `c3f7a9d2e841`, hija de `b6e1d9a4c2f8`): `id`, `user_id` (FK `users` `ON DELETE CASCADE`), `code_hash` (scrypt), `attempts`, `expires_at`, `used_at`, `created_at`, con índice único parcial `uq_account_deletion_codes_active_user` (a lo sumo un código activo por cuenta). **Regla vigente:** toda clave foránea hacia `users` es `ON DELETE CASCADE`, salvo las de `reports` (`SET NULL`, a propósito); `tests/test_account_deletion.py` recorre `pg_constraint` y falla si una tabla nueva no lo cumple, y exige que ninguna columna `*user_id` quede sin clave foránea.
+>
+> **v0.24 — prioridad de los reportes (`ADR-038-child-safety-reports.md`):** columna aditiva `reports.priority` (`VARCHAR(10)`, `NOT NULL`, `DEFAULT 'normal'`, `CHECK IN ('normal', 'critical')`) e índice `ix_reports_status_priority_created_at`. Migración `b6e1d9a4c2f8`, **no destructiva**: los reportes existentes quedan como `normal`. El motivo `child_safety` **no** necesita migración (el motivo es un texto validado en la aplicación).
 >
 > **v0.23 — reportes y aceptación de términos (`ADR-032-content-reports-and-moderation.md`, fase 1, **PROPUESTO**, implementado en una rama sin mergear):** nueva entidad `reports` (§5.17) y dos columnas aditivas en `users` (`terms_accepted_at`, `terms_version`, ambas nulas: las cuentas existentes cuentan como no aceptadas). Migración `a8d2f5c1b937`. `reporter_id`, `reported_user_id` y `resolved_by` son `ON DELETE SET NULL`, **no** `CASCADE`: un reporte debe sobrevivir a la eliminación de las cuentas involucradas (`ADR-031`). **Ojo con `ADR-031`:** su prueba de claves foráneas debe aceptar este `SET NULL` como excepción explícita. Las columnas de moderación y suspensión (`is_moderator`, `suspended_at`, ...) NO están: son de la fase 2.
 >
@@ -893,7 +897,8 @@ Todas las lecturas que significan "relación efectiva" (`is_following`, `followe
 | `target_type` | **VARCHAR(10)** | No | `post`, `comment`, `message` o `user`. Validado en la aplicación (`domain/reports/kinds.py`), no con un `ENUM`: agregar un tipo no exige migración |
 | `target_id` | **UUID** | No | **Sin clave foránea**: apunta a tablas distintas según `target_type` |
 | `reported_user_id` | **UUID**, FK → `users.id` | **Sí** | Autor del contenido o la cuenta reportada. `SET NULL` por el mismo motivo |
-| `reason` | **VARCHAR(20)** | No | `spam`, `harassment`, `hate`, `sexual`, `violence`, `self_harm`, `illegal`, `impersonation`, `other` |
+| `reason` | **VARCHAR(20)** | No | `spam`, `harassment`, `hate`, `sexual`, `violence`, `self_harm`, `illegal`, `impersonation`, `other`, `child_safety` (v0.24) |
+| `priority` | **VARCHAR(10)** | No | **v0.24.** `normal` o `critical`; `DEFAULT 'normal'`, con `CHECK`. La asigna el **servidor** a partir del motivo: `child_safety` → `critical`, el resto → `normal`. Un reporte se eleva (nunca se degrada) si el mismo objetivo se reporta de nuevo con un motivo más urgente |
 | `details` | **VARCHAR(500)** | Sí | Texto libre opcional |
 | `status` | **VARCHAR(10)** | No | `open`, `reviewing`, `actioned`, `dismissed`. `DEFAULT 'open'`. En la fase 1 todo reporte nace y queda `open` |
 | `content_snapshot` | **TEXT** | Sí | Copia del texto reportado (hasta 2000 caracteres) para que quien modere vea qué se dijo aunque el contenido se borre. **Se vacía al resolver** (fase 2). Para una cuenta, solo el texto **público** del perfil |
@@ -905,6 +910,8 @@ Todas las lecturas que significan "relación efectiva" (`is_following`, `followe
 **Constraints e índices**
 - **`uq_reports_reporter_target`** — `UNIQUE (reporter_id, target_type, target_id)`: reportar lo mismo dos veces es idempotente, también ante dos peticiones simultáneas. Con `reporter_id` nulo (cuenta eliminada) PostgreSQL no considera iguales dos filas, así que esos reportes no se bloquean entre sí: es lo deseado.
 - **`ix_reports_status_created_at`** — la cola de moderación: abiertos primero, del más antiguo al más nuevo.
+- **`ix_reports_status_priority_created_at`** — (v0.24) la cola con lo crítico primero. Aún no hay cola que la use: se crea ahora para no tener que migrar después.
+- **`ck_reports_priority`** — `CHECK (priority IN ('normal', 'critical'))`.
 - **`ix_reports_reported_user_id`** — «¿cuántos reportes tiene esta cuenta?».
 
 **Pendiente (no decidido):** cuánto tiempo se conserva un reporte ya resuelto, y el esquema de la fase 2 (`is_moderator`, `suspended_at`, `suspension_reason`). Ver `ADR-032`.

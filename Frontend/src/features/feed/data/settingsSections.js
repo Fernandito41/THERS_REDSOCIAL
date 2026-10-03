@@ -149,6 +149,12 @@ export const SETTINGS_CONTENT = {
         rows: [{ type: "activeSessions" }],
       },
       {
+        title: "Eliminar cuenta",
+        description:
+          "Elimina tu cuenta y sus datos de forma definitiva. Te pedimos un código por correo y varias confirmaciones.",
+        rows: [{ type: "deleteAccount" }],
+      },
+      {
         title: "Alertas de inicio de sesión",
         rows: [
           {

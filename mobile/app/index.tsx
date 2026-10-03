@@ -10,7 +10,7 @@ import { colors, fontSize, radius, space } from '@shared/design/tokens';
  *
  * Tres casos al arrancar:
  * - restaurando: spinner (evita parpadear el login);
- * - sesión válida: perfil;
+ * - sesión válida: inicio (feed);
  * - sin sesión: login.
  *
  * Y un cuarto, `restoreFailed` (ADR-017 §7 decisión 2): hay una sesión
@@ -68,7 +68,7 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={user ? '/profile' : '/login'} />;
+  return <Redirect href={user ? '/home' : '/login'} />;
 }
 
 const styles = StyleSheet.create({

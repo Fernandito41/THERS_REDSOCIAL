@@ -55,7 +55,7 @@ export default function Login() {
       }
       // `replace`, no `push`: el login no debe quedar en la pila: el botón
       // Atrás desde el perfil no puede volver a una pantalla de credenciales.
-      router.replace('/profile');
+      router.replace('/home');
     } catch (e) {
       if (e instanceof ApiError) {
         // `403` con `email_verified: false` es un caso propio del contrato
@@ -63,10 +63,10 @@ export default function Login() {
         // correo. Se distingue por el cuerpo, nunca parseando el texto.
         const body = e.body as { email_verified?: boolean } | null;
         if (e.status === 403 && body?.email_verified === false) {
-          setError(
-            'Tu correo todavía no fue verificado. Verificá tu cuenta desde la web de THERS ' +
-              'para poder iniciar sesión.',
-          );
+          // Las credenciales eran correctas: se continúa con la verificación por
+          // código (ADR-011) en vez de mandar a la persona a la web.
+          router.push({ pathname: '/verify-registration', params: { email: email.trim() } });
+          return;
         } else {
           setError(e.message);
         }
@@ -82,7 +82,7 @@ export default function Login() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
     >
       <ScrollView
         contentContainerStyle={[
@@ -153,14 +153,29 @@ export default function Login() {
           )}
         </Pressable>
 
+        <Pressable
+          style={({ pressed }) => [styles.linkRow, pressed && styles.linkPressed]}
+          onPress={() => router.push('/forgot-password')}
+          accessibilityRole="link"
+        >
+          <Text style={styles.linkText}>¿Olvidaste tu contraseña?</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.linkRow, pressed && styles.linkPressed]}
+          onPress={() => router.push('/register')}
+          accessibilityRole="link"
+        >
+          <Text style={styles.linkText}>¿No tienes cuenta? Crear cuenta</Text>
+        </Pressable>
+
         {/*
-          Registro, recuperación de contraseña y "Continuar con Google" existen
-          en el backend pero NO en esta entrega (ROADMAP fase 1/2). No se pone
-          un botón que no hace nada: una pantalla que aparenta una función
-          inexistente es peor que su ausencia.
+          "Continuar con Google" existe en el backend pero sigue sin pantalla
+          móvil: necesita credenciales nativas de OAuth (Google Cloud Console) que
+          todavía no existen. No se pone un botón que no hace nada.
         */}
         <Text style={styles.note}>
-          Por ahora, crear cuenta y recuperar contraseña se hacen desde la web de THERS.
+          «Continuar con Google» se hace por ahora desde la web de THERS.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -230,6 +245,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.bodyLg,
     fontWeight: '700',
   },
+  linkRow: { alignItems: 'center', marginTop: space[4], padding: space[3] },
+  linkPressed: { opacity: 0.6 },
+  linkText: { color: colors.brand, fontSize: fontSize.bodyMd, fontWeight: '600' },
   note: {
     fontSize: fontSize.bodySm,
     color: colors.fgMuted,

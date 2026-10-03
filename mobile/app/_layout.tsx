@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@features/auth/context/AuthContext';
+import { PostsProvider } from '@features/posts/PostsContext';
 import { colors } from '@shared/design/tokens';
 
 /**
@@ -16,13 +17,16 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.bg },
-          }}
-        />
+        {/* Las publicaciones se cargan al iniciar sesión y se vacían al cerrarla. */}
+        <PostsProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.bg },
+            }}
+          />
+        </PostsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

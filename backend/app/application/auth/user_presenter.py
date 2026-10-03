@@ -52,6 +52,9 @@ def to_public_user(user, followers_count=0, following_count=0):
         "is_private": user.is_private,
         "profile_completed": user.profile_completed,
         "has_password": user.password_hash is not None,
+        # ADR-032 fase 2: solo para que el cliente decida si muestra la entrada a la
+        # página de moderación. No concede nada: las rutas lo vuelven a comprobar.
+        "is_moderator": user.is_moderator,
         # ADR-032 §5: `true` solo si aceptó la versión VIGENTE. Las cuentas
         # anteriores y las que aceptaron una versión vieja dan `false`, y el
         # cliente les pide aceptar antes de crear contenido.

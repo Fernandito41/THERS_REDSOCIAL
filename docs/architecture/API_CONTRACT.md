@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.34 (Propuesta) |
+| Versión | 0.35 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -43,6 +43,8 @@
 > **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
+>
+> **v0.35 — moderación de la plataforma (`ADR-032`, fase 2):** `GET /api/moderation/reports` y `POST /api/moderation/reports/<id>/resolve` (§4.22), solo para cuentas con `is_moderator` (cualquier otra recibe el mismo `404` que una ruta inexistente). El objeto `user` propio gana `is_moderator`. `POST /api/login`, `POST /api/auth/google` y `POST /api/2fa/verify` responden `403` con `suspended: true` y `suspension_reason` a una cuenta suspendida. Cambios aditivos.
 >
 > **v0.34 — sincronización del chat (`ADR-035-chat-sync.md`, **PROPUESTO**):** `POST /api/users/<id>/messages` acepta `client_id` opcional (envío idempotente por remitente: `201` la primera vez, `200` si ya existía); `GET /api/users/<id>/messages` acepta `limit`, `before` y `after` (instantes ISO 8601 con zona horaria) y devuelve `has_more`. El mensaje público gana `client_id`. Cambios aditivos y compatibles (§4.10).
 >
@@ -2061,3 +2063,72 @@ Body `{ "email", "code", "confirm_email", "confirmation": "DELETE", "two_factor_
 **Qué se elimina** (una transacción): la fila de `users` y, por `ON DELETE CASCADE`, publicaciones, comentarios, me gusta, seguidos, notificaciones, **mensajes enviados y recibidos (las dos bandejas)**, tokens, sesiones, identidades de Google, menciones, filtros, exportaciones y códigos. Después se borran del almacenamiento el avatar y la portada. Los access y refresh tokens dejan de valer **de inmediato**. Quien hablaba con esa cuenta recibe `404 "Usuario no encontrado"` al pedir ese hilo. **Quedan fuera** y deben declararse en la política de privacidad: las copias de seguridad del proveedor y los registros del servidor. Se envía un correo de confirmación sin guardar copia.
 
 **Reportes:** `reports.reporter_id`, `reported_user_id` y `resolved_by` son `ON DELETE SET NULL` (`ADR-032`): un reporte sobrevive a la eliminación de las cuentas involucradas.
+
+---
+
+## 4.22 Moderación de la plataforma (`ADR-032-content-reports-and-moderation.md`, fase 2) — v0.35
+
+Rutas **solo para moderadores** (`users.is_moderator`, que se concede **únicamente por línea de comandos**, nunca por la API). Quien no lo es recibe `404 {"msg": "Recurso no encontrado"}`, idéntico al de una URL inexistente; sin token, `401`. El rol se vuelve a comprobar contra la base en cada petición y una cuenta moderadora suspendida pierde el acceso. No confundir con los filtros personales (`/api/users/me/muted-*`, `ADR-024`).
+
+#### `GET /api/moderation/reports`
+
+Query opcional: `status` (`open` por defecto, `reviewing`, `actioned`, `dismissed`), `limit` (1–100, por defecto 50) y `offset` (≥ 0). Orden: **lo crítico primero** (`ADR-038`) y, dentro de cada prioridad, del más antiguo al más nuevo. `400` si algún valor no es válido.
+
+```json
+{
+  "reports": [
+    {
+      "id": "uuid",
+      "target_type": "post | comment | message | user",
+      "target_id": "uuid",
+      "reason": "string",
+      "priority": "normal | critical",
+      "status": "open",
+      "details": "string | null",
+      "content_snapshot": "string | null",
+      "reports_on_target": 2,
+      "reported_user": { "id": "uuid", "username": "string", "name": "string", "suspended": false, "is_moderator": false },
+      "created_at": "ISO 8601",
+      "resolved_at": "ISO 8601 | null",
+      "resolution_note": "string | null"
+    }
+  ],
+  "has_more": false
+}
+```
+
+**Nunca** incluye quién reportó (`reporter_id`) ni el correo de la cuenta reportada. `content_snapshot` es la copia del texto reportado y **solo existe mientras el reporte está abierto** (`ADR-032` §4). `reported_user` es `null` si la cuenta ya no existe. `reports_on_target` cuenta los reportes sobre el mismo objetivo.
+
+#### `POST /api/moderation/reports/<id>/resolve`
+
+Body `{ "action": "dismiss | remove_content | suspend_user", "note"?: "string (≤ 500)", "reason"?: "string (≤ 500)" }`. `note` es **interna** (queda en `resolution_note`). `reason` solo vale con `suspend_user` y es lo que **ve la persona suspendida**; sin él se usa un texto estándar. La nota interna nunca se le muestra. `moderator_id` sale del JWT; cualquier otro campo del cuerpo se ignora.
+
+| Acción | Efecto |
+|---|---|
+| `dismiss` | Cierra el reporte como `dismissed`. No toca el contenido |
+| `remove_content` | Borra el post, comentario o mensaje con las rutas de borrado existentes, cierra el reporte como `actioned` y cierra también los **demás reportes abiertos sobre el mismo objetivo**. Sobre un reporte de **cuenta** responde `400` |
+| `suspend_user` | Fija `suspended_at` y el motivo, **revoca todas las sesiones y los refresh tokens de inmediato** y cierra el reporte como `actioned`. Idempotente: si ya estaba suspendida se conserva la suspensión original. No se puede suspender a una cuenta moderadora desde el panel (`400`) ni a una cuenta que ya no existe (`400`) |
+
+Toda resolución deja `resolved_by`, `resolved_at` y `resolution_note`, y **vacía `content_snapshot`**.
+
+| Código | Causa |
+|---|---|
+| `200` | `{"report": {"id", "status", "action"}}` |
+| `400` | Acción, nota o motivo no válidos; acción no aplicable al tipo de reporte |
+| `403` | Quien modera es la cuenta reportada (no puede resolver un reporte sobre sí misma) |
+| `404` | Reporte inexistente o `id` mal formado |
+| `409` | El reporte ya estaba resuelto |
+
+#### Cuenta suspendida
+
+`POST /api/login`, `POST /api/auth/google` y `POST /api/2fa/verify` responden **`403`** una vez probada la identidad:
+
+```json
+{ "msg": "Tu cuenta está suspendida.", "suspended": true, "suspension_reason": "string" }
+```
+
+Con una contraseña incorrecta sigue siendo `401`: la suspensión no sirve para averiguar qué cuentas lo están sin conocer sus credenciales. Los tokens ya emitidos dejan de valer al instante. El objeto `user` propio incluye además `is_moderator` (boolean), solo para que el cliente decida si muestra la entrada a la página de moderación; no concede nada.
+
+#### Línea de comandos (no es API)
+
+`flask set-moderator <correo> [--revoke]` concede o retira el rol (avisa si la cuenta no tiene 2FA) y `flask unsuspend-user <correo>` levanta una suspensión.

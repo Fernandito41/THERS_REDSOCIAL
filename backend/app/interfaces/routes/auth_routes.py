@@ -76,6 +76,7 @@ from app.infrastructure.persistence.repositories.user_identity_repository import
 from app.infrastructure.persistence.repositories.user_repository import (
     SQLAlchemyUserRepository,
 )
+from app.interfaces.retention_trigger import maybe_purge
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -192,6 +193,8 @@ def _issue_session_token(user_entity):
         _email_service,
         refresh_family_id=family_id,
     )
+    # ADR-037: oportunista, nunca falla el inicio de sesión (ver retention_trigger.py).
+    maybe_purge()
     return tokens
 
 

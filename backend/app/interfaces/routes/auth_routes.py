@@ -312,7 +312,7 @@ def register():
         }), 400
 
     try:
-        user = register_user(
+        user, email_sent = register_user(
             name, username, email, phone, country_code, birth_date, password,
             _user_repository, _email_verification_token_repository, _email_service,
         )
@@ -328,7 +328,9 @@ def register():
         updated = record_terms_acceptance(user["id"], current_terms_version(), _user_repository)
         user = to_public_user(updated)
 
-    return jsonify({"user": user}), 201
+    # `email_sent` (aditivo): `false` si no se pudo entregar el código al proveedor de
+    # correo; la cuenta existe igual y se pide otro código con «Reenviar».
+    return jsonify({"user": user, "email_sent": email_sent}), 201
 
 
 @auth_bp.route("/login", methods=["POST"])

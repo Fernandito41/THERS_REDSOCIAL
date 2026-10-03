@@ -62,6 +62,10 @@ def register_user(
             password_hash=password_hash,
         )
 
-    send_registration_code(user, email_verification_token_repository, email_service)
+    # La cuenta ya está creada: un fallo del proveedor de correo no debe convertirse en un
+    # 500 (la persona no sabría que su cuenta existe). Se informa con `email_sent`.
+    email_sent = send_registration_code(
+        user, email_verification_token_repository, email_service
+    )
 
-    return to_public_user(user)
+    return to_public_user(user), email_sent

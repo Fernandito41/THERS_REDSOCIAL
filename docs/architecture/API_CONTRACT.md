@@ -2072,6 +2072,18 @@ Body `{ "email", "code", "confirm_email", "confirmation": "DELETE", "two_factor_
 
 ---
 
+## 4.21 Fallos del proveedor de correo (`ADR-036-email-provider-failures.md`, aceptado con cambios)
+
+**Cambio propuesto sobre `ADR-011`; no se fusiona sin aprobación del equipo.** Si el proveedor de correo falla:
+
+- `POST /api/register` responde `201` con `"email_sent": false` (campo aditivo; `true` si el correo salió). La cuenta existe y se pide otro código con `POST /api/resend-registration-code`. Antes respondía `500` después de crear la cuenta.
+- `POST /api/forgot-password` y `POST /api/resend-registration-code` responden **siempre** el mismo `200` genérico, exista o no la cuenta (antes, un `500` solo para las cuentas existentes revelaba qué correos están registrados).
+- `POST /api/reset-password` responde `200` aunque falle solo el aviso de «contraseña cambiada» posterior (la contraseña ya cambió).
+
+El fallo se registra con el tipo de correo, la clase del error y el código del proveedor; **nunca** el código de 6 dígitos, el destinatario ni el mensaje del proveedor.
+
+---
+
 ## 4.22 Moderación de la plataforma (`ADR-032-content-reports-and-moderation.md`, fase 2) — v0.35
 
 Rutas **solo para moderadores** (`users.is_moderator`, que se concede **únicamente por línea de comandos**, nunca por la API). Quien no lo es recibe `404 {"msg": "Recurso no encontrado"}`, idéntico al de una URL inexistente; sin token, `401`. El rol se vuelve a comprobar contra la base en cada petición y una cuenta moderadora suspendida pierde el acceso. No confundir con los filtros personales (`/api/users/me/muted-*`, `ADR-024`).

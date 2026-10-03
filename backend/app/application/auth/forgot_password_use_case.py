@@ -14,6 +14,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+from app.application.email.safe_delivery import attempt_delivery
 from app.domain.auth.auth_service import hash_password
 from app.domain.auth.token_generator import generate_otp_code
 from app.domain.auth.token_policy import (
@@ -42,8 +43,13 @@ def forgot_password(email, user_repository, password_reset_token_repository, ema
         )
         password_reset_token_repository.create_code(user.id, code_hash, expires_at)
 
-        email_service.send_password_reset_code_email(
-            user.email, user.name, code, PASSWORD_RESET_CODE_TTL_MINUTES
+        # Si el proveedor falla, la respuesta sigue siendo la genérica: un 500 solo para
+        # las cuentas que existen revelaría qué correos están registrados.
+        attempt_delivery(
+            lambda: email_service.send_password_reset_code_email(
+                user.email, user.name, code, PASSWORD_RESET_CODE_TTL_MINUTES
+            ),
+            "password_reset_code",
         )
 
     # Mismo mensaje siempre -- exista o no el usuario, esté o no en cooldown

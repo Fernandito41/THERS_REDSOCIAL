@@ -10,7 +10,12 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    CORS(app)
+    # ADR-018 §Riesgos ítem 5: en un entorno desplegado `CORS_ORIGINS` limita qué sitios web
+    # pueden llamar a la API. Sin ella (desarrollo local) queda abierto, como siempre.
+    if app.config["ALLOWED_WEB_ORIGINS"]:
+        CORS(app, origins=app.config["ALLOWED_WEB_ORIGINS"])
+    else:
+        CORS(app)
 
     jwt.init_app(app)
     db.init_app(app)

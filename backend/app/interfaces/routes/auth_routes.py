@@ -106,7 +106,9 @@ _session_tokens = JwtSessionTokens()
 # en que Config ya resolvió RESEND_API_KEY desde el entorno) -- Resend real
 # si hay API key, NullEmailSender si no (ADR-009-password-reset-and-email-verification.md
 # §Decisión, infrastructure/email/factory.py).
-_email_service = EmailService(create_email_sender(Config.RESEND_API_KEY, Config.EMAIL_FROM))
+_email_service = EmailService(
+    create_email_sender(Config.RESEND_API_KEY, Config.EMAIL_FROM, Config.EMAIL_REPLY_TO)
+)
 
 # Mismo criterio: el Client ID se resuelve una sola vez al importar este
 # módulo (ADR-012-google-sign-in.md §Decisión, infrastructure/auth/google_id_token_verifier.py).

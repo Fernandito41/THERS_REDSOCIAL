@@ -10,6 +10,7 @@ from app.application.rate_limiting import rate_limit_guard
 from app.application.reports.report_use_cases import create_report
 from app.domain.rate_limiting import policy
 from app.domain.rate_limiting.exceptions import RateLimitExceededError
+from app.domain.reports import kinds
 from app.domain.reports.exceptions import (
     CannotReportSelfError,
     InvalidReportError,
@@ -54,9 +55,13 @@ def post_report():
     # saturar a quien modera. Por persona, no por IP: la cuenta es lo que se
     # protege (ADR-032 §2, regla `REPORT_CREATE` de ADR-027).
     try:
-        rate_limit_guard.enforce(
-            policy.REPORT_CREATE, f"user:{reporter_id}", _rate_limit_repository
+        # Un reporte de explotación de menores usa su propio límite, más holgado (ADR-038).
+        rule = (
+            policy.REPORT_CHILD_SAFETY
+            if data.get("reason") == kinds.REASON_CHILD_SAFETY
+            else policy.REPORT_CREATE
         )
+        rate_limit_guard.enforce(rule, f"user:{reporter_id}", _rate_limit_repository)
     except RateLimitExceededError as error:
         return rate_limited_response(error)
 

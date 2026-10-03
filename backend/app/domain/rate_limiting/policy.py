@@ -97,3 +97,23 @@ OTP_VERIFY = RateLimitRule("otp_verify", 15, 15 * _MINUTE, clear_on_success=True
 #: usar el reporte como herramienta de hostigamiento o de saturación de quien
 #: modera. `clear_on_success=False`: acá el acierto **es** el uso.
 REPORT_CREATE = RateLimitRule("report_create", 10, _HOUR, clear_on_success=False)
+
+#: `POST /api/reports` con motivo `child_safety` (ADR-038). Límite PROPIO y más holgado que
+#: `REPORT_CREATE`: una persona que ya hizo varios reportes comunes no debe quedarse sin poder
+#: denunciar una explotación de menores. Sigue existiendo (no es ilimitado) para que no se use
+#: como forma de saturar a quien modera.
+REPORT_CHILD_SAFETY = RateLimitRule("report_child_safety", 30, _HOUR, clear_on_success=False)
+
+#: `POST /api/account-deletion/request` (ADR-031). `clear_on_success=False`: cada
+#: llamada exitosa manda un correo, así que acá el éxito ES el abuso. Por IP.
+ACCOUNT_DELETION_REQUEST = RateLimitRule(
+    "account_deletion_request", 5, 15 * _MINUTE, clear_on_success=False
+)
+
+#: `POST /api/account-deletion/confirm` (ADR-031). Cuenta **fallos** y se limita por
+#: cuenta y por IP: cubre adivinar el código de 6 dígitos y el segundo factor. 5
+#: intentos por 15 minutos, el mismo orden que `TWO_FACTOR_VERIFY`, porque es el
+#: mismo problema (un código corto que se protege con intentos, no con entropía).
+ACCOUNT_DELETION_CONFIRM = RateLimitRule(
+    "account_deletion_confirm", 5, 15 * _MINUTE, clear_on_success=True
+)

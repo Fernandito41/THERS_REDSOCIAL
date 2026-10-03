@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.31 (Propuesta) |
+| Versión | 0.34 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -43,6 +43,12 @@
 > **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
+>
+> **v0.34 — sincronización del chat (`ADR-035-chat-sync.md`, **PROPUESTO**):** `POST /api/users/<id>/messages` acepta `client_id` opcional (envío idempotente por remitente: `201` la primera vez, `200` si ya existía); `GET /api/users/<id>/messages` acepta `limit`, `before` y `after` (instantes ISO 8601 con zona horaria) y devuelve `has_more`. El mensaje público gana `client_id`. Cambios aditivos y compatibles (§4.10).
+>
+> **v0.33 — eliminación de cuenta (`ADR-031-account-deletion.md`, aceptado con cambios, implementado sin commit hasta esta rama):** `POST /api/account-deletion/request` y `POST /api/account-deletion/confirm` (§4.19), públicos y sin JWT. Cambio aditivo. Los mensajes de la cuenta eliminada se borran en las dos bandejas.
+>
+> **v0.32 — seguridad infantil en los reportes (`ADR-038-child-safety-reports.md`, **PROPUESTO**, implementado sin commit):** `POST /api/reports` acepta el motivo nuevo `child_safety` («Explotación o abuso de menores») y la respuesta gana `priority` (`normal` o `critical`). **La prioridad la decide solo el servidor**: `child_safety` es siempre `critical`, y cualquier `priority` enviada por el cliente se ignora. Un reporte posterior más urgente sobre el mismo objetivo **eleva** el existente (no se degrada nunca). Límite propio de 30 por hora para este motivo. Cambio aditivo y compatible. Ver §4.18.
 >
 > **v0.31 — reportes de contenido y aceptación de términos (`ADR-032-content-reports-and-moderation.md`, fase 1, **PROPUESTO**, implementado en una rama sin mergear):** se agrega `POST /api/reports` y `POST /api/users/me/terms-acceptance` (§4.18). `POST /api/register` y `POST /api/auth/google` aceptan `terms_accepted` (opcional por defecto; obligatorio cuando el entorno define `TERMS_ACCEPTANCE_REQUIRED`, que arranca **apagado**). El objeto `user` gana `terms_accepted` (§5). Tabla nueva `reports` y columnas `users.terms_accepted_at` / `users.terms_version` (`DATABASE_ARCHITECTURE.md` v0.23). Cambio aditivo: ningún cliente actual se rompe. No incluye las rutas de moderación (cola, resolver, suspender): son de la fase 2. **Pendiente de la ratificación de `ADR-032`.**
 >
@@ -1050,8 +1056,9 @@ Obligatorio, con el mismo validador y el mismo límite (1000, menor que el de po
 
 **Request body**
 ```json
-{ "content": "string" }
+{ "content": "string", "client_id": "string (opcional, 1–64: letras, números, - o _)" }
 ```
+`client_id` (v0.34, `ADR-035`) hace el envío **idempotente por remitente**: repetir la petición con el mismo `client_id` devuelve el mensaje ya creado con `200` en vez de duplicarlo (el texto del reintento se ignora). Sin `client_id` se mantiene el comportamiento anterior: cada llamada crea un mensaje (`201`). Las comprobaciones de bloqueo y de quién puede escribir se hacen **siempre**, también en un reintento. El mensaje público incluye `client_id` (`null` si no se envió).
 
 **Response — éxito (201)**
 ```json
@@ -1087,13 +1094,21 @@ Obligatorio, con el mismo validador y el mismo límite (1000, menor que el de po
 
 **Semántica.** Historial de mensajes con `user_id`, ambos sentidos, orden cronológico **ascendente** (mensaje más viejo primero — a diferencia del feed/notificaciones, que van más reciente primero). Sin paginación real: límite fijo de **50** más recientes. **Efecto secundario:** marca como leídos los mensajes que `user_id` le mandó a la persona autenticada (`ADR-013` §Opciones consideradas — no hay un `PATCH .../read` separado).
 
-**Request:** sin body. Header `Authorization: Bearer <token>` obligatorio.
+**Request:** sin body. Header `Authorization: Bearer <token>` obligatorio. Query opcional (`ADR-035-chat-sync.md`, v0.34):
+
+| Parámetro | Efecto |
+|---|---|
+| `limit` | Entero 1–100 (por defecto 50). Otro valor → `400` |
+| `before` | Instante ISO 8601 **con zona horaria** (el `created_at` de un mensaje): los mensajes anteriores o iguales a ese instante (historial hacia atrás) |
+| `after` | Igual, pero posteriores o iguales (recuperación tras perder la conexión) |
+
+`before` y `after` no se combinan (`400`). Los cursores son **instantes, no ids**: el borrado de mensajes es duro y un id borrado no sirve de cursor. Son inclusivos, así que el cliente descarta duplicados por `id`.
 
 **Response — éxito (200)**
 ```json
-{ "messages": [ /* misma forma que el objeto de POST */ ] }
+{ "messages": [ /* misma forma que el objeto de POST */ ], "has_more": false }
 ```
-Lista vacía (`[]`) si nunca hubo mensajes con esa persona.
+`has_more` (v0.34, aditivo): quedan más mensajes en la dirección pedida. Lista vacía (`[]`) si nunca hubo mensajes con esa persona.
 
 **Response — error**
 
@@ -1850,11 +1865,17 @@ Además de los de §4.2, acepta `bio` (≤ 160), `location` (≤ 60) y `website`
 {
   "target_type": "post | comment | message | user",
   "target_id": "string (UUID)",
-  "reason": "spam | harassment | hate | sexual | violence | self_harm | illegal | impersonation | other",
+  "reason": "spam | harassment | hate | sexual | violence | self_harm | illegal | impersonation | other | child_safety",
   "details": "string, opcional, hasta 500 caracteres"
 }
 ```
-`reporter_id`, `reported_user_id`, `status` y cualquier otro campo del cuerpo **se ignoran**: quien reporta sale solo del JWT.
+`reporter_id`, `reported_user_id`, `status`, **`priority`** y cualquier otro campo del cuerpo **se ignoran**: quien reporta sale solo del JWT y la prioridad la calcula el servidor.
+
+**Motivo `child_safety` (v0.32).** «Explotación o abuso de menores». Está disponible para **los cuatro** `target_type` (`post`, `comment`, `message`, `user`) con sus mismas guardias de visibilidad: no se puede reportar con él lo que no se puede ver. Siempre produce `priority: "critical"`. Los demás motivos producen `priority: "normal"`. Un valor de `reason` que no esté en la lista (incluidas variantes como `CHILD_SAFETY` o `child-safety`) responde `400`.
+
+**Escalada.** Como (`reporter_id`, `target_type`, `target_id`) es único, si esa persona ya había reportado el objetivo con un motivo menos urgente y ahora lo reporta como `child_safety`, **no se crea otro**: se eleva el existente (motivo, prioridad y, si se envió, el detalle) y se reabre si estaba `dismissed`. Responde `200` con `already_reported: true` y `priority: "critical"`. Un reporte posterior **menos** urgente nunca baja la prioridad.
+
+**Límite de uso.** `child_safety` cuenta contra su propio límite (`REPORT_CHILD_SAFETY`, 30 por hora y por persona), distinto del de los demás motivos (`REPORT_CREATE`, 10 por hora), para que haber hecho reportes comunes no impida denunciar una explotación de menores.
 
 **Qué se puede reportar.** Solo lo que quien reporta **puede ver**, con las mismas guardias que protegen la lectura (cuentas privadas de `ADR-022`, bloqueos de `ADR-029`):
 
@@ -1876,6 +1897,7 @@ No se puede reportar lo propio (`400`). La visibilidad se comprueba **antes** qu
     "target_id": "string (UUID)",
     "reason": "string",
     "status": "open",
+    "priority": "normal | critical",
     "created_at": "string (ISO 8601)",
     "already_reported": "boolean"
   }
@@ -2015,7 +2037,34 @@ Este documento **no modifica** el backend ni el Frontend: define el contrato de 
 
 ---
 
-## 4.21 Fallos del proveedor de correo (`ADR-036-email-provider-failures.md`, PROPUESTO)
+## 4.19 Eliminación de cuenta (`ADR-031-account-deletion.md`) — v0.33
+
+Dos pasos, **públicos** (sin JWT): la identidad la aporta el control del correo y, si la cuenta tiene 2FA, el segundo factor.
+
+#### `POST /api/account-deletion/request`
+
+Body `{ "email": "..." }`. Responde **siempre `200`** con el mismo mensaje, exista o no la cuenta (sin enumeración de correos). Si existe, envía un código de 6 dígitos (scrypt, vigencia 10 min, 5 intentos, enfriamiento de 60 s, un solo código activo por cuenta). Límite por IP (`ACCOUNT_DELETION_REQUEST`: 5 / 15 min). `400` si el correo falta o no es válido; `429` con `Retry-After`.
+
+#### `POST /api/account-deletion/confirm`
+
+Body `{ "email", "code", "confirm_email", "confirmation": "DELETE", "two_factor_code"? }`. `confirm_email` debe coincidir con el de la cuenta (sin distinguir mayúsculas) y `confirmation` ser **exactamente** `DELETE`.
+
+| Código | Causa |
+|---|---|
+| `200` | Cuenta eliminada (`{"msg": "Tu cuenta fue eliminada."}`) |
+| `400` | Cuenta inexistente, sin solicitud, código vencido, intentos agotados o incorrecto (**un solo mensaje** para todos los casos) |
+| `400` + `confirmation_error: true` | Correo o palabra mal escritos. **Solo con el código ya verificado**; no consume el código |
+| `400` | Segundo factor inválido (no `401`: un cliente con sesión intentaría renovarla) |
+| `403` + `two_factor_required: true` | La cuenta tiene 2FA y falta `two_factor_code`. Solo con el código verificado; no lo consume |
+| `429` | `ACCOUNT_DELETION_CONFIRM`: 5 fallos / 15 min por cuenta y por IP |
+
+**Qué se elimina** (una transacción): la fila de `users` y, por `ON DELETE CASCADE`, publicaciones, comentarios, me gusta, seguidos, notificaciones, **mensajes enviados y recibidos (las dos bandejas)**, tokens, sesiones, identidades de Google, menciones, filtros, exportaciones y códigos. Después se borran del almacenamiento el avatar y la portada. Los access y refresh tokens dejan de valer **de inmediato**. Quien hablaba con esa cuenta recibe `404 "Usuario no encontrado"` al pedir ese hilo. **Quedan fuera** y deben declararse en la política de privacidad: las copias de seguridad del proveedor y los registros del servidor. Se envía un correo de confirmación sin guardar copia.
+
+**Reportes:** `reports.reporter_id`, `reported_user_id` y `resolved_by` son `ON DELETE SET NULL` (`ADR-032`): un reporte sobrevive a la eliminación de las cuentas involucradas.
+
+---
+
+## 4.21 Fallos del proveedor de correo (`ADR-036-email-provider-failures.md`, aceptado con cambios)
 
 **Cambio propuesto sobre `ADR-011`; no se fusiona sin aprobación del equipo.** Si el proveedor de correo falla:
 

@@ -10,6 +10,7 @@ import { usePrivacySettings } from "../hooks/usePrivacySettings";
 import FollowRequestsRow from "../components/settings/FollowRequestsRow";
 import MutedKeywordsRow from "../components/settings/MutedKeywordsRow";
 import TwoFactorRow from "../components/settings/TwoFactorRow";
+import DeleteAccountRow from "../components/settings/DeleteAccountRow";
 import ActiveSessionsRow from "../components/settings/ActiveSessionsRow";
 import MutedTopicsRow from "../components/settings/MutedTopicsRow";
 import RestrictedAccountsRow from "../components/settings/RestrictedAccountsRow";
@@ -192,6 +193,11 @@ function SettingRowRenderer({
 
     case "twoFactor":
       return <TwoFactorRow />;
+
+    // --- Eliminación de cuenta (ADR-031): lleva a la página pública con el
+    // flujo completo, la misma que se declara en Play Console ---
+    case "deleteAccount":
+      return <DeleteAccountRow />;
 
     // --- Privacidad: se aplica en el servidor (ADR-022/ADR-023/ADR-024) ---
     case "privacySwitch":

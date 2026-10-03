@@ -159,7 +159,7 @@ def _clean_tables(app):
                 "TRUNCATE TABLE refresh_tokens, password_reset_tokens, email_verification_tokens, "
                 "user_identities, notifications, messages, mentions, muted_keywords, "
                 "sessions, two_factor_recovery_codes, rate_limit_buckets, data_exports, user_restrictions, muted_topics, "
-                "comments, likes, follows, posts, users"
+                "comments, likes, follows, posts, reports, users"
             )
         )
         db.session.commit()

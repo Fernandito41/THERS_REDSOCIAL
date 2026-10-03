@@ -23,13 +23,19 @@
 
 from app.application.auth.user_presenter import to_public_user
 from app.domain.auth.exceptions import GoogleEmailNotVerifiedError
+from app.domain.terms.exceptions import TermsNotAcceptedError
 from app.domain.auth.placeholder_username import generate_placeholder_username
 
 GOOGLE_PROVIDER = "google"
 
 
 def authenticate_with_google(
-    credential, google_identity_verifier, user_repository, user_identity_repository
+    credential,
+    google_identity_verifier,
+    user_repository,
+    user_identity_repository,
+    require_terms=False,
+    terms_accepted=False,
 ):
     identity = google_identity_verifier.verify(credential)
 
@@ -55,6 +61,10 @@ def authenticate_with_google(
     existing_user = user_repository.find_by_email(identity.email)
 
     if existing_user is None:
+        # ADR-032 §5: una cuenta NUEVA no se crea sin aceptar los términos.
+        # Iniciar sesión con una cuenta de Google que ya existe no lo necesita.
+        if require_terms and not terms_accepted:
+            raise TermsNotAcceptedError()
         user = _create_new_google_user(identity, user_repository)
     else:
         user = _link_or_reclaim_existing_account(identity, existing_user, user_repository)

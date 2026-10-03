@@ -12,8 +12,9 @@ DEFAULT_LIMIT = 50
 
 def list_thread(
     user_id, other_user_id, user_repository, message_repository, restriction_repository,
-    limit=DEFAULT_LIMIT,
+    limit=DEFAULT_LIMIT, before=None, after=None,
 ):
+    """Devuelve `(mensajes_públicos, has_more)` (ADR-035: paginación y recuperación)."""
     other_user = user_repository.find_by_id(other_user_id)
     if other_user is None:
         raise UserNotFoundError()
@@ -23,7 +24,9 @@ def list_thread(
     if restriction_repository.is_blocked_between(user_id, other_user_id):
         raise UserNotFoundError()
 
-    messages = message_repository.list_thread(user_id, other_user_id, limit)
+    messages, has_more = message_repository.list_thread_page(
+        user_id, other_user_id, limit, before=before, after=after
+    )
 
     # El objeto público se arma ANTES de marcar como leído
     # (ADR-014-messages-ux-improvements.md §Decisión): Flask-SQLAlchemy
@@ -39,4 +42,4 @@ def list_thread(
 
     message_repository.mark_thread_as_read(recipient_id=user_id, sender_id=other_user_id)
 
-    return public_messages
+    return public_messages, has_more

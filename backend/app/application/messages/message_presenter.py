@@ -20,6 +20,8 @@ def to_public_message(message):
         # Booleano, nunca el timestamp `edited_at` crudo -- mismo criterio
         # que `read` en messages/notifications (ADR-021-content-editing.md).
         "edited": message.edited_at is not None,
+        # ADR-035: el id que eligió quien envió (null si su cliente no lo manda).
+        "client_id": message.client_id,
     }
 
 

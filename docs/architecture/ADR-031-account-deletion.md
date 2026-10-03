@@ -152,3 +152,10 @@ Quedan abiertas **a propósito**; la recomendación es mía, no una decisión to
 - Código de `develop` (`8a213c0`): `models.py` (claves foráneas), `domain/media/storage.py`, `application/email/email_service.py`.
 - `ADR-010`, `ADR-011`, `ADR-012`, `ADR-015`, `ADR-018`, `ADR-025` a `ADR-029`.
 - Play Console Help: *Understanding Google Play's app account deletion requirements* (2026-10-02).
+
+## Implementación (2026-10-02) — corrección sobre mensajes y alcance
+
+- **Mensajes de una cuenta eliminada:** se implementó el **borrado en las dos bandejas** (el `CASCADE` ya existente), no la conservación con «Usuario no encontrado» de la sección C. Motivo: conservar texto escrito por quien se fue exige anular `sender_id`/`recipient_id` y retener datos personales tras una eliminación, y esa lectura de la decisión del equipo no estaba confirmada. **Quien tenía la conversación recibe `404 «Usuario no encontrado»` al pedir ese hilo.** Si el equipo quiere conservarlos, es un cambio de esquema que requiere ADR propio y revisión jurídica.
+- **Autenticación:** el flujo no usa contraseña (las cuentas de solo Google no tienen) ni sesión: el control del correo, el código y, si existe, el 2FA son la autenticación. Es la misma exposición que la recuperación de contraseña (`ADR-010`).
+- **Suspensión voluntaria (sección B): NO implementada.** La advertencia final no la ofrece porque la función no existe; no se muestra un botón que no hace nada.
+- Contrato: `API_CONTRACT.md` §4.18. Implementado en backend, web (`/eliminar-cuenta`) y móvil (pantalla dentro de la app).

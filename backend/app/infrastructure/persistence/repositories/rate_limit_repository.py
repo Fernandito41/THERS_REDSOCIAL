@@ -119,6 +119,14 @@ class SQLAlchemyRateLimitRepository(RateLimitRepository):
         )
         db.session.commit()
 
+    def clear_identity(self, identity):
+        db.session.execute(
+            delete(RateLimitBucket).where(
+                RateLimitBucket.identity_hash == _hash_identity(identity)
+            )
+        )
+        db.session.commit()
+
     def purge_expired(self, older_than_seconds=_PURGE_AFTER_SECONDS):
         result = db.session.execute(
             delete(RateLimitBucket).where(

@@ -23,6 +23,11 @@ def create_app():
     app.extensions["media_storage"] = build_media_storage(app.config)
     configure_media_url(app.config["MEDIA_PUBLIC_BASE_URL"])
 
+    # Versión vigente de los términos de uso (ADR-032 §5).
+    from app.application.terms.terms_version import configure_terms_version
+
+    configure_terms_version(app.config["TERMS_VERSION"])
+
     @app.after_request
     def _no_store_for_authenticated_requests(response):
         # Hallazgo de la validación en dispositivo (2026-10-02): la capa de red
@@ -84,6 +89,13 @@ def create_app():
 
     from app.interfaces.routes.restriction_routes import restrictions_bp
     app.register_blueprint(restrictions_bp, url_prefix="/api")
+
+    # Reportes y aceptación de términos (ADR-032, fase 1).
+    from app.interfaces.routes.report_routes import reports_bp
+    app.register_blueprint(reports_bp, url_prefix="/api")
+
+    from app.interfaces.routes.terms_routes import terms_bp
+    app.register_blueprint(terms_bp, url_prefix="/api")
 
     from app.interfaces.routes.content_routes import content_bp
     app.register_blueprint(content_bp, url_prefix="/api")

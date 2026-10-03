@@ -185,6 +185,13 @@ class User(db.Model):
         db.Boolean, nullable=False, server_default=text("false")
     )
 
+    # Aceptación de los términos de uso (ADR-032 §5). NULL = nunca aceptó: es el
+    # caso de TODAS las cuentas anteriores a esta columna, y se tratan como no
+    # aceptadas. `terms_version` es la versión que aceptó, no la vigente: así se
+    # sabe a quién volver a preguntarle cuando los términos cambian.
+    terms_accepted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    terms_version = db.Column(db.String(32), nullable=True)
+
     # DEFAULT now() en la base de datos. `updated_at` se mantiene actualizado
     # por un trigger de PostgreSQL (set_updated_at, ver migración), no por
     # SQLAlchemy — así funciona igual para updates hechos vía ORM o SQL directo.
@@ -1263,3 +1270,80 @@ class RefreshToken(db.Model):
 
     def __repr__(self):
         return f"<RefreshToken user_id={self.user_id} family_id={self.family_id}>"
+
+
+class Report(db.Model):
+    __tablename__ = "reports"
+
+    # ADR-032-content-reports-and-moderation.md §1. Un reporte de un post,
+    # comentario, mensaje o cuenta, hecho por una persona.
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    # SET NULL, no CASCADE: si quien reportó elimina su cuenta (ADR-031), el
+    # reporte sigue, porque lo reportado puede seguir siendo un problema. El
+    # reporte queda sin autor; no se conserva ningún dato de esa persona.
+    reporter_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # "post" | "comment" | "message" | "user", validado en la aplicación
+    # (`domain/reports/kinds.py`). `target_id` NO tiene clave foránea: apunta a
+    # tablas distintas según `target_type`.
+    target_type = db.Column(db.String(10), nullable=False)
+    target_id = db.Column(PG_UUID(as_uuid=True), nullable=False)
+
+    # Autor del contenido, o la propia cuenta reportada. SET NULL por lo mismo.
+    reported_user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    reason = db.Column(db.String(20), nullable=False)
+    details = db.Column(db.String(500), nullable=True)
+
+    # "open" | "reviewing" | "actioned" | "dismissed". Lo cambian las rutas de
+    # moderación (fase 2); en esta fase todo reporte nace y queda `open`.
+    status = db.Column(db.String(10), nullable=False, server_default=text("'open'"))
+
+    # Copia del texto reportado, para que quien modera vea qué se dijo aunque el
+    # contenido se borre o su autor elimine la cuenta (ADR-032 §4). Se vacía al
+    # resolver el reporte; no se guardan imágenes ni nombres.
+    content_snapshot = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    resolved_by = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    resolution_note = db.Column(db.String(500), nullable=True)
+
+    __table_args__ = (
+        # Reportar lo mismo dos veces es idempotente (ADR-032 §1). Con
+        # `reporter_id` NULL (cuenta eliminada) PostgreSQL no considera iguales
+        # dos filas, así que no se bloquean entre sí: es lo deseado.
+        db.Index(
+            "uq_reports_reporter_target",
+            "reporter_id",
+            "target_type",
+            "target_id",
+            unique=True,
+        ),
+        # La cola de moderación: abiertos primero, del más antiguo al más nuevo.
+        db.Index("ix_reports_status_created_at", "status", "created_at"),
+        db.Index("ix_reports_reported_user_id", "reported_user_id"),
+    )
+
+    def __repr__(self):
+        return f"<Report {self.target_type}:{self.target_id} reason={self.reason!r}>"

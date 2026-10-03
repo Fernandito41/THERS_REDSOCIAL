@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.30 (Propuesta) |
+| Versión | 0.31 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -43,6 +43,8 @@
 > **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
+>
+> **v0.31 — reportes de contenido y aceptación de términos (`ADR-032-content-reports-and-moderation.md`, fase 1, **PROPUESTO**, implementado en una rama sin mergear):** se agrega `POST /api/reports` y `POST /api/users/me/terms-acceptance` (§4.18). `POST /api/register` y `POST /api/auth/google` aceptan `terms_accepted` (opcional por defecto; obligatorio cuando el entorno define `TERMS_ACCEPTANCE_REQUIRED`, que arranca **apagado**). El objeto `user` gana `terms_accepted` (§5). Tabla nueva `reports` y columnas `users.terms_accepted_at` / `users.terms_version` (`DATABASE_ARCHITECTURE.md` v0.23). Cambio aditivo: ningún cliente actual se rompe. No incluye las rutas de moderación (cola, resolver, suspender): son de la fase 2. **Pendiente de la ratificación de `ADR-032`.**
 >
 > **v0.30 — corrección retroactiva de `POST /api/2fa/verify` (§4.12):** la respuesta `200` ya devolvía `refresh_token` (el segundo paso del login emite la sesión por el mismo camino que `login` y `auth/google`, `ADR-017`), pero no figuraba en este contrato. Sin ese campo, un cliente que implemente el 2FA no sabe que debe guardarlo. Hallado al implementar el segundo factor en la app móvil. Sin cambio de código.
 >
@@ -178,7 +180,8 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
   "country_code": "string",
   "birth_date": "string (ISO yyyy-mm-dd)",
   "password": "string",
-  "confirm_password": "string"
+  "confirm_password": "string",
+  "terms_accepted": "boolean (opcional; ver abajo)"
 }
 ```
 
@@ -207,6 +210,7 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 | Código | Causa | Body |
 |---|---|---|
 | `400` | Body vacío; alguno de `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`/`confirm_password` ausente; `email` con formato inválido; `password` ≠ `confirm_password`; `password` con menos de 8 caracteres; `username`/`phone`/`country_code`/`birth_date` con formato inválido; edad menor a 13 años | `{"msg": "..."}` |
+| `400` | **`terms_accepted` ausente o distinto de `true`, con `TERMS_ACCEPTANCE_REQUIRED` activado** (`ADR-032` §5). Solo cuenta el booleano `true`: la cadena `"true"` o el número `1` **no** son una aceptación. Solo con la exigencia activada | `{"msg": "...", "terms_required": true}` |
 | `409` | Ya existe una cuenta **verificada** con ese email (comparación case-insensitive, `CITEXT`) **o** con ese username | `{"msg": "..."}` |
 
 **Notas de implementación:**
@@ -992,7 +996,7 @@ Obligatorio, con el mismo validador y el mismo límite (1000, menor que el de po
 
 **Request body**
 ```json
-{ "credential": "string (ID Token de Google)" }
+{ "credential": "string (ID Token de Google)", "terms_accepted": "boolean (opcional; ver abajo)" }
 ```
 
 **Response — éxito (200)** — mismo shape que `POST /api/login`
@@ -1829,6 +1833,96 @@ Además de los de §4.2, acepta `bio` (≤ 160), `location` (≤ 60) y `website`
 
 ---
 
+### 4.18 Reportes y aceptación de términos (`ADR-032`, fase 1)
+
+> **Estado: PROPUESTO.** Implementado en una rama sin mergear, **pendiente de la ratificación de `ADR-032`**. Documentado el mismo día que el código (`HB-001` §15.1). Las rutas de moderación (cola, resolver, suspender) **no existen todavía**: son de la fase 2.
+
+#### `POST /api/reports`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** (rama, sin mergear) |
+| Blueprint | `reports_bp` |
+| Auth requerida | Sí (access token) |
+
+**Request body**
+```json
+{
+  "target_type": "post | comment | message | user",
+  "target_id": "string (UUID)",
+  "reason": "spam | harassment | hate | sexual | violence | self_harm | illegal | impersonation | other",
+  "details": "string, opcional, hasta 500 caracteres"
+}
+```
+`reporter_id`, `reported_user_id`, `status` y cualquier otro campo del cuerpo **se ignoran**: quien reporta sale solo del JWT.
+
+**Qué se puede reportar.** Solo lo que quien reporta **puede ver**, con las mismas guardias que protegen la lectura (cuentas privadas de `ADR-022`, bloqueos de `ADR-029`):
+
+| `target_type` | Regla |
+|---|---|
+| `post` | Visible para quien reporta |
+| `comment` | El post es visible **y** su autor no está bloqueado en ningún sentido |
+| `message` | **Solo quien lo recibió**, y sin bloqueo entre ambos. El remitente y los terceros reciben `404` |
+| `user` | La cuenta existe y no hay bloqueo entre ambos |
+
+No se puede reportar lo propio (`400`). La visibilidad se comprueba **antes** que "es mío", para que ese `400` no sirva para confirmar que algo existe.
+
+**Response — éxito**
+```json
+{
+  "report": {
+    "id": "string (UUID)",
+    "target_type": "string",
+    "target_id": "string (UUID)",
+    "reason": "string",
+    "status": "open",
+    "created_at": "string (ISO 8601)",
+    "already_reported": "boolean"
+  }
+}
+```
+- `201` si el reporte es nuevo; **`200` con `already_reported: true`** si esa persona ya había reportado lo mismo. Es idempotente, también ante dos peticiones simultáneas (índice único), y la segunda **no** cambia el motivo del primero.
+- La respuesta **nunca** incluye quién reportó, a quién se reportó ni el texto copiado: la persona reportada no debe poder enterarse de quién fue.
+
+**Response — error**
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Cuerpo ausente o no es un objeto; `target_type`, `target_id` o `reason` inválidos; `details` no es texto o supera 500 caracteres; se intenta reportar lo propio | `{"msg": "..."}` |
+| `401` | Sin token, token inválido o expirado | `{"msg": "..."}` |
+| `404` | El objetivo no existe **o quien reporta no puede verlo**: un único mensaje para los dos casos (`"No encontramos lo que quieres reportar"`) | `{"msg": "..."}` |
+| `429` | Más de **10 reportes por hora** por persona (`ADR-027`, regla `REPORT_CREATE`) | `{"msg": "...", "retry_after_seconds": N}` + header `Retry-After` |
+
+**Qué se guarda.** Una copia del texto reportado (`content_snapshot`, hasta 2000 caracteres: el texto del post, comentario o mensaje; para una cuenta, solo los campos de texto **públicos** del perfil, sin correo, teléfono ni fecha de nacimiento). Existe para que quien modere vea *qué se dijo* aunque el contenido se borre o se edite. Se vacía al resolver el reporte (fase 2).
+
+#### `POST /api/users/me/terms-acceptance`
+
+| Campo | Valor |
+|---|---|
+| Estado | **IMPLEMENTADO** (rama, sin mergear) |
+| Blueprint | `terms_bp` |
+| Auth requerida | Sí |
+
+Para las cuentas que **ya existían** y no aceptaron nada al registrarse: se les pide aceptar los términos vigentes antes de crear contenido. Las cuentas nuevas aceptan en el propio registro.
+
+**Request body:** `{"version": "string"}`, la versión que el cliente mostró.
+
+**Response — éxito (200):** `{"user": { ... objeto user (§5), con `terms_accepted: true` }}`. Idempotente.
+
+| Código | Causa | Body |
+|---|---|---|
+| `400` | Cuerpo ausente o no es un objeto | `{"msg": "..."}` |
+| `401` | Sin token, token inválido o expirado | `{"msg": "..."}` |
+| `409` | `version` **no es la vigente** (o falta, o no es texto): el cliente mostró términos que ya no rigen | `{"msg": "...", "current_version": "string"}` |
+
+#### `terms_accepted` en el registro y en Google
+
+- **Opcional por defecto.** Si viene `true`, se guardan `terms_accepted_at` y `terms_version` **después** de crear la cuenta. Solo cuenta el booleano `true`.
+- **Con `TERMS_ACCEPTANCE_REQUIRED` activado** (variable de entorno, **apagada por defecto**), `POST /api/register` responde `400` con `terms_required: true` si falta, y `POST /api/auth/google` hace lo mismo **solo cuando la cuenta de Google es nueva**. Iniciar sesión con una cuenta de Google que ya existe no la necesita. Se activa cuando el Frontend y la app móvil ya envíen la casilla (`ADR-032` fases 3 y 4); activarla antes dejaría sin poder registrarse a quien use un cliente que todavía no la envía.
+- **Versión vigente:** variable `TERMS_VERSION` (una fecha de publicación; **placeholder** hasta que el equipo publique los términos definitivos). Cambiarla hace que `terms_accepted` vuelva a `false` en todas las cuentas y a todo el mundo se le vuelva a pedir aceptar.
+
+---
+
 ## 5. Modelo de datos expuesto por la API
 
 Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) pero sí documenta **qué forma tiene el dato tal como cruza la frontera HTTP**, que puede no coincidir 1:1 con el modelo de persistencia:
@@ -1848,6 +1942,8 @@ Este documento no define el modelo de datos (eso es `DATABASE_ARCHITECTURE.md`) 
 | `conversation` (en response de `GET /api/conversations`) — no es una entidad propia, es una vista derivada de `messages` agrupada por "la otra persona" | `user` (misma forma reducida que `actor`/`author`, más `last_seen_at` desde v0.23), `last_message` (`content`/`sender_id`/`created_at`), `unread_count` | `ADR-013-messages-minimal-model.md` §Opciones consideradas: sin tabla `conversations`/`conversation_participants` en esta versión. `last_message` **no** lleva `edited` (v0.22): muestra el texto vigente pero la marca solo viaja en el mensaje completo (`ADR-021` §Riesgos) |
 
 **Perfil ampliado (v0.20, `ADR-015`):** además de los campos de la fila `user` de arriba, el objeto `user` expone `bio` (≤ 160 caracteres), `location` (≤ 60), `website` (≤ 100, URL válida), `avatar_url` y `cover_url` — los cuatro primeros `null` mientras no se definan, y las dos URL son absolutas (resueltas con `MEDIA_PUBLIC_BASE_URL`) o `null`. La forma reducida de autor (`author`, `actor`, `user` de `conversation`) incluye `avatar_url`. Las rutas que los gestionan están en §4.12.
+
+**`terms_accepted` (v0.31, `ADR-032` §5):** booleano en el objeto `user`. `true` solo si la persona aceptó la **versión vigente** de los términos: las cuentas anteriores y las que aceptaron una versión vieja dan `false`, y el cliente les pide aceptar antes de crear contenido (§4.18).
 
 ---
 

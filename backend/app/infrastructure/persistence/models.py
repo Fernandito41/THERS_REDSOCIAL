@@ -1313,6 +1313,10 @@ class Report(db.Model):
     # moderación (fase 2); en esta fase todo reporte nace y queda `open`.
     status = db.Column(db.String(10), nullable=False, server_default=text("'open'"))
 
+    # Prioridad de revisión (ADR-038): `normal` o `critical`. La asigna el servidor a partir
+    # del motivo (`domain/reports/kinds.priority_for_reason`); el cliente no la envía.
+    priority = db.Column(db.String(10), nullable=False, server_default=text("'normal'"))
+
     # Copia del texto reportado, para que quien modera vea qué se dijo aunque el
     # contenido se borre o su autor elimine la cuenta (ADR-032 §4). Se vacía al
     # resolver el reporte; no se guardan imágenes ni nombres.
@@ -1342,6 +1346,9 @@ class Report(db.Model):
         ),
         # La cola de moderación: abiertos primero, del más antiguo al más nuevo.
         db.Index("ix_reports_status_created_at", "status", "created_at"),
+        # Cola de revisión futura: lo crítico primero (ADR-038).
+        db.Index("ix_reports_status_priority_created_at", "status", "priority", "created_at"),
+        db.CheckConstraint("priority IN ('normal', 'critical')", name="ck_reports_priority"),
         db.Index("ix_reports_reported_user_id", "reported_user_id"),
     )
 

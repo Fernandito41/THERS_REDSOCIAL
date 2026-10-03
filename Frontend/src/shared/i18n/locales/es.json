@@ -292,5 +292,53 @@
       "permissions": "Permisos y aplicaciones",
       "content": "Preferencias de contenido y feed"
     }
+  },
+  "childSafety": {
+    "title": "Estándares de Seguridad Infantil de THERS Social Network",
+    "intro": "THERS Social Network aplica tolerancia cero frente a la explotación y el abuso sexual infantil. Este contenido está prohibido en nuestra plataforma, sin excepciones.",
+    "prohibitedTitle": "Qué está prohibido",
+    "prohibitedIntro": "Está prohibido publicar, compartir, solicitar o facilitar cualquiera de estos contenidos o conductas:",
+    "prohibited": [
+      "Material de abuso sexual infantil.",
+      "Explotación sexual infantil.",
+      "Grooming: acercarse a un menor para ganarse su confianza con fines sexuales.",
+      "Sextorsión de menores.",
+      "Solicitudes o propuestas sexuales dirigidas a menores.",
+      "Trata o explotación de menores.",
+      "Distribuir, ofrecer o enlazar contenido de este tipo.",
+      "Contenido generado o manipulado que represente sexualmente a menores."
+    ],
+    "reportTitle": "Cómo reportar dentro de THERS",
+    "reportIntro": "En la aplicación de THERS puedes reportar publicaciones, comentarios, mensajes que hayas recibido y cuentas:",
+    "reportSteps": [
+      "Abre el menú «⋯» del contenido o de la conversación.",
+      "Elige «Reportar».",
+      "Selecciona la categoría «Explotación o abuso de menores».",
+      "Envía el reporte. Si quieres, añade un detalle."
+    ],
+    "reportCategoryLabel": "Categoría",
+    "reportCategory": "Explotación o abuso de menores",
+    "reportAnonymous": "La persona reportada no sabrá quién envió el reporte.",
+    "handlingTitle": "Qué hacemos con estos reportes",
+    "handling": [
+      "Los reportes de esta categoría reciben prioridad máxima de revisión.",
+      "El contenido de este tipo puede retirarse de inmediato.",
+      "Las cuentas pueden ser suspendidas cuando corresponda."
+    ],
+    "sensitiveTitle": "Contenido sensible y contenido prohibido no son lo mismo",
+    "sensitiveAllowed": "El contenido sensible permitido puede mostrarse con una advertencia o desenfoque cuando THERS implemente ese mecanismo.",
+    "sensitiveForbidden": "El contenido de explotación o abuso infantil no es «contenido sensible»: está prohibido y puede retirarse de inmediato.",
+    "ageTitle": "Edad mínima",
+    "age": [
+      "THERS es exclusivamente para personas de 18 años o más.",
+      "Si existen razones razonables para creer que una cuenta pertenece a una persona menor de 18 años, THERS podrá restringirla y solicitar una verificación de edad."
+    ],
+    "contactTitle": "Contacto de seguridad infantil",
+    "contactName": "Diego Medina",
+    "contactRole": "Administrador de THERS Social Network",
+    "contactEmail": "seguridadinfantil@thersweb.com",
+    "contactWarning": "No envíes ni reenvíes material ilegal por correo. Este correo es un medio de contacto; el mecanismo principal de denuncia es el sistema de reportes de THERS.",
+    "legalTitle": "Cumplimiento legal",
+    "legal": "THERS cumple la legislación aplicable en materia de seguridad infantil y colabora con las autoridades competentes cuando exista una obligación legal válida de hacerlo."
   }
 }

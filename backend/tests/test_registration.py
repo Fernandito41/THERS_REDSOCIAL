@@ -528,17 +528,19 @@ class TestDuplicateAccountsAndRetry:
 
 
 class TestResendFailureLeavesRecoverableState:
-    def test_email_send_failure_returns_500_but_account_stays_recoverable(
+    def test_email_send_failure_keeps_the_account_recoverable_and_reports_it(
         self, app, client, monkeypatch
     ):
         # Simula que Resend (o, acá, el NullEmailSender usado en tests)
-        # falla al enviar -- EmailService no atrapa la excepción a
-        # propósito (application/email/email_service.py), así que se
-        # propaga hasta el manejador global de errores (500 genérico).
-        # ADR-011 §Fase 16: la cuenta y el código ya se persistieron antes
-        # de intentar el envío -- ni el registro queda a medias ni el email
-        # queda bloqueado para siempre, la persona puede pedir un código
-        # nuevo más tarde vía "Reenviar código".
+        # falla al enviar. ADR-011 §Fase 16: la cuenta y el código ya se
+        # persistieron antes de intentar el envío -- ni el registro queda a
+        # medias ni el email queda bloqueado para siempre, la persona puede
+        # pedir un código nuevo más tarde vía "Reenviar código".
+        #
+        # CAMBIO PROPUESTO (ADR-036-email-provider-failures.md, PENDIENTE DE
+        # APROBACIÓN): antes esto respondía 500 genérico; ahora responde 201 con
+        # `email_sent: false`. Lo que protege ADR-011 -- el estado recuperable --
+        # se mantiene y se sigue comprobando abajo.
         def _boom(self, to_email, subject, html_body):
             raise RuntimeError("fallo simulado de envío de correo")
 
@@ -546,8 +548,8 @@ class TestResendFailureLeavesRecoverableState:
 
         response = _register(client)
 
-        assert response.status_code == 500
-        assert response.get_json() == {"msg": "Error interno del servidor"}
+        assert response.status_code == 201
+        assert response.get_json()["email_sent"] is False
 
         with app.app_context():
             user = db.session.query(User).filter_by(email="ada@example.com").one_or_none()

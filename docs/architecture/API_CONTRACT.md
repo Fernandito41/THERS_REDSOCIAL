@@ -2067,3 +2067,15 @@ Body `{ "email", "code", "confirm_email", "confirmation": "DELETE", "two_factor_
 ## 4.20 Compuerta de perfil completo (`ADR-034-minimum-age-18.md`)
 
 `POST /api/posts`, `POST /api/posts/<id>/comments`, `POST /api/posts/<id>/like`, `POST /api/users/<id>/follow` y `POST /api/users/<id>/messages` responden `403` con `{"msg": "...", "profile_incomplete": true}` si la cuenta tiene `profile_completed=false` (una cuenta nueva de Google aún sin fecha de nacimiento). Leer no se bloquea. `POST /api/register` y `PATCH /api/users/me` rechazan con `400` y `min_age: 18` una fecha de nacimiento que no cumpla la edad mínima.
+
+---
+
+## 4.21 Fallos del proveedor de correo (`ADR-036-email-provider-failures.md`, aceptado con cambios)
+
+**Cambio propuesto sobre `ADR-011`; no se fusiona sin aprobación del equipo.** Si el proveedor de correo falla:
+
+- `POST /api/register` responde `201` con `"email_sent": false` (campo aditivo; `true` si el correo salió). La cuenta existe y se pide otro código con `POST /api/resend-registration-code`. Antes respondía `500` después de crear la cuenta.
+- `POST /api/forgot-password` y `POST /api/resend-registration-code` responden **siempre** el mismo `200` genérico, exista o no la cuenta (antes, un `500` solo para las cuentas existentes revelaba qué correos están registrados).
+- `POST /api/reset-password` responde `200` aunque falle solo el aviso de «contraseña cambiada» posterior (la contraseña ya cambió).
+
+El fallo se registra con el tipo de correo, la clase del error y el código del proveedor; **nunca** el código de 6 dígitos, el destinatario ni el mensaje del proveedor.

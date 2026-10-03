@@ -12,6 +12,7 @@
 # solicitud activa por usuario en todo momento (uq_password_reset_tokens_active_user,
 # ADR-010 §Decisión) -- marcar esta fila como usada ya cubre todo.
 
+from app.application.email.safe_delivery import attempt_delivery
 from app.domain.auth.auth_service import hash_password
 from app.domain.auth.exceptions import InvalidOrExpiredResetTokenError
 from app.domain.auth.token_generator import hash_token
@@ -53,6 +54,10 @@ def reset_password(
     if refresh_token_repository is not None:
         refresh_token_repository.revoke_all_for_user(user.id)
 
-    email_service.send_password_changed_email(user.email, user.name)
+    # La contraseña YA cambió: si el aviso por correo falla, no se responde 500.
+    attempt_delivery(
+        lambda: email_service.send_password_changed_email(user.email, user.name),
+        "password_changed",
+    )
 
     return {"msg": "Tu contraseña fue actualizada correctamente."}

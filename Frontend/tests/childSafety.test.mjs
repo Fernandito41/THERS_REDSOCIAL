@@ -156,6 +156,11 @@ describe('ruta y enlaces', () => {
     assert.match(page, /childSafety\.reportCategory/);
   });
 
+  it('está en la lista de URLs indexables del SEO (sitemap y robots)', () => {
+    const seo = read('src/shared/seo/seoRoutes.js');
+    assert.match(seo, /path: "\/child-safety"/);
+  });
+
   it('el pie de página enlaza a «Seguridad infantil»', () => {
     const footer = read('src/shared/components/Footer/footerLinks.js');
     assert.match(footer, /label: "Seguridad infantil", to: "\/child-safety"/);

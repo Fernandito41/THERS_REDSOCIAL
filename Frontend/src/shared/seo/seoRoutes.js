@@ -31,6 +31,12 @@ const STATIC_ROUTES = [
     description: "Conoce THERS: una red social pensada para conectar con tu gente.",
   },
   {
+    path: "/child-safety",
+    title: "Estándares de Seguridad Infantil de THERS Social Network",
+    description:
+      "Tolerancia cero frente a la explotación y el abuso sexual infantil: qué está prohibido, cómo reportar y cómo contactarnos.",
+  },
+  {
     path: "/help",
     title: "Centro de Ayuda",
     description: "Guías para usar THERS: cuenta, seguridad, privacidad y más.",

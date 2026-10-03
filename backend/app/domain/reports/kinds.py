@@ -22,6 +22,9 @@ REASON_SELF_HARM = "self_harm"
 REASON_ILLEGAL = "illegal"
 REASON_IMPERSONATION = "impersonation"
 REASON_OTHER = "other"
+#: Explotación o abuso de menores (ADR-038-child-safety-reports.md). Tratamiento
+#: prioritario: el servidor le asigna siempre prioridad `critical`.
+REASON_CHILD_SAFETY = "child_safety"
 
 REASONS = (
     REASON_SPAM,
@@ -33,7 +36,29 @@ REASONS = (
     REASON_ILLEGAL,
     REASON_IMPERSONATION,
     REASON_OTHER,
+    REASON_CHILD_SAFETY,
 )
+
+# Prioridad de revisión (ADR-038). La decide SIEMPRE el servidor a partir del motivo:
+# ningún cliente puede fijarla ni degradarla. Dos niveles; si más adelante hace falta
+# otro, es un valor nuevo aquí (columna de texto con restricción, no un ENUM).
+PRIORITY_NORMAL = "normal"
+PRIORITY_CRITICAL = "critical"
+
+PRIORITIES = (PRIORITY_NORMAL, PRIORITY_CRITICAL)
+
+_PRIORITY_RANK = {PRIORITY_NORMAL: 0, PRIORITY_CRITICAL: 1}
+
+
+def priority_for_reason(reason):
+    """Prioridad que le corresponde a un reporte por su motivo."""
+    return PRIORITY_CRITICAL if reason == REASON_CHILD_SAFETY else PRIORITY_NORMAL
+
+
+def is_higher_priority(candidate, current):
+    """`True` si `candidate` es estrictamente más urgente que `current`."""
+    return _PRIORITY_RANK[candidate] > _PRIORITY_RANK[current]
+
 
 STATUS_OPEN = "open"
 STATUS_REVIEWING = "reviewing"

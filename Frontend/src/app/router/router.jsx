@@ -11,7 +11,7 @@ import {
   TwoFactorChallenge,
   CompleteProfile,
 } from "@features/auth";
-import { Terms, Privacy, Cookies } from "@features/legal";
+import { Terms, Privacy, Cookies, ChildSafety } from "@features/legal";
 import {
   Information,
   HowItWorks,
@@ -117,6 +117,8 @@ export default function AppRouter() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/cookies" element={<Cookies />} />
+          {/* Estándares de seguridad infantil (ADR-038): URL pública que exige Google Play. */}
+          <Route path="/child-safety" element={<ChildSafety />} />
           {/* Comodín dentro del layout público: una URL rota sigue mostrando
               Footer y navegación (RouteSeo la marca noindex). */}
           <Route path="*" element={<NotFound />} />

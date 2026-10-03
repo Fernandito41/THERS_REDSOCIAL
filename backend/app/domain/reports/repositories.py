@@ -4,6 +4,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from app.domain.reports import kinds
+
 
 @dataclass(frozen=True)
 class ResolvedTarget:
@@ -33,9 +35,16 @@ class ReportTargetResolver(ABC):
 class ReportRepository(ABC):
     @abstractmethod
     def create_if_absent(
-        self, reporter_id, target_type, target_id, reported_user_id, reason, details, snapshot
+        self, reporter_id, target_type, target_id, reported_user_id, reason, details, snapshot,
+        priority=kinds.PRIORITY_NORMAL,
     ):
         """Crea el reporte, o devuelve el que ya existía para
         (`reporter_id`, `target_type`, `target_id`). Devuelve `(reporte,
         creado)`. Idempotente: reportar dos veces lo mismo no duplica (índice
-        único, ADR-032 §1), y es seguro frente a dos peticiones simultáneas."""
+        único, ADR-032 §1), y es seguro frente a dos peticiones simultáneas.
+
+        **Escalada (ADR-038):** si ya existía y el nuevo reporte es MÁS urgente (por
+        ejemplo, se reportó como spam y ahora como explotación de menores), el reporte
+        existente se eleva (motivo, prioridad, detalle) y se reabre si estaba cerrado como
+        descartado. Sin esto, el índice único haría perder la prioridad. **Nunca se
+        degrada:** un reporte posterior menos urgente no cambia el existente."""

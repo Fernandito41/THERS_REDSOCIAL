@@ -18,8 +18,13 @@ from app.domain.restrictions.kinds import BLOCK
 
 def send_message(
     sender_id, recipient_id, content, user_repository, message_repository, follow_repository,
-    restriction_repository,
+    restriction_repository, client_id=None,
 ):
+    """Devuelve `(mensaje_público, created)`. Con `client_id`, reenviar el mismo
+    mensaje (por ejemplo tras perder la conexión justo al recibir la respuesta)
+    devuelve el original con `created=False` en vez de duplicarlo (ADR-035).
+    Las comprobaciones de bloqueo y de quién puede escribir se hacen SIEMPRE
+    antes: un reintento no es una forma de saltárselas."""
     if sender_id == recipient_id:
         raise CannotMessageSelfError()
 
@@ -47,5 +52,11 @@ def send_message(
     if not is_allowed(recipient.who_can_message, sender_follows_recipient):
         raise MessagesNotAllowedError()
 
-    message = message_repository.create(sender_id, recipient_id, content)
-    return to_public_message(message)
+    if client_id is None:
+        message = message_repository.create(sender_id, recipient_id, content)
+        return to_public_message(message), True
+
+    message, created = message_repository.create_idempotent(
+        sender_id, recipient_id, content, client_id
+    )
+    return to_public_message(message), created

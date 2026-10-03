@@ -10,6 +10,9 @@
 # (ninguna ruta matchea) para cualquier segmento que no sea un UUID válido,
 # sin necesidad de validarlo a mano (mismo criterio que follow_routes.py).
 
+import re
+from datetime import datetime
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -46,6 +49,53 @@ from app.infrastructure.realtime.typing_indicator_repository import (
 
 messages_bp = Blueprint("messages", __name__)
 
+_CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+MAX_PAGE_LIMIT = 100
+
+
+def _parse_instant(raw):
+    """Un instante ISO 8601 con zona horaria (el `created_at` de un mensaje), o None."""
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _parse_thread_query():
+    """`(limit, before, after, error_response)` desde la query string."""
+    limit = DEFAULT_LIMIT
+    raw_limit = request.args.get("limit")
+    if raw_limit is not None:
+        if not raw_limit.isdigit() or not 1 <= int(raw_limit) <= MAX_PAGE_LIMIT:
+            return None, None, None, (
+                jsonify({"msg": f"limit debe ser un entero entre 1 y {MAX_PAGE_LIMIT}"}), 400
+            )
+        limit = int(raw_limit)
+
+    raw_before = request.args.get("before")
+    raw_after = request.args.get("after")
+    if raw_before is not None and raw_after is not None:
+        return None, None, None, (
+            jsonify({"msg": "Usa before o after, no los dos a la vez"}), 400
+        )
+
+    before = after = None
+    if raw_before is not None:
+        before = _parse_instant(raw_before)
+        if before is None:
+            return None, None, None, (
+                jsonify({"msg": "before debe ser una fecha ISO 8601 con zona horaria"}), 400
+            )
+    if raw_after is not None:
+        after = _parse_instant(raw_after)
+        if after is None:
+            return None, None, None, (
+                jsonify({"msg": "after debe ser una fecha ISO 8601 con zona horaria"}), 400
+            )
+    return limit, before, after, None
+
+
 _user_repository = SQLAlchemyUserRepository()
 _message_repository = SQLAlchemyMessageRepository()
 _typing_repository = InMemoryTypingIndicatorRepository()
@@ -76,10 +126,21 @@ def create(user_id):
             {"msg": f"El contenido debe tener entre 1 y {MAX_CONTENT_LENGTH} caracteres"}
         ), 400
 
+    # ADR-035: identificador opcional que hace el envío idempotente. Se valida
+    # estrictamente: es una clave de una tabla, no texto libre.
+    client_id = data.get("client_id")
+    if client_id is not None and not (
+        isinstance(client_id, str) and _CLIENT_ID_RE.match(client_id)
+    ):
+        return jsonify(
+            {"msg": "client_id debe tener entre 1 y 64 caracteres: letras, números, - o _"}
+        ), 400
+
     try:
-        message = send_message(
+        message, created = send_message(
             sender_id, str(user_id), content.strip(), _user_repository,
             _message_repository, _follow_repository, _restriction_repository,
+            client_id=client_id,
         )
     except CannotMessageSelfError:
         return jsonify({"msg": "No podés mandarte un mensaje a vos mismo"}), 400
@@ -93,7 +154,8 @@ def create(user_id):
         # (ADR-024 §Seguridad, a diferencia del 404 de una cuenta privada).
         return jsonify({"msg": "Esta persona no acepta mensajes tuyos"}), 403
 
-    return jsonify({"message": message}), 201
+    # 201 si es nuevo; 200 si el `client_id` ya existía (reintento idempotente).
+    return jsonify({"message": message}), 201 if created else 200
 
 
 @messages_bp.route("/users/<uuid:user_id>/messages", methods=["GET"])
@@ -101,15 +163,21 @@ def create(user_id):
 def thread(user_id):
     current_user_id = get_jwt_identity()
 
+    # ADR-035: paginación y recuperación. Sin parámetros, la misma respuesta de
+    # siempre (los DEFAULT_LIMIT más recientes) más `has_more`.
+    limit, before, after, error = _parse_thread_query()
+    if error:
+        return error
+
     try:
-        messages = list_thread(
+        messages, has_more = list_thread(
             current_user_id, str(user_id), _user_repository, _message_repository,
-            _restriction_repository, DEFAULT_LIMIT,
+            _restriction_repository, limit, before=before, after=after,
         )
     except UserNotFoundError:
         return jsonify({"msg": "Usuario no encontrado"}), 404
 
-    return jsonify({"messages": messages}), 200
+    return jsonify({"messages": messages, "has_more": has_more}), 200
 
 
 @messages_bp.route("/conversations", methods=["GET"])

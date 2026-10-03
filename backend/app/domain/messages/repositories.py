@@ -16,6 +16,33 @@ class MessageRepository(ABC):
         dos mensajes entre las mismas personas son eventos legítimos)."""
 
     @abstractmethod
+    def create_idempotent(self, sender_id, recipient_id, content, client_id):
+        """Como `create`, pero con `client_id` (ADR-035-chat-sync.md): si `sender_id`
+        ya envió un mensaje con ese `client_id`, devuelve **ese** mensaje y NO crea
+        otro. Devuelve `(message, created)`. Tiene que resistir dos envíos simultáneos
+        con el mismo `client_id` (el índice único lo garantiza; el que pierde la
+        carrera recibe el mensaje del que ganó)."""
+
+    @abstractmethod
+    def list_thread_page(self, user_a_id, user_b_id, limit, before=None, after=None):
+        """Una página del hilo, en orden cronológico ascendente (ADR-035).
+
+        - sin cursor: los `limit` mensajes más recientes;
+        - `before` (datetime): los `limit` mensajes más recientes anteriores o iguales
+          a ese instante (historial hacia atrás);
+        - `after` (datetime): los `limit` mensajes más antiguos posteriores o iguales
+          a ese instante (recuperación tras perder conexión).
+
+        Los cursores son **instantes** (`created_at`), no ids: un mensaje borrado
+        (borrado duro) deja de existir pero su instante sigue siendo un cursor
+        válido. Con `>=`/`<=` nunca se pierde un mensaje por empate de instante; el
+        cliente descarta duplicados por `id`.
+
+        Devuelve `(messages, has_more)`: `has_more` indica que quedan más mensajes
+        en la dirección pedida (más antiguos con `before`/sin cursor, más nuevos con
+        `after`)."""
+
+    @abstractmethod
     def list_thread(self, user_a_id, user_b_id, limit):
         """Historial de mensajes entre `user_a_id` y `user_b_id` (ambos
         sentidos), orden cronológico ascendente (más viejo primero), límite

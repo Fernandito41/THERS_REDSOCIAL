@@ -27,6 +27,7 @@ from app.domain.messages.exceptions import (
     MessagesNotAllowedError,
 )
 from app.domain.messages.validators import MAX_CONTENT_LENGTH, is_valid_content
+from app.interfaces.profile_gate import profile_completed_required
 from app.infrastructure.persistence.repositories.follow_repository import (
     SQLAlchemyFollowRepository,
 )
@@ -58,6 +59,7 @@ _restriction_repository = SQLAlchemyRestrictionRepository()
 
 @messages_bp.route("/users/<uuid:user_id>/messages", methods=["POST"])
 @jwt_required()
+@profile_completed_required
 def create(user_id):
     # Identidad exclusivamente del JWT -- nunca del body (mismo principio
     # que el resto de endpoints protegidos).

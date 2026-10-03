@@ -16,6 +16,7 @@ from app.application.posts.list_posts_use_case import DEFAULT_LIMIT, list_posts
 from app.application.posts.update_post_use_case import update_post
 from app.domain.posts.exceptions import PostNotFoundError
 from app.domain.posts.validators import MAX_CONTENT_LENGTH, is_valid_content
+from app.interfaces.profile_gate import profile_completed_required
 from app.infrastructure.persistence.repositories.comment_repository import (
     SQLAlchemyCommentRepository,
 )
@@ -63,6 +64,7 @@ _restriction_repository = SQLAlchemyRestrictionRepository()
 
 @posts_bp.route("/posts", methods=["POST"])
 @jwt_required()
+@profile_completed_required
 def create():
     # Identidad exclusivamente del JWT -- nunca de query string, body ni
     # headers personalizados (mismo principio que auth_routes.py/user_routes.py).

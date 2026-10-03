@@ -16,9 +16,12 @@ COUNTRY_CODE_RE = re.compile(r"^\+[1-9]\d{0,3}$")
 # sin sobre-ingeniería). Rechaza espacios en blanco.
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
-# Mismo placeholder de edad mínima que el Frontend (dateUtils.js,
-# MIN_AGE_YEARS) -- ratificado como regla real del servidor en ADR-002 §3.
-MIN_AGE_YEARS = 13
+# THERS es solo para personas de 18 años cumplidos o más (decisión de producto
+# del equipo, 2026-10-02; antes 13). Mismo valor que el Frontend (dateUtils.js)
+# y que la app móvil. Es la fecha que la persona DECLARA: no es una
+# verificación documental (no se piden documentos ni hay proveedor de
+# verificación -- sería una decisión aparte).
+MIN_AGE_YEARS = 18
 
 # Placeholder de producto, igual de revisable que MIN_AGE_YEARS -- no exige
 # mayúscula/número/símbolo (esa combinación sí sería una decisión de UX de

@@ -206,14 +206,14 @@ Sigue **`PENDIENTE DE APROBACIÓN`** (§9, degradado de prioridad tras v0.6): si
 
 | Código | Causa | Body |
 |---|---|---|
-| `400` | Body vacío; alguno de `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`/`confirm_password` ausente; `email` con formato inválido; `password` ≠ `confirm_password`; `password` con menos de 8 caracteres; `username`/`phone`/`country_code`/`birth_date` con formato inválido; edad menor a 13 años | `{"msg": "..."}` |
+| `400` | Body vacío; alguno de `name`/`username`/`email`/`phone`/`country_code`/`birth_date`/`password`/`confirm_password` ausente; `email` con formato inválido; `password` ≠ `confirm_password`; `password` con menos de 8 caracteres; `username`/`phone`/`country_code`/`birth_date` con formato inválido; edad menor a **18 años** (`ADR-034-minimum-age-18.md`; el body trae `min_age: 18`) | `{"msg": "..."}` |
 | `409` | Ya existe una cuenta **verificada** con ese email (comparación case-insensitive, `CITEXT`) **o** con ese username | `{"msg": "..."}` |
 
 **Notas de implementación:**
 - `password_hash` se genera con `werkzeug.security.generate_password_hash` (scrypt) — nunca se persiste ni se devuelve la contraseña en claro.
 - `id` lo genera PostgreSQL (`gen_random_uuid()`), nunca Python (`DATABASE_ARCHITECTURE.md` §5).
 - `confirm_password` se valida (debe coincidir con `password`) y **nunca se persiste** — no existe como columna de `users`.
-- Formato validado en el backend (`domain/auth/validators.py`, ver `ADR-002` §3): `username` (`^[a-zA-Z0-9_]{3,20}$`), `phone` (7–15 dígitos), `country_code` (`^\+[1-9]\d{0,3}$`), `birth_date` (ISO válida + edad mínima 13 años).
+- Formato validado en el backend (`domain/auth/validators.py`, ver `ADR-002` §3): `username` (`^[a-zA-Z0-9_]{3,20}$`), `phone` (7–15 dígitos), `country_code` (`^\+[1-9]\d{0,3}$`), `birth_date` (ISO válida + edad mínima **18 años**, calculada por fecha completa; es la fecha declarada, no una verificación documental, `ADR-034`).
 - **v0.7 — resuelto:** `email` (regex básica `^[^\s@]+@[^\s@]+\.[^\s@]+$`, sin verificar dominio real) y `password` (mínimo `MIN_PASSWORD_LENGTH = 8` caracteres, sin exigir mayúscula/número/símbolo) — ambos placeholders de producto explícitos, revisables (mismo criterio que `MIN_AGE_YEARS`).
 - **v0.16 — verificación obligatoria de email (`ADR-011-mandatory-email-verification.md`):** `email_verified` nace en `false`; el registro envía de inmediato un código de 6 dígitos por correo (mismo mecanismo que `verify-reset-code`, §4.8) y la cuenta no puede usar `POST /api/login` hasta verificarlo. Registrar de nuevo con un email que existe pero **nunca** se verificó actualiza esa misma fila (incluida la contraseña) y reenvía un código — no produce un `409` ni una fila duplicada; el `409` de email solo ocurre contra una cuenta ya verificada. La prueba definitiva de que la cuenta controla el correo es siempre el código OTP — el formato de `email` se valida, pero un dominio/formato con buena forma nunca se trata como verificación por sí solo.
 - **v0.17 (`ADR-012-google-sign-in.md`):** este contrato de `POST /api/register` **no cambia** — sigue exigiendo `phone`/`country_code`/`birth_date`/`password`/`confirm_password` igual que siempre. La relajación a nullable de esas columnas en `users` (§5, `DATABASE_ARCHITECTURE.md`) es exclusiva de cuentas creadas vía `POST /api/auth/google` (§4.9) — el registro tradicional nunca las deja en `NULL` en la práctica.
@@ -1916,3 +1916,9 @@ Si el catálogo de endpoints crece lo suficiente para que un Markdown plano deje
 ## Cierre
 
 Este documento **no modifica** el backend ni el Frontend: define el contrato de API que ambos deben respetar hacia adelante, separando explícitamente **lo implementado** (§4.1), **lo esperado pero ausente** (§4.2) y **lo pendiente de aprobación** (§9). Cualquier cambio a este contrato sigue el proceso de decisiones de impacto medio/alto de `HB-001` §11–12 (ADR), no el criterio individual de quien implementa. A partir de su ratificación, Backend y Frontend deben implementar contra este documento — no negociar el contrato de forma ad-hoc en cada feature.
+
+---
+
+## 4.20 Compuerta de perfil completo (`ADR-034-minimum-age-18.md`)
+
+`POST /api/posts`, `POST /api/posts/<id>/comments`, `POST /api/posts/<id>/like`, `POST /api/users/<id>/follow` y `POST /api/users/<id>/messages` responden `403` con `{"msg": "...", "profile_incomplete": true}` si la cuenta tiene `profile_completed=false` (una cuenta nueva de Google aún sin fecha de nacimiento). Leer no se bloquea. `POST /api/register` y `PATCH /api/users/me` rechazan con `400` y `min_age: 18` una fecha de nacimiento que no cumpla la edad mínima.

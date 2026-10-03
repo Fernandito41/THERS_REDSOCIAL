@@ -23,6 +23,7 @@ from app.application.comments.update_comment_use_case import update_comment
 from app.domain.comments.exceptions import CommentNotFoundError
 from app.domain.comments.validators import MAX_CONTENT_LENGTH, is_valid_content
 from app.domain.posts.exceptions import PostNotFoundError
+from app.interfaces.profile_gate import profile_completed_required
 from app.infrastructure.persistence.repositories.comment_repository import (
     SQLAlchemyCommentRepository,
 )
@@ -66,6 +67,7 @@ _restriction_repository = SQLAlchemyRestrictionRepository()
 
 @comments_bp.route("/posts/<uuid:post_id>/comments", methods=["POST"])
 @jwt_required()
+@profile_completed_required
 def create(post_id):
     # Identidad exclusivamente del JWT -- nunca del body (mismo principio
     # que el resto de endpoints protegidos).

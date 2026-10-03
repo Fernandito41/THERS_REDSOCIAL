@@ -34,6 +34,7 @@ from app.domain.follows.exceptions import (
     FollowRequestNotFoundError,
 )
 from app.domain.restrictions.exceptions import AccountBlockedError
+from app.interfaces.profile_gate import profile_completed_required
 from app.infrastructure.persistence.repositories.follow_repository import (
     SQLAlchemyFollowRepository,
 )
@@ -59,6 +60,7 @@ _restriction_repository = SQLAlchemyRestrictionRepository()
 
 @follows_bp.route("/users/<uuid:user_id>/follow", methods=["POST"])
 @jwt_required()
+@profile_completed_required
 def follow(user_id):
     # Identidad exclusivamente del JWT -- nunca del body (mismo principio
     # que el resto de endpoints protegidos). `get_jwt_identity()` devuelve

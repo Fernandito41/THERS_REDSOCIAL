@@ -42,6 +42,7 @@ from app.domain.auth.two_factor_exceptions import InvalidTwoFactorCodeError
 from app.domain.rate_limiting import policy
 from app.domain.rate_limiting.exceptions import RateLimitExceededError
 from app.domain.auth.validators import (
+    MIN_AGE_YEARS,
     MIN_PASSWORD_LENGTH,
     is_valid_country_code,
     is_valid_email,
@@ -79,6 +80,7 @@ from app.infrastructure.persistence.repositories.user_identity_repository import
 from app.infrastructure.persistence.repositories.user_repository import (
     SQLAlchemyUserRepository,
 )
+from app.interfaces.retention_trigger import maybe_purge
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -106,7 +108,9 @@ _session_tokens = JwtSessionTokens()
 # en que Config ya resolvió RESEND_API_KEY desde el entorno) -- Resend real
 # si hay API key, NullEmailSender si no (ADR-009-password-reset-and-email-verification.md
 # §Decisión, infrastructure/email/factory.py).
-_email_service = EmailService(create_email_sender(Config.RESEND_API_KEY, Config.EMAIL_FROM))
+_email_service = EmailService(
+    create_email_sender(Config.RESEND_API_KEY, Config.EMAIL_FROM, Config.EMAIL_REPLY_TO)
+)
 
 # Mismo criterio: el Client ID se resuelve una sola vez al importar este
 # módulo (ADR-012-google-sign-in.md §Decisión, infrastructure/auth/google_id_token_verifier.py).
@@ -195,6 +199,8 @@ def _issue_session_token(user_entity):
         _email_service,
         refresh_family_id=family_id,
     )
+    # ADR-037: oportunista, nunca falla el inicio de sesión (ver retention_trigger.py).
+    maybe_purge()
     return tokens
 
 
@@ -285,7 +291,10 @@ def register():
     if birth_date is None:
         return jsonify({"msg": "La fecha de nacimiento no es válida"}), 400
     if not meets_minimum_age(birth_date):
-        return jsonify({"msg": "Debes tener al menos 13 años para registrarte"}), 400
+        return jsonify({
+            "msg": f"THERS es solo para personas de {MIN_AGE_YEARS} años o más",
+            "min_age": MIN_AGE_YEARS,
+        }), 400
 
     try:
         user, email_sent = register_user(

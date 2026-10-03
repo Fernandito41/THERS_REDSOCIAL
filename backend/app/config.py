@@ -137,6 +137,11 @@ class Config:
     # fallback de desarrollo, no para un entorno real (ver backend/.env.example).
     EMAIL_FROM = os.environ.get("EMAIL_FROM", "onboarding@resend.dev")
 
+    # Dirección de respuesta ("Reply-To") de los correos de THERS. Vacía = no se envía el
+    # campo. En producción debe ser un buzón que SÍ recibe correo (hoy soporte@thersweb.com,
+    # reenviado por Cloudflare Email Routing); el remitente `avisos@...` no tiene buzón.
+    EMAIL_REPLY_TO = (os.environ.get("EMAIL_REPLY_TO") or "").strip() or None
+
     # Origen del Frontend -- usado para construir los enlaces de recuperación
     # de contraseña/verificación de email que van dentro de esos correos
     # (nunca hardcodeados en la plantilla, ver application/email/templates.py).

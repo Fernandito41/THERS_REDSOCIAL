@@ -37,6 +37,11 @@ const STATIC_ROUTES = [
       "Tolerancia cero frente a la explotación y el abuso sexual infantil: qué está prohibido, cómo reportar y cómo contactarnos.",
   },
   {
+    path: "/eliminar-cuenta",
+    title: "Eliminar tu cuenta de THERS",
+    description: "Cómo pedir la eliminación de tu cuenta de THERS y de tus datos, sin tener la app instalada.",
+  },
+  {
     path: "/help",
     title: "Centro de Ayuda",
     description: "Guías para usar THERS: cuenta, seguridad, privacidad y más.",

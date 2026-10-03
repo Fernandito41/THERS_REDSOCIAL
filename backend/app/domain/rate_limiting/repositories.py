@@ -45,3 +45,9 @@ class RateLimitRepository(ABC):
         oficial, `CLAUDE.md` §15), así que hoy lo dispara de forma oportunista
         el propio camino de escritura -- ver la implementación
         (ADR-027 §Riesgos)."""
+
+    @abstractmethod
+    def clear_identity(self, identity):
+        """Borra los contadores de `identity` en **todos** los scopes. Lo usa la
+        eliminación de cuenta (ADR-031): `rate_limit_buckets` no tiene clave
+        foránea hacia `users`, así que no se borra con el CASCADE."""

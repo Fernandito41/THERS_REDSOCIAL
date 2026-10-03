@@ -230,3 +230,58 @@ def login_alert_email(name, user_agent, ip_address, when):
         body_html=body,
         footer_note=footer,
     )
+
+
+def account_deletion_code_email(name, code, ttl_minutes):
+    # ADR-031-account-deletion.md. Hace de aviso previo: si la persona no pidió
+    # esto, el correo mismo le dice que alguien lo intentó.
+    subject = "Confirma la eliminación de tu cuenta de THERS"
+    body = f"""
+        <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
+          Hola {name},
+        </p>
+        <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
+          Alguien pidió <strong>eliminar tu cuenta de THERS</strong>. Si fuiste tú,
+          usa este código para continuar:
+        </p>
+        {_code_box(code)}
+        <p style="margin:0 0 16px;font-size:13px;color:#666666;line-height:1.6;">
+          Este código vence en {ttl_minutes} minutos y solo puede usarse una vez.
+          La eliminación es <strong>definitiva</strong>: no se puede deshacer.
+        </p>
+        <p style="margin:0;font-size:13px;color:#666666;line-height:1.6;">
+          Si no fuiste tú, ignora este correo: tu cuenta sigue intacta. Te
+          recomendamos cambiar tu contraseña por si alguien más la conoce.
+        </p>
+    """
+    footer = "Este es un mensaje automático de THERS. Nunca compartas este código con nadie, ni siquiera con el equipo de THERS."
+    return subject, _shell(
+        preheader="Código para confirmar la eliminación de tu cuenta",
+        title="Eliminar tu cuenta",
+        body_html=body,
+        footer_note=footer,
+    )
+
+
+def account_deleted_email(name):
+    subject = "Tu cuenta de THERS fue eliminada"
+    body = f"""
+        <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
+          Hola {name},
+        </p>
+        <p style="margin:0 0 16px;font-size:14px;color:#333333;line-height:1.6;">
+          Te confirmamos que tu cuenta de THERS y los datos asociados fueron eliminados.
+        </p>
+        <p style="margin:0;font-size:13px;color:#666666;line-height:1.6;">
+          Pueden quedar copias de seguridad del proveedor de base de datos hasta que
+          caduquen, según se explica en nuestra política de privacidad. Si no fuiste
+          tú quien lo pidió, escríbenos de inmediato.
+        </p>
+    """
+    footer = "Este es un mensaje automático de THERS. No guardamos copia de este correo."
+    return subject, _shell(
+        preheader="Tu cuenta fue eliminada",
+        title="Cuenta eliminada",
+        body_html=body,
+        footer_note=footer,
+    )

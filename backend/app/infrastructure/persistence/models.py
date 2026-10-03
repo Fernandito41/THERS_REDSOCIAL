@@ -1354,3 +1354,39 @@ class Report(db.Model):
 
     def __repr__(self):
         return f"<Report {self.target_type}:{self.target_id} reason={self.reason!r}>"
+
+class AccountDeletionCode(db.Model):
+    """Código de un solo uso para confirmar la eliminación de una cuenta
+    (ADR-031-account-deletion.md). Tabla propia, no `password_reset_tokens`: un
+    código de recuperación nunca debe servir para borrar una cuenta."""
+
+    __tablename__ = "account_deletion_codes"
+
+    id = db.Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id = db.Column(
+        PG_UUID(as_uuid=True),
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # scrypt del código de 6 dígitos (nunca el código en claro).
+    code_hash = db.Column(db.Text, nullable=False)
+    attempts = db.Column(db.Integer, nullable=False, server_default=text("0"))
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    __table_args__ = (
+        # A lo sumo un código activo por cuenta.
+        db.Index(
+            "uq_account_deletion_codes_active_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("used_at IS NULL"),
+        ),
+    )

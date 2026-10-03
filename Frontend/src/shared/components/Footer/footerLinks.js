@@ -64,6 +64,7 @@ export const FOOTER_GROUPS = [
       { label: "Privacidad", to: "/privacy" },
       { label: "Términos", to: "/terms" },
       { label: "Cookies", to: "/cookies" },
+      { label: "Eliminar cuenta", to: "/eliminar-cuenta" },
       { label: "Seguridad infantil", to: "/child-safety" },
     ],
   },

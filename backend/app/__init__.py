@@ -99,6 +99,10 @@ def create_app():
 
     from app.interfaces.routes.content_routes import content_bp
     app.register_blueprint(content_bp, url_prefix="/api")
+
+    # Eliminación de cuenta (ADR-031-account-deletion.md).
+    from app.interfaces.routes.account_deletion_routes import account_deletion_bp
+    app.register_blueprint(account_deletion_bp, url_prefix="/api")
     # Servir imágenes desde disco solo con STORAGE_BACKEND=local (en s3 las
     # sirve el proveedor directamente desde su URL pública).
     if (app.config.get("STORAGE_BACKEND") or "local").lower() == "local":

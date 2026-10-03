@@ -27,6 +27,8 @@
 
 
 from app.application.media.media_url import media_url
+from app.application.terms.terms_version import current_terms_version
+from app.domain.terms.policy import has_accepted_current_terms
 
 
 def to_public_user(user, followers_count=0, following_count=0):
@@ -50,6 +52,12 @@ def to_public_user(user, followers_count=0, following_count=0):
         "is_private": user.is_private,
         "profile_completed": user.profile_completed,
         "has_password": user.password_hash is not None,
+        # ADR-032 §5: `true` solo si aceptó la versión VIGENTE. Las cuentas
+        # anteriores y las que aceptaron una versión vieja dan `false`, y el
+        # cliente les pide aceptar antes de crear contenido.
+        "terms_accepted": has_accepted_current_terms(
+            user.terms_version, current_terms_version()
+        ),
         # ADR-015-profile-media.md: perfil público extendido. `None` = no definido.
         "bio": user.bio,
         "location": user.location,

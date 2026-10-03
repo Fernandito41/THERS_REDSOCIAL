@@ -5,7 +5,7 @@
 | Documento | `docs/architecture/ADR-032-content-reports-and-moderation.md` |
 | Tipo | Architecture Decision Record (`HB-001` §11–12) |
 | Fecha | 02/10/2026 |
-| Estado | **PROPUESTO** — pendiente de aprobación del equipo. **Nada de esto está implementado.** Redactado por Claude Code a pedido del propietario del proyecto |
+| Estado | **PROPUESTO** — pendiente de aprobación del equipo. La **fase 1** está implementada en la rama `feature/backend-terms-and-reports` (PR borrador): **no debe mergearse antes de la ratificación**. Las fases 2 a 4 no existen. Redactado por Claude Code a pedido del propietario del proyecto |
 | Alcance | `backend/` — tabla `reports`, columnas nuevas en `users`, `POST /api/reports`, rutas de moderación; `Frontend/` — menú «Reportar» y una página de moderación; `mobile/` — el mismo menú cuando exista contenido de usuarios |
 | Relacionado | `ADR-022` (cuentas privadas), `ADR-025` (sesiones), `ADR-027` (rate limiting), **`ADR-029` (bloqueo y restricción)**, `ADR-031` (eliminación de cuenta), `docs/LAUNCH_CHECKLIST.md` |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §4) |
@@ -173,6 +173,26 @@ Si el contenido reportado se borra o su autor elimina la cuenta (`ADR-031`), el 
 3. **Fase 3 — Web:** menú «Reportar» en posts, comentarios, mensajes y perfiles; casilla de términos en el registro; página de moderación.
 4. **Fase 4 — Móvil:** el mismo menú **en cada pantalla de contenido de usuarios en cuanto exista**. Se añade como **criterio de aceptación** de la fase 3 de la hoja de ruta móvil: no se publica una pantalla de contenido sin «Reportar» y «Bloquear».
 5. **Docs el mismo día** (`HB-001` §15.1): `API_CONTRACT.md`, `DATABASE_ARCHITECTURE.md`, `BACKEND_ARCHITECTURE.md` §20 ítem 10 (se documenta que la bandera `is_moderator` no cierra el modelo de roles).
+
+## Fase 1: lo que se implementó y lo que se decidió al hacerlo
+
+Implementada en `feature/backend-terms-and-reports`. **Si el equipo cambia alguna decisión de este ADR, se ajusta esa rama**: está pensada para eso.
+
+| Qué | Cómo quedó | Por qué |
+|---|---|---|
+| `terms_accepted_at`, `terms_version` | Columnas nulas en `users`, migración `a8d2f5c1b937` | Aditivo: ningún cliente actual se rompe |
+| Tabla `reports` | Como en la decisión 1, con **`SET NULL`** en las tres claves a `users` | Un reporte debe sobrevivir a la eliminación de cuentas (`ADR-031`) |
+| `POST /api/reports` | Como en la decisión 2, más: `200` idempotente, visibilidad **antes** de "es mío", y un mensaje lo reporta **solo quien lo recibió** | Que el `400` de "no puedes reportarte" no confirme que algo existe |
+| Límite | `REPORT_CREATE`, 10 por hora por persona | `ADR-027` |
+| **Exigir los términos** | **Apagado por defecto** (`TERMS_ACCEPTANCE_REQUIRED`) | **Desviación de la decisión 5:** exigirlo ya dejaría sin poder registrarse a quien use un cliente que todavía no envía la casilla (Frontend y móvil, fases 3 y 4). Se enciende cuando estén desplegados |
+| `terms_accepted` | Booleano nuevo en el objeto `user`: `true` solo si aceptó la **versión vigente** | El cliente necesita saber a quién volver a preguntarle |
+| Cuentas existentes | `POST /api/users/me/terms-acceptance`: `409` con `current_version` si la versión no es la vigente | Un cliente con términos viejos en caché debe enterarse |
+| Google | `terms_accepted` en el cuerpo; con la exigencia activa, solo se pide a las cuentas **nuevas** | Una cuenta que ya existe no puede quedar fuera por una casilla que nunca vio |
+| Versión de los términos | Variable `TERMS_VERSION`, con un valor por defecto que es un **placeholder** | Hasta que el equipo publique los términos definitivos |
+
+**No está en la fase 1:** `is_moderator`, las rutas de moderación, la suspensión de cuentas, vaciar `content_snapshot` al resolver (aún no hay forma de resolver), y toda la interfaz (web y móvil).
+
+**Una advertencia de nombres para la fase 2.** Ya existe `app/domain/moderation` y `app/application/moderation`: son los **filtros personales** de cada persona (palabras y temas silenciados, `ADR-024`), no la moderación de la plataforma. Para evitar confusión, el código de la fase 2 no debe vivir en esos paquetes.
 
 ## Fuentes consultadas
 

@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 from flask_jwt_extended import create_access_token, decode_token, get_jwt, get_jwt_identity, jwt_required
 
 from app.application.auth.forgot_password_use_case import forgot_password
@@ -17,6 +17,9 @@ from app.application.auth.session_use_cases import (
 from app.application.auth.verify_registration_code_use_case import verify_registration_code
 from app.application.auth.verify_reset_code_use_case import verify_reset_code
 from app.application.auth.user_presenter import to_public_user
+from app.application.terms.terms_use_cases import record_terms_acceptance
+from app.application.terms.terms_version import current_terms_version
+from app.domain.terms.exceptions import TermsNotAcceptedError
 from app.application.email.email_service import EmailService
 from app.application.rate_limiting import rate_limit_guard
 from app.application.sessions.issue_session_use_case import issue_session
@@ -249,6 +252,15 @@ def register():
                    "nacimiento, contraseña y confirmación de contraseña son obligatorios"
         }), 400
 
+    # ADR-032 §5: solo `true` cuenta como aceptación (no "true", ni 1, ni
+    # un objeto): es un consentimiento, no un valor que se pueda adivinar.
+    terms_accepted = data.get("terms_accepted") is True
+    if current_app.config.get("TERMS_ACCEPTANCE_REQUIRED") and not terms_accepted:
+        return jsonify({
+            "msg": "Debes aceptar los términos de uso para crear tu cuenta",
+            "terms_required": True,
+        }), 400
+
     if not is_valid_email(email):
         return jsonify({"msg": "El email no es válido"}), 400
 
@@ -284,6 +296,13 @@ def register():
         return jsonify({"msg": "Ya existe una cuenta con ese email"}), 409
     except UsernameAlreadyExistsError:
         return jsonify({"msg": "Ya existe una cuenta con ese username"}), 409
+
+    if terms_accepted:
+        # Se guarda DESPUÉS de crear la cuenta, no dentro de `register_user`:
+        # así no se toca el caso de uso del registro. La respuesta se vuelve a
+        # armar para que `terms_accepted` ya salga en `true`.
+        updated = record_terms_acceptance(user["id"], current_terms_version(), _user_repository)
+        user = to_public_user(updated)
 
     # `email_sent` (aditivo): `false` si no se pudo entregar el código al proveedor de
     # correo; la cuenta existe igual y se pide otro código con «Reenviar».
@@ -580,10 +599,22 @@ def google_auth_route():
     if not credential or not isinstance(credential, str):
         return jsonify({"msg": "La credencial de Google es obligatoria"}), 400
 
+    terms_accepted = data.get("terms_accepted") is True
+
     try:
         user = authenticate_with_google(
-            credential, _google_identity_verifier, _user_repository, _user_identity_repository
+            credential,
+            _google_identity_verifier,
+            _user_repository,
+            _user_identity_repository,
+            require_terms=bool(current_app.config.get("TERMS_ACCEPTANCE_REQUIRED")),
+            terms_accepted=terms_accepted,
         )
+    except TermsNotAcceptedError:
+        return jsonify({
+            "msg": "Debes aceptar los términos de uso para crear tu cuenta",
+            "terms_required": True,
+        }), 400
     except InvalidGoogleCredentialError:
         # Nunca hay una cuenta de THERS involucrada todavía en este punto --
         # no hay enumeración que proteger, el mensaje puede ser directo.
@@ -608,6 +639,14 @@ def google_auth_route():
     # la cuenta tiene 2FA activo ese segundo factor también aplica acá -- si no,
     # "Continuar con Google" sería una puerta que lo saltea (ADR-026 §Seguridad).
     user_entity = _user_repository.find_by_id(user["id"])
+
+    if terms_accepted:
+        # La credencial de Google ya está verificada: quien llega hasta aquí es
+        # la persona dueña de la cuenta, y aceptó marcando la casilla.
+        user_entity = record_terms_acceptance(
+            user_entity.id, current_terms_version(), _user_repository
+        )
+        user = to_public_user(user_entity)
 
     if user_entity.two_factor_enabled:
         return jsonify({

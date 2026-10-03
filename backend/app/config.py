@@ -207,3 +207,21 @@ Config.JWT_ACCESS_TOKEN_EXPIRES = timedelta(
 Config.JWT_REFRESH_TOKEN_EXPIRES = timedelta(
     days=_positive_int_env("JWT_REFRESH_TOKEN_EXPIRES_DAYS", 30)
 )
+
+
+# --- Términos de uso (ADR-032-content-reports-and-moderation.md §5) ---------
+# `TERMS_VERSION`: versión vigente (una fecha de publicación). Es un placeholder
+# hasta que el equipo publique los términos definitivos; al cambiarla, a todo el
+# mundo se le vuelve a pedir la aceptación.
+#
+# `TERMS_ACCEPTANCE_REQUIRED`: si el registro y el alta con Google exigen aceptar.
+# **Apagado por defecto**: la casilla vive en el Frontend y en la app móvil
+# (ADR-032 fases 3 y 4). Encenderlo antes dejaría sin poder registrarse a
+# quien use un cliente que todavía no la envía. Se enciende cuando los clientes
+# estén desplegados.
+from app.domain.terms.policy import DEFAULT_TERMS_VERSION  # noqa: E402
+
+Config.TERMS_VERSION = os.environ.get("TERMS_VERSION", "").strip() or DEFAULT_TERMS_VERSION
+Config.TERMS_ACCEPTANCE_REQUIRED = os.environ.get(
+    "TERMS_ACCEPTANCE_REQUIRED", ""
+).strip().lower() in ("1", "true", "yes")

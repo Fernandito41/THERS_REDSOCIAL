@@ -12,6 +12,7 @@ import {
   CompleteProfile,
 } from "@features/auth";
 import { Terms, Privacy, Cookies, ChildSafety } from "@features/legal";
+import { DeleteAccount } from "@features/account";
 import {
   Information,
   HowItWorks,
@@ -119,6 +120,9 @@ export default function AppRouter() {
           <Route path="/cookies" element={<Cookies />} />
           {/* Estándares de seguridad infantil (ADR-038): URL pública que exige Google Play. */}
           <Route path="/child-safety" element={<ChildSafety />} />
+          {/* Recurso web de eliminación de cuenta que Google Play exige
+              (ADR-031-account-deletion.md). Público a propósito. */}
+          <Route path="/eliminar-cuenta" element={<DeleteAccount />} />
           {/* Comodín dentro del layout público: una URL rota sigue mostrando
               Footer y navegación (RouteSeo la marca noindex). */}
           <Route path="*" element={<NotFound />} />

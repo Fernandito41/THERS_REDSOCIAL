@@ -3,7 +3,7 @@
 | Campo | Valor |
 |---|---|
 | Documento | `docs/architecture/API_CONTRACT.md` |
-| Versión | 0.32 (Propuesta) |
+| Versión | 0.33 (Propuesta) |
 | Estado | **Pendiente de ratificación formal del equipo** (proceso de decisiones de alto impacto, `HB-001` §11–12) |
 | Depende de | `BACKEND_ARCHITECTURE.md` (fuente directa del estado real del backend), `DATABASE_ARCHITECTURE.md` (modelo de datos disponible), `FRONTEND_ARCHITECTURE.md` (consumidor del contrato), `HB-001` §15.1 (exige documentar cada endpoint el mismo día del PR) |
 | Autoridad sobre este documento | `/docs` oficial > estructura real observada en el código > este documento (mismo orden que `CLAUDE.md` §3) |
@@ -43,6 +43,8 @@
 > **v0.16 — verificación obligatoria de email al registrarse (`ADR-011-mandatory-email-verification.md`, reemplaza `send-verification-email`/`verify-email` de v0.14):** `POST /api/register` (§4.1) sigue devolviendo `201` con el usuario creado, pero ahora `email_verified` nace en `false` y de inmediato se envía un código de 6 dígitos — la cuenta no puede iniciar sesión todavía. Registrar de nuevo con un email que existe pero nunca se verificó **actualiza esa misma cuenta** (incluida la contraseña) y reenvía un código, en vez de un `409` — el `409` real solo ocurre si el email ya pertenece a una cuenta verificada. `POST /api/login` (§4.1) gana un caso nuevo: credenciales correctas pero cuenta sin verificar responde `403` con `{"msg": "...", "email_verified": false}`, sin emitir ningún JWT. Se agregan `POST /api/verify-registration-code` y `POST /api/resend-registration-code` (§4.8) — mismo patrón que `verify-reset-code`/`forgot-password` (`ADR-010`): 6 dígitos, hash scrypt, máximo 5 intentos, cooldown de 60s, índice único parcial (a lo sumo un código activo por usuario). Un código de registro nunca sirve para verificar una recuperación de contraseña ni viceversa — viven en tablas/repositorios completamente separados, no un discriminador de tipo sobre una tabla compartida. **Se retiran** `POST /api/send-verification-email` y `POST /api/verify-email` (`ADR-009`, flujo de enlace) — con el login ya bloqueado para cuentas sin verificar, una cuenta sin verificar nunca puede obtener el JWT que el primero exigía, dejando ambos permanentemente inalcanzables. El Frontend queda conectado de punta a punta: `Register.jsx` navega a la nueva pantalla `VerifyRegistrationCode.jsx` en vez de a `/login`; `Login.jsx` distingue el `403` de cuenta sin verificar y redirige a la misma pantalla. Verificado con 36 pruebas nuevas (`test_registration.py`, reemplaza a `test_email_verification.py`) + la suite completa (212/212, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`).
 >
 > **v0.14 — recuperación de contraseña y verificación de email vía Resend (`ADR-009-password-reset-and-email-verification.md`):** se agregan `POST /api/forgot-password`, `POST /api/reset-password`, `POST /api/send-verification-email` y `POST /api/verify-email` (§4.8) — séptima y octava entidad del alcance objetivo del producto (`DATABASE_ARCHITECTURE.md` §4.B, candidata "Verificación de correo, Recuperación de contraseña") en pasar a implementadas. Rutas planas bajo `/api`, sin prefijo `/auth/` — mismo criterio que `/api/register`/`/api/login`. `forgot-password` nunca revela si un email está registrado (mismo mensaje `200` siempre); `reset-password`/`verify-email` usan tokens de un solo uso, expirables, con hash SHA-256 persistido (nunca el valor crudo). `GET`/`PATCH /api/users/me` y `register`/`login` se extienden de forma aditiva con `email_verified` (§4.2, §5) — no rompe el contrato existente. Nuevo servicio de correo centralizado (Resend, SDK oficial) detrás de un `EmailSender` abstracto — ningún endpoint llama a Resend directamente. Verificado con 30 pruebas nuevas + la suite completa (175/175, ejecutada contra PostgreSQL 16 real, incluido un ciclo de `flask db upgrade` sobre `thers_dev` y `thers_test`), más una prueba manual end-to-end contra el backend real (los cuatro endpoints, con `NullEmailSender` en desarrollo sin `RESEND_API_KEY`).
+>
+> **v0.33 — eliminación de cuenta (`ADR-031-account-deletion.md`, aceptado con cambios, implementado sin commit hasta esta rama):** `POST /api/account-deletion/request` y `POST /api/account-deletion/confirm` (§4.19), públicos y sin JWT. Cambio aditivo. Los mensajes de la cuenta eliminada se borran en las dos bandejas.
 >
 > **v0.32 — seguridad infantil en los reportes (`ADR-038-child-safety-reports.md`, **PROPUESTO**, implementado sin commit):** `POST /api/reports` acepta el motivo nuevo `child_safety` («Explotación o abuso de menores») y la respuesta gana `priority` (`normal` o `critical`). **La prioridad la decide solo el servidor**: `child_safety` es siempre `critical`, y cualquier `priority` enviada por el cliente se ignora. Un reporte posterior más urgente sobre el mismo objetivo **eleva** el existente (no se degrada nunca). Límite propio de 30 por hora para este motivo. Cambio aditivo y compatible. Ver §4.18.
 >
@@ -2021,3 +2023,30 @@ Si el catálogo de endpoints crece lo suficiente para que un Markdown plano deje
 ## Cierre
 
 Este documento **no modifica** el backend ni el Frontend: define el contrato de API que ambos deben respetar hacia adelante, separando explícitamente **lo implementado** (§4.1), **lo esperado pero ausente** (§4.2) y **lo pendiente de aprobación** (§9). Cualquier cambio a este contrato sigue el proceso de decisiones de impacto medio/alto de `HB-001` §11–12 (ADR), no el criterio individual de quien implementa. A partir de su ratificación, Backend y Frontend deben implementar contra este documento — no negociar el contrato de forma ad-hoc en cada feature.
+
+---
+
+## 4.19 Eliminación de cuenta (`ADR-031-account-deletion.md`) — v0.33
+
+Dos pasos, **públicos** (sin JWT): la identidad la aporta el control del correo y, si la cuenta tiene 2FA, el segundo factor.
+
+#### `POST /api/account-deletion/request`
+
+Body `{ "email": "..." }`. Responde **siempre `200`** con el mismo mensaje, exista o no la cuenta (sin enumeración de correos). Si existe, envía un código de 6 dígitos (scrypt, vigencia 10 min, 5 intentos, enfriamiento de 60 s, un solo código activo por cuenta). Límite por IP (`ACCOUNT_DELETION_REQUEST`: 5 / 15 min). `400` si el correo falta o no es válido; `429` con `Retry-After`.
+
+#### `POST /api/account-deletion/confirm`
+
+Body `{ "email", "code", "confirm_email", "confirmation": "DELETE", "two_factor_code"? }`. `confirm_email` debe coincidir con el de la cuenta (sin distinguir mayúsculas) y `confirmation` ser **exactamente** `DELETE`.
+
+| Código | Causa |
+|---|---|
+| `200` | Cuenta eliminada (`{"msg": "Tu cuenta fue eliminada."}`) |
+| `400` | Cuenta inexistente, sin solicitud, código vencido, intentos agotados o incorrecto (**un solo mensaje** para todos los casos) |
+| `400` + `confirmation_error: true` | Correo o palabra mal escritos. **Solo con el código ya verificado**; no consume el código |
+| `400` | Segundo factor inválido (no `401`: un cliente con sesión intentaría renovarla) |
+| `403` + `two_factor_required: true` | La cuenta tiene 2FA y falta `two_factor_code`. Solo con el código verificado; no lo consume |
+| `429` | `ACCOUNT_DELETION_CONFIRM`: 5 fallos / 15 min por cuenta y por IP |
+
+**Qué se elimina** (una transacción): la fila de `users` y, por `ON DELETE CASCADE`, publicaciones, comentarios, me gusta, seguidos, notificaciones, **mensajes enviados y recibidos (las dos bandejas)**, tokens, sesiones, identidades de Google, menciones, filtros, exportaciones y códigos. Después se borran del almacenamiento el avatar y la portada. Los access y refresh tokens dejan de valer **de inmediato**. Quien hablaba con esa cuenta recibe `404 "Usuario no encontrado"` al pedir ese hilo. **Quedan fuera** y deben declararse en la política de privacidad: las copias de seguridad del proveedor y los registros del servidor. Se envía un correo de confirmación sin guardar copia.
+
+**Reportes:** `reports.reporter_id`, `reported_user_id` y `resolved_by` son `ON DELETE SET NULL` (`ADR-032`): un reporte sobrevive a la eliminación de las cuentas involucradas.

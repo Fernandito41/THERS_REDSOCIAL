@@ -276,7 +276,7 @@ def register():
         return jsonify({"msg": "Debes tener al menos 13 años para registrarte"}), 400
 
     try:
-        user = register_user(
+        user, email_sent = register_user(
             name, username, email, phone, country_code, birth_date, password,
             _user_repository, _email_verification_token_repository, _email_service,
         )
@@ -285,7 +285,9 @@ def register():
     except UsernameAlreadyExistsError:
         return jsonify({"msg": "Ya existe una cuenta con ese username"}), 409
 
-    return jsonify({"user": user}), 201
+    # `email_sent` (aditivo): `false` si no se pudo entregar el código al proveedor de
+    # correo; la cuenta existe igual y se pide otro código con «Reenviar».
+    return jsonify({"user": user, "email_sent": email_sent}), 201
 
 
 @auth_bp.route("/login", methods=["POST"])

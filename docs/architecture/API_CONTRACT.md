@@ -1916,3 +1916,15 @@ Si el catálogo de endpoints crece lo suficiente para que un Markdown plano deje
 ## Cierre
 
 Este documento **no modifica** el backend ni el Frontend: define el contrato de API que ambos deben respetar hacia adelante, separando explícitamente **lo implementado** (§4.1), **lo esperado pero ausente** (§4.2) y **lo pendiente de aprobación** (§9). Cualquier cambio a este contrato sigue el proceso de decisiones de impacto medio/alto de `HB-001` §11–12 (ADR), no el criterio individual de quien implementa. A partir de su ratificación, Backend y Frontend deben implementar contra este documento — no negociar el contrato de forma ad-hoc en cada feature.
+
+---
+
+## 4.21 Fallos del proveedor de correo (`ADR-036-email-provider-failures.md`, PROPUESTO)
+
+**Cambio propuesto sobre `ADR-011`; no se fusiona sin aprobación del equipo.** Si el proveedor de correo falla:
+
+- `POST /api/register` responde `201` con `"email_sent": false` (campo aditivo; `true` si el correo salió). La cuenta existe y se pide otro código con `POST /api/resend-registration-code`. Antes respondía `500` después de crear la cuenta.
+- `POST /api/forgot-password` y `POST /api/resend-registration-code` responden **siempre** el mismo `200` genérico, exista o no la cuenta (antes, un `500` solo para las cuentas existentes revelaba qué correos están registrados).
+- `POST /api/reset-password` responde `200` aunque falle solo el aviso de «contraseña cambiada» posterior (la contraseña ya cambió).
+
+El fallo se registra con el tipo de correo, la clase del error y el código del proveedor; **nunca** el código de 6 dígitos, el destinatario ni el mensaje del proveedor.

@@ -11,12 +11,16 @@
 
 from datetime import datetime, timedelta, timezone
 
+from app.application.email.safe_delivery import attempt_delivery
 from app.domain.auth.auth_service import hash_password
 from app.domain.auth.token_generator import generate_otp_code
 from app.domain.auth.token_policy import REGISTRATION_CODE_TTL_MINUTES
 
 
 def send_registration_code(user, email_verification_token_repository, email_service):
+    """Crea el código y lo envía. Devuelve `True` si el correo se entregó al proveedor.
+    Si el proveedor falla NO lanza (la cuenta ya existe y la persona puede pedir otro
+    código con «Reenviar»); ver `application/email/safe_delivery.py`."""
     code = generate_otp_code()
     # Hash lento (scrypt, mismo algoritmo que password_hash) -- no el
     # SHA-256 rápido de domain/auth/token_generator.hash_token (ADR-010/
@@ -25,6 +29,9 @@ def send_registration_code(user, email_verification_token_repository, email_serv
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=REGISTRATION_CODE_TTL_MINUTES)
 
     email_verification_token_repository.create_code(user.id, code_hash, expires_at)
-    email_service.send_registration_code_email(
-        user.email, user.name, code, REGISTRATION_CODE_TTL_MINUTES
+    return attempt_delivery(
+        lambda: email_service.send_registration_code_email(
+            user.email, user.name, code, REGISTRATION_CODE_TTL_MINUTES
+        ),
+        "registration_code",
     )

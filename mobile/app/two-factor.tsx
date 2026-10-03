@@ -43,7 +43,7 @@ export default function TwoFactor() {
   // Sin desafío pendiente no hay nada que verificar: p. ej. la app se cerró y se
   // reabrió (el desafío vive solo 5 minutos y solo en memoria), o se llegó sin
   // pasar por el login.
-  if (user) return <Redirect href="/profile" />;
+  if (user) return <Redirect href="/home" />;
   if (!hasPendingTwoFactor) return <Redirect href="/login" />;
 
   function goBackToLogin() {
@@ -70,11 +70,11 @@ export default function TwoFactor() {
           'Usaste un código de recuperación',
           `Te quedan ${outcome.recoveryCodesRemaining}. Generá códigos nuevos desde la web de THERS ` +
             'cuando puedas.',
-          [{ text: 'Entendido', onPress: () => router.replace('/profile') }],
+          [{ text: 'Entendido', onPress: () => router.replace('/home') }],
           { cancelable: false },
         );
       } else {
-        router.replace('/profile');
+        router.replace('/home');
       }
     } catch (e) {
       if (e instanceof ApiError && e.status === 429) {
@@ -100,7 +100,7 @@ export default function TwoFactor() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
     >
       <ScrollView
         contentContainerStyle={[

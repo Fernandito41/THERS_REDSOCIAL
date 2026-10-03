@@ -8,7 +8,7 @@ from app.infrastructure.email.null_email_sender import NullEmailSender
 from app.infrastructure.email.resend_email_sender import ResendEmailSender
 
 
-def create_email_sender(api_key, from_email):
+def create_email_sender(api_key, from_email, reply_to=None):
     if not api_key:
         return NullEmailSender()
-    return ResendEmailSender(api_key, from_email)
+    return ResendEmailSender(api_key, from_email, reply_to)

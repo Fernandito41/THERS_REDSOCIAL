@@ -4,7 +4,7 @@
 |---|---|
 | Documento | `docs/architecture/ADR-036-email-provider-failures.md` |
 | Fecha | 2026-10-02 |
-| Estado | **PROPUESTO** — pendiente de aprobación del equipo. **Contradice en parte `ADR-011` (Aceptada)**: ver abajo. El código está en el árbol de trabajo, **sin commit**, hasta que se decida |
+| Estado | **ACEPTADO con cambios** (2026-10-02) — el propietario del proyecto pidió resolverlo para avanzar; la ratificación del equipo es la aprobación del PR (`HB-001` §11–12). **Enmienda en parte `ADR-011` (Aceptada)**: solo la respuesta HTTP, ver abajo. El código está commiteado en `feature/email-provider-failures` |
 | Relacionado | `ADR-009`, `ADR-010`, `ADR-011` (§ «Resend fallando durante el registro»), `ADR-027` |
 
 ## Por qué existe
@@ -32,10 +32,12 @@ Con Resend real en uso apareció el caso que `ADR-011` solo había reproducido e
 
 La persona **no se entera** de que el correo no salió salvo en el registro (`email_sent`). Si Resend queda caído, quien pide recuperar su contraseña no recibe nada y no ve un error. Mitigación: vigilar el consumo del plan y los registros del servidor (aviso `No se pudo enviar el correo`). Los clientes web y móvil todavía **no muestran** `email_sent: false`; es un cambio de interfaz pendiente.
 
-## Qué hay que decidir
+## Decisión
 
-1. ¿Aprueban cambiar `ADR-011` en este punto? Si **no**, se revierten los archivos listados y se mantiene el `500`.
-2. Si **sí**: web y móvil deberían avisar «no pudimos enviar el correo, usa Reenviar» cuando `email_sent` sea `false`.
+1. **Se enmienda `ADR-011`** únicamente en la respuesta HTTP cuando falla el envío del código de registro (`500` → `201` con `email_sent: false`). Se conservan sin cambios su estado recuperable (cuenta y código ya persistidos) y que `EmailService` no atrape excepciones. La enmienda queda anotada en `ADR-011`.
+2. **Pendiente (no bloquea el merge):** web y móvil deben avisar «no pudimos enviar el correo, usa Reenviar» cuando `email_sent` sea `false`. Hasta entonces la persona ve el flujo normal y puede pedir otro código con «Reenviar».
+3. **Operación:** vigilar el consumo del plan gratuito de Resend (100 correos/día) y el aviso `No se pudo enviar el correo` en los registros del servidor. Con el plan gratuito, el cupo de un día de pruebas intensas puede agotarse.
+4. **Si el equipo rechaza esta decisión en el PR**, se revierten los archivos listados abajo y se mantiene el `500` de `ADR-011`.
 
 ## Archivos afectados
 

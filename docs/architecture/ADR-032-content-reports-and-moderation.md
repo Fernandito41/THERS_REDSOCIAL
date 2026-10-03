@@ -194,6 +194,25 @@ Implementada en `feature/backend-terms-and-reports`. **Si el equipo cambia algun
 
 **Una advertencia de nombres para la fase 2.** Ya existe `app/domain/moderation` y `app/application/moderation`: son los **filtros personales** de cada persona (palabras y temas silenciados, `ADR-024`), no la moderación de la plataforma. Para evitar confusión, el código de la fase 2 no debe vivir en esos paquetes.
 
+## Fase 2: lo que se implementó y lo que se decidió al hacerlo
+
+Implementada en `feature/moderation-backend` (migración `e5b8c3a7d912`). Contrato en `API_CONTRACT.md` §4.22.
+
+| Qué | Cómo quedó | Por qué |
+|---|---|---|
+| `is_moderator`, `suspended_at`, `suspension_reason` | Columnas de `users`; el rol solo por `flask set-moderator` | Una cuenta comprometida no puede ascenderse |
+| Cola | `GET /api/moderation/reports`, filtro `status`, paginada con `limit`/`offset` | Como en la decisión 3 |
+| **Orden de la cola** | **Lo crítico primero** y, dentro de cada prioridad, del más antiguo al más nuevo | **Ajusta la decisión 3** a `ADR-038`: un reporte de explotación de menores no puede esperar detrás de spam más antiguo |
+| Resolver | `dismiss`, `remove_content`, `suspend_user`; deja `resolved_by`, `resolved_at` y `resolution_note` y **vacía `content_snapshot`** | Decisión 4 |
+| **Motivo de la suspensión** | Campo `reason` aparte de la `note`; sin él, un texto estándar | **Adición:** la `note` es interna y puede contener comentarios del equipo; la persona suspendida solo debe ver lo que quien moderó escribió para ella |
+| **Reportes del mismo objetivo** | `remove_content` cierra también los demás reportes abiertos sobre ese contenido | Evita reportes huérfanos sobre algo que ya no existe |
+| **Suspender moderadores** | No se puede desde el panel (`400`); primero se retira el rol por línea de comandos | Una cuenta moderadora comprometida podría suspender a todo el equipo (§Riesgos) |
+| **Quién reportó** | Nunca aparece en la cola | La decisión es sobre lo reportado, no sobre quien denunció (§2) |
+| Suspensión | `403` con `suspended: true` en login, Google y 2FA, **solo tras probar la identidad**; sesiones y refresh tokens se revocan al instante | Que no sirva de oráculo de qué cuentas están suspendidas |
+| Levantar una suspensión | `flask unsuspend-user` | **Adición:** sin apelaciones (decisión 4 del equipo), el equipo necesita al menos poder corregir un error |
+
+**Sigue pendiente:** la interfaz (fase 3, web y móvil), quién modera y con qué plazo (decisión 1 del equipo), exigir la 2FA a las cuentas moderadoras, las apelaciones y la política de privacidad sobre `content_snapshot`.
+
 ## Fuentes consultadas
 
 - Código de `develop` (`8a213c0`): `auth_routes.py`, `models.py`, `Register.jsx`, `Terms.jsx`.

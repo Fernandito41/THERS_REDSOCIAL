@@ -177,6 +177,21 @@ def _client_fingerprint():
     return request.headers.get("User-Agent"), ip
 
 
+def _suspended_response(user_entity):
+    """`403` si la cuenta está suspendida, o `None`. Se llama SOLO después de probar la
+    identidad (contraseña, credencial de Google o segundo factor): así no sirve para
+    averiguar qué cuentas están suspendidas sin conocer sus credenciales. La persona
+    ve el motivo para poder reaccionar (ADR-032 §3). `suspended: true` explícito para
+    que el cliente distinga este caso sin parsear texto, como `email_verified: false`."""
+    if user_entity.suspended_at is None:
+        return None
+    return jsonify({
+        "msg": "Tu cuenta está suspendida.",
+        "suspended": True,
+        "suspension_reason": user_entity.suspension_reason,
+    }), 403
+
+
 def _issue_session_token(user_entity):
     """Abre una sesión y devuelve `{"token", "refresh_token"}`. Único camino por
     el que se emite un token de sesión en todo el backend (login, Google y
@@ -379,6 +394,10 @@ def login():
     # `two_factor_enabled` -- ninguno de los cuatro forma parte del objeto
     # público. Es una búsqueda por clave primaria y solo ocurre en el login.
     user_entity = _user_repository.find_by_id(user["id"])
+
+    suspended = _suspended_response(user_entity)
+    if suspended:
+        return suspended
 
     if user_entity.two_factor_enabled:
         # 200, no 4xx: nada salió mal -- las credenciales eran correctas y falta
@@ -649,6 +668,10 @@ def google_auth_route():
     # "Continuar con Google" sería una puerta que lo saltea (ADR-026 §Seguridad).
     user_entity = _user_repository.find_by_id(user["id"])
 
+    suspended = _suspended_response(user_entity)
+    if suspended:
+        return suspended
+
     if terms_accepted:
         # La credencial de Google ya está verificada: quien llega hasta aquí es
         # la persona dueña de la cuenta, y aceptó marcando la casilla.
@@ -750,6 +773,11 @@ def verify_two_factor():
     rate_limit_guard.clear(
         policy.TWO_FACTOR_VERIFY, f"ip:{_client_ip()}", _rate_limit_repository
     )
+
+    # Identidad ya probada: si la suspendieron entre la contraseña y este paso, no hay sesión.
+    suspended = _suspended_response(user_entity)
+    if suspended:
+        return suspended
 
     session = _issue_session_token(user_entity)
 

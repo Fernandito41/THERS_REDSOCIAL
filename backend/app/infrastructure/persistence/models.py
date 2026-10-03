@@ -192,6 +192,13 @@ class User(db.Model):
     terms_accepted_at = db.Column(db.DateTime(timezone=True), nullable=True)
     terms_version = db.Column(db.String(32), nullable=True)
 
+    # Moderación de la plataforma (ADR-032 fase 2). `is_moderator` solo se asigna
+    # por línea de comandos (`flask set-moderator`), nunca por la API. Una cuenta
+    # suspendida no puede iniciar sesión y ve `suspension_reason`.
+    is_moderator = db.Column(db.Boolean, nullable=False, server_default=text("false"))
+    suspended_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    suspension_reason = db.Column(db.String(500), nullable=True)
+
     # DEFAULT now() en la base de datos. `updated_at` se mantiene actualizado
     # por un trigger de PostgreSQL (set_updated_at, ver migración), no por
     # SQLAlchemy — así funciona igual para updates hechos vía ORM o SQL directo.

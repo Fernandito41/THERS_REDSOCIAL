@@ -13,6 +13,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.application.likes.like_post_use_case import like_post
 from app.application.likes.unlike_post_use_case import unlike_post
 from app.domain.posts.exceptions import PostNotFoundError
+from app.interfaces.profile_gate import profile_completed_required
 from app.infrastructure.persistence.repositories.follow_repository import (
     SQLAlchemyFollowRepository,
 )
@@ -44,6 +45,7 @@ _restriction_repository = SQLAlchemyRestrictionRepository()
 
 @likes_bp.route("/posts/<uuid:post_id>/like", methods=["POST"])
 @jwt_required()
+@profile_completed_required
 def like(post_id):
     # Identidad exclusivamente del JWT -- nunca del body (mismo principio
     # que el resto de endpoints protegidos).

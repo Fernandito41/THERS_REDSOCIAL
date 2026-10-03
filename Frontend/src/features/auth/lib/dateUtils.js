@@ -12,13 +12,13 @@ export const MONTH_NAMES = [
 export const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
 
 // THERS todavía no tiene una política de edad mínima ratificada en ningún
-// documento oficial -- CLAUDE.md §15 confirma este hueco explícitamente. 13
-// es un valor placeholder de UX (el mínimo más común entre redes sociales),
-// centralizado en esta única constante para que sea trivial de ajustar
-// cuando el equipo lo ratifique. Backend deberá aplicar la misma regla (o la
-// que se decida) del lado del servidor -- este valor nunca es, por sí solo,
-// la barrera real de la regla de negocio.
-export const MIN_AGE_YEARS = 13;
+// documento oficial -- CLAUDE.md §15 confirma este hueco explícitamente.
+// THERS es solo para personas de 18 años cumplidos o más (decisión de producto
+// del equipo, 2026-10-02; antes 13), centralizado en esta única constante. El
+// backend aplica la misma regla (domain/auth/validators.py, MIN_AGE_YEARS): este
+// valor nunca es, por sí solo, la barrera real. Es la fecha que la persona
+// DECLARA, no una verificación documental.
+export const MIN_AGE_YEARS = 18;
 
 function pad(value) {
   return String(value).padStart(2, "0");
